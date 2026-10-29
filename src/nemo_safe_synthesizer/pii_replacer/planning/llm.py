@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""OpenAI-compatible two-pass LLM enhancement for PII replacement plans."""
+"""OpenAI-compatible LLM discovery for PII plans and sampler mappings."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from ...config.replace_pii import (
     ENTITIES,
     ENTITY_BY_TYPE,
     EXCLUSIVE_DEPENDS_ON_GROUPS,
+    DataToSamplerValueMapping,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -36,6 +37,8 @@ from ..llm_client import (
     TransientInferenceError,
     resolve_inference_settings,
 )
+from ..sampler_catalog import SamplerValueCatalog
+from .dependency_mappings import DependencyMappingInput, mapping_inputs
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
     ColumnClassification,
@@ -45,7 +48,7 @@ from .plan_builder import (
     plan_from_classifications,
 )
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import column_pattern_issue, column_pattern_syntax_issue
+from .validation import column_pattern_issue, column_pattern_syntax_issue, identifier_mask_capacity_issue
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -58,6 +61,8 @@ MAX_BATCH_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
 RETRY_MAX_DELAY_SECONDS = 30.0
+MAX_MAPPING_SOURCE_VALUES = 256
+MAX_MAPPING_REQUEST_BYTES = 48 * 1024
 
 logger = get_logger(__name__)
 
@@ -69,7 +74,18 @@ class _StructuredResponse(BaseModel):
 
 
 class _ProposedClassification(_StructuredResponse):
-    """One LLM classification before NSS drops a pattern it cannot use.
+    """One LLM entity-type classification; its pattern comes from a separate request."""
+
+    column_name: str
+    entity_type: EntityType | None
+
+
+class _ClassificationResponse(_StructuredResponse):
+    classifications: list[_ProposedClassification]
+
+
+class _ProposedPattern(_StructuredResponse):
+    """One LLM pattern proposal before NSS drops a pattern it cannot use.
 
     ``ColumnClassification`` rejects ineligible patterns, which is right for
     heuristic and user-authored input. An LLM pattern that cannot apply is
@@ -77,12 +93,11 @@ class _ProposedClassification(_StructuredResponse):
     """
 
     column_name: str
-    entity_type: EntityType | None
     pattern: str | None
 
 
-class _ClassificationResponse(_StructuredResponse):
-    classifications: list[_ProposedClassification]
+class _PatternResponse(_StructuredResponse):
+    patterns: list[_ProposedPattern]
 
 
 class _PatternRepairResponse(_StructuredResponse):
@@ -91,6 +106,24 @@ class _PatternRepairResponse(_StructuredResponse):
 
 class _InvalidStructuredOutputError(GenerationError):
     """Structured output stayed invalid after every allowed attempt."""
+
+
+class _LLMValueMappingEntry(_StructuredResponse):
+    # Fields are documented with attribute docstrings rather than Field(description=...), because this
+    # model's JSON schema is sent to the LLM and descriptions would change the planner's input.
+    column_name: str
+    """Conditioner column whose value is mapped."""
+
+    source_value: str
+    """Value as written in the data, such as ``"F"``."""
+
+    sampler_values: list[str]
+    """Sampler values the source value stands for, such as ``["female"]``."""
+
+
+class _LLMValueMappingResponse(_StructuredResponse):
+    mappings: list[_LLMValueMappingEntry]
+    """One entry per mapped source value."""
 
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
@@ -161,41 +194,14 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
 
 
 def _entity_catalog() -> list[dict[str, object]]:
-    return [
-        {
-            "entity_type": entity.entity_type.value,
-            "pattern_syntax": entity.pattern_syntax.name.lower() if entity.pattern_syntax is not None else None,
-        }
-        for entity in ENTITIES
-    ]
+    return [{"entity_type": entity.entity_type.value, "description": entity.description} for entity in ENTITIES]
 
 
-def _entity_types_without_pattern() -> str:
-    return ", ".join(entity.entity_type.value for entity in ENTITIES if entity.pattern_syntax is None)
-
-
-def _heuristic_classifications_payload(
-    baseline: PiiReplacementPlan,
-    batch: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    submitted = {str(profile["column_name"]) for profile in batch}
-    return [
-        {
-            "column_name": spec.column_name,
-            "entity_type": spec.entity_type.value,
-            "pattern": spec.pattern,
-        }
-        for spec in baseline.columns_to_replace
-        if spec.column_name in submitted
-    ]
-
-
-def _heuristic_dependency_edges(baseline: PiiReplacementPlan) -> frozenset[tuple[str, str]]:
-    return frozenset(
-        (spec.column_name, dependency.column_name)
-        for spec in baseline.columns_to_replace
-        for dependency in spec.depends_on
-    )
+def _pattern_syntax(entity_type: EntityType | None) -> str | None:
+    """Name the pattern grammar ``entity_type`` supports, or ``None`` when it takes no pattern."""
+    if entity_type is None or (syntax := ENTITY_BY_TYPE[entity_type].pattern_syntax) is None:
+        return None
+    return syntax.name.lower()
 
 
 def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
@@ -226,27 +232,35 @@ def _quoted(names: Sequence[str]) -> str:
     return ", ".join(repr(name) for name in names)
 
 
-def _usable_pattern(item: _ProposedClassification, protected_columns: Set[str]) -> str | None:
+def _usable_pattern(
+    column_name: str,
+    entity_type: EntityType | None,
+    pattern: str | None,
+    protected_columns: Set[str],
+) -> str | None:
     """Return the proposed pattern, or ``None`` when NSS could not use it for this column.
 
     Unclassified columns, protected columns, and entity types without a pattern
     syntax never take a pattern, so dropping one loses nothing.
     """
-    pattern = item.pattern
     if (
         pattern is None
         or not pattern.strip()
-        or item.entity_type is None
-        or item.column_name in protected_columns
-        or ENTITY_BY_TYPE[item.entity_type].pattern_syntax is None
+        or column_name in protected_columns
+        or _pattern_syntax(entity_type) is None
     ):
         if pattern is not None:
-            logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": item.column_name})
+            logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": column_name})
         return None
     return pattern
 
 
-def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str]) -> str | None:
+def _classification_coverage_issue(
+    expected: Sequence[str],
+    actual: Sequence[str],
+    *,
+    key: str = "classifications",
+) -> str | None:
     """Name the columns that make ``actual`` differ from exactly one entry per ``expected`` column."""
     counts = Counter(actual)
     expected_names = set(expected)
@@ -261,64 +275,88 @@ def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str
     ]
     if not problems:
         return None
-    return "classifications must contain every submitted column exactly once; " + "; ".join(problems)
+    return f"{key} must contain every submitted column exactly once; " + "; ".join(problems)
 
 
 def _classification_messages(
     discovery_input: PlanDiscoveryInput,
     batch: Sequence[Mapping[str, object]],
-    baseline: PiiReplacementPlan,
 ) -> list[dict[str, str]]:
+    """Ask for each column's entity type only; patterns are a separate, smaller request.
+
+    Keeping pattern rules out of this request leaves the model's reasoning for the entity types themselves.
+    """
     system = (
         "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
         "synthetic-data model. NSS replaces sensitive values with realistic fake values of the same kind. Your job is "
-        "only to say what kind of data each column holds, and optionally describe its format so the fake values look "
-        "like the real ones. NSS decides on its own which columns to replace.\n"
+        "only to say what kind of data each column holds. NSS decides on its own which columns to replace.\n"
         "\n"
         "Input\n"
         "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
-        "- entity_catalog: the entity types you may choose from, each with the pattern grammar it supports.\n"
+        "- entity_catalog: the entity types you may choose from, each with a short definition.\n"
         "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
-        "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
-        "wrong, and a column missing from this list may still hold sensitive data.\n"
-        "- pattern_grammars: the pattern languages you may use.\n"
         "\n"
         "For each column\n"
-        "1. Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
+        "Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
         "every column, including the group column.\n"
-        "2. Set pattern to null unless all of these are true:\n"
-        "   - entity_type is not null and that entity has a pattern_syntax. These entity types never take a "
-        f"pattern: {_entity_types_without_pattern()};\n"
-        "   - every sample value shares one format that the entity type alone does not capture. If the values mix "
-        "formats, set pattern to null.\n"
-        "3. A pattern must use exactly the grammar named by the entity's pattern_syntax and describe the whole cell "
-        "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
-        "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
         "\n"
         "Output\n"
         "Return a JSON object with one key, classifications: a list with one object per submitted column, in the "
-        "same order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name, entity_type "
-        "(a catalog value or null), and pattern (a string or null). Example:\n"
-        '{"classifications":[{"column_name":"phone","entity_type":"phone_number","pattern":"###-###-####"},'
-        '{"column_name":"visit_count","entity_type":null,"pattern":null}]}'
+        "same order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name and "
+        "entity_type (a catalog value or null). Example:\n"
+        '{"classifications":[{"column_name":"phone","entity_type":"phone_number"},'
+        '{"column_name":"visit_count","entity_type":null}]}'
     )
     user = _compact_json(
         {
             "discovery_context": {"group_column": discovery_input.group_column},
             "entity_catalog": _entity_catalog(),
-            "pattern_grammars": pattern_grammar_catalog(),
-            "heuristic_classifications": _heuristic_classifications_payload(baseline, batch),
             "column_profiles": batch,
         }
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _pattern_messages(columns: Sequence[Mapping[str, object]]) -> list[dict[str, str]]:
+    """Ask for the format of classified columns whose entity type has a pattern syntax."""
+    system = (
+        "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table. NSS replaces sensitive values with "
+        "realistic fake values of the same kind. Each submitted column has already been classified; your job is "
+        "only to describe its format, if it has a fixed one, so the fake values look like the real ones.\n"
+        "\n"
+        "Input\n"
+        "- columns: one entry per column, with its profile (name, dtype, counts, and sample values), its "
+        "entity_type, and the pattern_syntax that entity type supports.\n"
+        "- pattern_grammars: the pattern languages you may use.\n"
+        "\n"
+        "For each column\n"
+        "1. Give a pattern only if the sample values all follow one fixed layout (the same prefix, length, "
+        "separators, letter case or date order). Names follow a layout when they share letter case and arrangement, "
+        "even though their lengths differ. Otherwise set pattern to null.\n"
+        "2. A pattern must use exactly the grammar named by the column's pattern_syntax and describe the whole cell "
+        "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
+        "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
+        "\n"
+        "Output\n"
+        "Return a JSON object with one key, patterns: a list with one object per submitted column, in the same "
+        "order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name and pattern (a "
+        "string or null). Example:\n"
+        '{"patterns":[{"column_name":"phone","pattern":"###-###-####"}]}'
+    )
+    used_syntaxes = {str(column["pattern_syntax"]) for column in columns}
+    user = _compact_json(
+        {
+            "columns": list(columns),
+            "pattern_grammars": {
+                name: grammar for name, grammar in pattern_grammar_catalog().items() if name in used_syntaxes
+            },
+        }
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def _pattern_syntax_name(entity_type: EntityType, pattern: str | None) -> str | None:
-    pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
-    if pattern is None or pattern_syntax is None:
-        return None
-    return pattern_syntax.name.lower()
+    return None if pattern is None else _pattern_syntax(entity_type)
 
 
 DependencyOptions = dict[str, dict[EntityType, list[str]]]
@@ -393,10 +431,8 @@ def _selected_dependencies(response: _StructuredResponse, options: DependencyOpt
 def _dependency_target_payloads(
     plan: PiiReplacementPlan,
     options: DependencyOptions,
-    baseline: PiiReplacementPlan,
 ) -> list[dict[str, object]]:
     """Describe each dependency target and its permitted sources, in ``options`` order."""
-    heuristic_edges = _heuristic_dependency_edges(baseline)
     specs = {spec.column_name: spec for spec in plan.columns_to_replace}
     targets: list[dict[str, object]] = []
     for target_column, sources_by_type in options.items():
@@ -409,13 +445,7 @@ def _dependency_target_payloads(
                 "target_pattern": spec.pattern,
                 "target_pattern_syntax": _pattern_syntax_name(spec.entity_type, spec.pattern),
                 "source_options": {
-                    entity_type.value: {
-                        "columns": source_columns,
-                        "heuristic_choice": next(
-                            (source for source in source_columns if (target_column, source) in heuristic_edges),
-                            None,
-                        ),
-                    }
+                    entity_type.value: {"columns": source_columns}
                     for entity_type, source_columns in sources_by_type.items()
                 },
             }
@@ -435,8 +465,7 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "- dependency_targets: one entry per target column, with its entity type and target_pattern, the format "
         "proposed for its fake values (or null; target_pattern_syntax names its grammar in pattern_grammars). "
         "source_options lists, for each source entity type the target may depend on, the columns of that type. "
-        "heuristic_choice is the column a rule-based detector chose for that type, or null; it can be wrong, so "
-        "treat it as a hint, not a requirement. When the pattern uses a name part such as {first} or {last}, a "
+        "When the pattern uses a name part such as {first} or {last}, a "
         "source column holding that name part lets the fake value match the fake name in the same row.\n"
         "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 3).\n"
         "\n"
@@ -445,8 +474,9 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "same person or record as the target. Tables can describe several people per row, such as a customer and "
         "a spouse or several children; match each target to its own "
         "person by column name, for example a spouse's first name to the spouse's gender, never to another person's.\n"
-        "2. Choose null when no column of that type describes the same person or record, or when the source adds "
-        "nothing beyond the other sources chosen for the same target.\n"
+        "2. When a listed column describes the same person or record as the target, choose it, so the fake value "
+        "stays consistent with that column. Choose null only when no column of that type describes the same person "
+        "or record.\n"
         "3. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
         "family of inner groups. Within a family, the source entity types chosen for one target may come from at "
         "most one inner group; several types from the same inner group are fine. For example, with the family "
@@ -515,6 +545,62 @@ def _pattern_repair_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _dependency_mapping_messages(inputs: Sequence[DependencyMappingInput]) -> list[dict[str, str]]:
+    system = (
+        "Map every submitted dataset value to one or more sampler values from the sampler value catalog for the same "
+        "dependency column. Return exactly one mapping for every submitted column_name/source_value pair. "
+        "sampler_values must be a non-empty list containing only values supplied for that column. Select the sampler "
+        "values that are reasonable semantic subsets of the dataset value. When no subset is more appropriate than the "
+        "others, list every supplied value so NSS does not narrow the sampler for that dataset value. Do not invent "
+        "columns, source values, or sampler values."
+    )
+    payload = [
+        {
+            "column_name": item.column_name,
+            "entity_type": item.entity_type.value,
+            "dataset_values": list(item.source_values),
+            "sampler_values": list(item.sampler_values),
+        }
+        for item in inputs
+    ]
+    return [{"role": "system", "content": system}, {"role": "user", "content": _compact_json(payload)}]
+
+
+def _mapping_coverage_issue(expected: Sequence[tuple[str, str]], actual: Sequence[tuple[str, str]]) -> str | None:
+    """Name the column/value pairs that make ``actual`` differ from one mapping per ``expected`` pair."""
+    counts = Counter(actual)
+    expected_pairs = set(expected)
+    problems = [
+        f"{label}: " + ", ".join(f"{column!r}/{value!r}" for column, value in pairs)
+        for label, pairs in (
+            ("missing", [pair for pair in expected if pair not in counts]),
+            ("duplicated", sorted(pair for pair, count in counts.items() if count > 1)),
+            ("not submitted", sorted(set(counts) - expected_pairs)),
+        )
+        if pairs
+    ]
+    if not problems:
+        return None
+    return "mappings must contain every submitted column_name/source_value pair exactly once; " + "; ".join(problems)
+
+
+def _resolved_sampler_values(sampler_values: Sequence[str], supplied: Sequence[str]) -> list[str]:
+    """Return ``sampler_values`` in their supplied spelling, or raise ``ValueError`` naming the invalid values."""
+    if not sampler_values:
+        raise ValueError("sampler_values must be non-empty")
+    available = {sampler_value.casefold(): sampler_value for sampler_value in supplied}
+    normalized = [sampler_value.casefold() for sampler_value in sampler_values]
+    if duplicates := sorted({sampler_value for sampler_value in normalized if normalized.count(sampler_value) > 1}):
+        raise ValueError("sampler_values must not repeat values: " + _quoted(duplicates))
+    if unknown := sorted(
+        {sampler_value for sampler_value in sampler_values if sampler_value.casefold() not in available}
+    ):
+        raise ValueError(
+            "sampler_values must come from the values supplied for the column; unknown: " + _quoted(unknown)
+        )
+    return [available[sampler_value] for sampler_value in normalized]
+
+
 def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) -> list[dict[str, str]]:
     result = [dict(message) for message in messages]
     if feedback is not None:
@@ -550,12 +636,13 @@ def _raise_if_invalid_output_exhausted(purpose: str, attempt: int) -> None:
 
 
 class LLMPlanEnhancer(PlanEnhancer):
-    """Enhance a heuristic plan with classification and dependency-selection passes.
+    """Discover plans and sampler mappings through bounded structured requests.
 
     Pass one classifies every column's entity type and optional pattern. NSS
     then derives replacement membership and all permitted dependency
     candidates deterministically, and pass two only selects useful candidate
-    IDs. Invalid optional patterns get focused repair requests.
+    IDs. Invalid optional patterns get focused repair requests. A separate
+    request maps dependency values to sampler values on demand.
 
     Args:
         config: Persisted LLM behavior.
@@ -590,8 +677,12 @@ class LLMPlanEnhancer(PlanEnhancer):
         discovery_input: PlanDiscoveryInput,
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
-        """Return a semantically classified, deterministically assembled plan."""
-        classifications = self._classify_columns(discovery_input, baseline)
+        """Return a semantically classified, deterministically assembled plan.
+
+        ``baseline`` is not sent to the model. The heuristic discoverer returns an empty plan, and a hint that always
+        says nothing reads as a negative signal, so prompts carry no heuristic classifications or dependency choices.
+        """
+        classifications = self._classify_columns(discovery_input)
         expected_columns = {profile.column_name for profile in discovery_input.column_profiles}
         plan = plan_from_classifications(
             classifications,
@@ -606,18 +697,77 @@ class LLMPlanEnhancer(PlanEnhancer):
             protected_columns=discovery_input.protected_columns,
         )
         if candidates:
-            plan = self._select_dependencies(plan, candidates, baseline, classifications)
+            plan = self._select_dependencies(plan, candidates, classifications)
         return plan
 
-    def _classify_columns(
+    def discover_data_to_sampler_value_mapping(
         self,
-        discovery_input: PlanDiscoveryInput,
-        baseline: PiiReplacementPlan,
-    ) -> list[ColumnClassification]:
+        dataframe: pd.DataFrame,
+        plan: PiiReplacementPlan,
+        catalog: SamplerValueCatalog,
+    ) -> DataToSamplerValueMapping:
+        """Map conditioner-column values without a sampler match to values from one sampler catalog.
+
+        Args:
+            dataframe: Data whose conditioner-column values need sampler values.
+            plan: Replacement plan naming the conditioner columns.
+            catalog: Sampler values available for each conditioner entity type.
+
+        Returns:
+            Per-column mappings from each dataset value that has no
+            case-insensitive sampler match to one or more sampler values. A
+            value that fits no narrower set maps to every supplied value, so
+            sampling is not narrowed. Returns an empty dict when every value
+            already matches.
+
+            For example, with the catalog
+            ``{ETHNIC_BACKGROUND: ("east asian", "south asian", "white")}`` and
+            a ``race`` column holding ``"Asian"`` and ``"White"``, the result is
+            ``{"race": {"Asian": ["east asian", "south asian"]}}``. ``"White"``
+            is omitted because it already matches.
+
+        Raises:
+            ParameterError: If the mapping request exceeds its size bounds.
+        """
+        inputs = mapping_inputs(dataframe, plan, catalog)
+        if not inputs:
+            return {}
+        source_value_count = sum(len(item.source_values) for item in inputs)
+        messages = _dependency_mapping_messages(inputs)
+        if source_value_count > MAX_MAPPING_SOURCE_VALUES or _json_bytes(messages) > MAX_MAPPING_REQUEST_BYTES:
+            raise ParameterError(
+                "automatic dependency mapping exceeds its bounded request size; provide manual mappings instead"
+            )
+
+        expected: dict[tuple[str, str], tuple[str, DependencyMappingInput]] = {}
+        for item in inputs:
+            for source_value in item.source_values:
+                expected[(item.column_name, source_value.casefold())] = (source_value, item)
+
+        def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
+            actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
+            if issue := _mapping_coverage_issue(list(expected), actual):
+                raise ValueError(issue)
+            result: DataToSamplerValueMapping = {}
+            for item in response.mappings:
+                source_value, mapping_input = expected[(item.column_name, item.source_value.casefold())]
+                result.setdefault(item.column_name, {})[source_value] = _resolved_sampler_values(
+                    item.sampler_values, mapping_input.sampler_values
+                )
+            return result
+
+        return self._request_structured(
+            purpose="PII data-to-sampler value mapping",
+            messages=messages,
+            response_model=_LLMValueMappingResponse,
+            parse=parse,
+        )
+
+    def _classify_columns(self, discovery_input: PlanDiscoveryInput) -> list[ColumnClassification]:
         batches = _profile_batches(discovery_input.column_profiles)
         if not batches:
             return []
-        classify = partial(self._classify_batch, discovery_input, baseline)
+        classify = partial(self._classify_batch, discovery_input)
         return [classification for batch in self._map_batches(classify, batches) for classification in batch]
 
     def _map_batches(self, request: Callable[[BatchT], ResultT], batches: Sequence[BatchT]) -> list[ResultT]:
@@ -630,30 +780,65 @@ class LLMPlanEnhancer(PlanEnhancer):
     def _classify_batch(
         self,
         discovery_input: PlanDiscoveryInput,
-        baseline: PiiReplacementPlan,
         batch: list[dict[str, object]],
     ) -> list[ColumnClassification]:
+        """Classify a batch's entity types, then ask for patterns of the columns whose type takes one."""
         expected = [str(profile["column_name"]) for profile in batch]
         protected = discovery_input.protected_columns.intersection(expected)
 
-        def parse(response: _ClassificationResponse) -> list[ColumnClassification]:
+        def parse_types(response: _ClassificationResponse) -> dict[str, EntityType | None]:
             actual = [classification.column_name for classification in response.classifications]
             if issue := _classification_coverage_issue(expected, actual):
                 raise ValueError(issue)
-            by_name = {
-                item.column_name: ColumnClassification(
-                    column_name=item.column_name,
-                    entity_type=item.entity_type,
-                    pattern=_usable_pattern(item, protected),
-                )
-                for item in response.classifications
-            }
-            return [by_name[name] for name in expected]
+            return {item.column_name: item.entity_type for item in response.classifications}
+
+        entity_types = self._request_structured(
+            purpose="PII column classification",
+            messages=_classification_messages(discovery_input, batch),
+            response_model=_ClassificationResponse,
+            parse=parse_types,
+        )
+        patterns = self._propose_patterns(batch, entity_types, protected)
+        return [
+            ColumnClassification(
+                column_name=name,
+                entity_type=entity_types[name],
+                pattern=_usable_pattern(name, entity_types[name], patterns.get(name), protected),
+            )
+            for name in expected
+        ]
+
+    def _propose_patterns(
+        self,
+        batch: Sequence[Mapping[str, object]],
+        entity_types: Mapping[str, EntityType | None],
+        protected: Set[str],
+    ) -> dict[str, str | None]:
+        """Return proposed patterns for unprotected columns whose entity type has a pattern syntax.
+
+        No request is made when no column in the batch can take a pattern.
+        """
+        columns = [
+            {**profile, "entity_type": entity_type.value, "pattern_syntax": syntax}
+            for profile in batch
+            if (name := str(profile["column_name"])) not in protected
+            and (entity_type := entity_types[name]) is not None
+            and (syntax := _pattern_syntax(entity_type)) is not None
+        ]
+        if not columns:
+            return {}
+        eligible = [str(column["column_name"]) for column in columns]
+
+        def parse(response: _PatternResponse) -> dict[str, str | None]:
+            actual = [item.column_name for item in response.patterns]
+            if issue := _classification_coverage_issue(eligible, actual, key="patterns"):
+                raise ValueError(issue)
+            return {item.column_name: item.pattern for item in response.patterns}
 
         return self._request_structured(
-            purpose="PII column classification",
-            messages=_classification_messages(discovery_input, batch, baseline),
-            response_model=_ClassificationResponse,
+            purpose="PII column patterns",
+            messages=_pattern_messages(columns),
+            response_model=_PatternResponse,
             parse=parse,
         )
 
@@ -661,7 +846,6 @@ class LLMPlanEnhancer(PlanEnhancer):
         self,
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
-        baseline: PiiReplacementPlan,
         classifications: Sequence[ColumnClassification],
     ) -> PiiReplacementPlan:
         entity_types = {
@@ -671,7 +855,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         }
         options = _dependency_options(candidates, entity_types)
         batches = _bounded_batches(
-            _dependency_target_payloads(plan, options, baseline),
+            _dependency_target_payloads(plan, options),
             kind="Dependency options",
             name_key="target_column",
         )
@@ -769,16 +953,17 @@ class LLMPlanEnhancer(PlanEnhancer):
         profiles = {profile.column_name: profile for profile in discovery_input.column_profiles}
         repaired_specs: list[PiiColumnPlan] = []
         for spec in plan.columns_to_replace:
-            issue = column_pattern_issue(dataframe, spec)
+            issue = column_pattern_issue(dataframe, spec) or identifier_mask_capacity_issue(dataframe, spec)
             if issue is None:
                 repaired_specs.append(spec)
                 continue
             if column_pattern_syntax_issue(spec) is None:
-                # The grammar is fine but too few values match, so the column mixes
-                # formats. One pattern cannot describe it, and asking again would not help.
+                # The grammar is fine, but the pattern does not fit the data: too few values
+                # match (the column mixes formats), or an identifier mask has too few unused
+                # values. Asking again would not help, so replace the column without a pattern.
                 logger.user.warning(
-                    "Dropping an LLM-proposed pattern that does not cover the column's values",
-                    extra={"column": spec.column_name},
+                    "Dropping an LLM-proposed pattern that does not fit the column's values",
+                    extra={"column": spec.column_name, "reason": issue},
                 )
                 repaired_specs.append(spec.model_copy(update={"pattern": None}))
                 continue

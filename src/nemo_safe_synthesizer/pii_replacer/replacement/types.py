@@ -31,6 +31,7 @@ __all__ = [
     "GroupMappingKey",
     "GroupMappingProvenance",
     "RecordMappingKey",
+    "StructuredMappingKey",
     "detected_text",
     "free_text_mapping_key",
     "require_effective_dependency_tuple",
@@ -258,7 +259,10 @@ class RecordMappingKey:
     """Stable input row position that scopes the mapping."""
 
     canonical_original_value: CanonicalValue = field(repr=False)
-    """Canonical original value. Excluded from ``repr`` because it may contain PII."""
+    """Canonical original value, with letter case folded for strings so case variants share a mapping.
+
+    Excluded from ``repr`` because it may contain PII.
+    """
 
     def __post_init__(self) -> None:
         _require_str(self.target_column, "record mapping target_column")
@@ -340,12 +344,19 @@ class GroupMappingKey:
     """Original grouping-column value. Excluded from ``repr`` because it may contain PII."""
 
     canonical_original_value: CanonicalValue = field(repr=False)
-    """Canonical original value. Excluded from ``repr`` because it may contain PII."""
+    """Canonical original value, with letter case folded for strings so case variants share a mapping.
+
+    Excluded from ``repr`` because it may contain PII.
+    """
 
     def __post_init__(self) -> None:
         _require_str(self.target_column, "group mapping target_column")
         _require_scope_identity(self.original_group_identity, "group mapping original_group_identity")
         _require_canonical_value(self.canonical_original_value, "group mapping canonical_original_value")
+
+
+StructuredMappingKey: TypeAlias = RecordMappingKey | GroupMappingKey
+"""Cache identity for one structured replacement in record or group scope."""
 
 
 @dataclass(frozen=True, slots=True)

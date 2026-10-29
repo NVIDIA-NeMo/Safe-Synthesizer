@@ -320,12 +320,7 @@ def _apply_inference_cli_overrides(
     """
     replace_pii = config.replace_pii
     model_id = settings.inference_model_id
-    if (
-        replace_pii is None
-        or replace_pii.llm is None
-        or model_id is None
-        or "inference_model_id" not in settings.explicit_cli_fields
-    ):
+    if replace_pii is None or model_id is None or "inference_model_id" not in settings.explicit_cli_fields:
         return config
 
     llm = replace_pii.llm.model_copy(update={"model_id": model_id})

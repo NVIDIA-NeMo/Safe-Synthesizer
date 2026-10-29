@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import nemo_safe_synthesizer.observability as obs
@@ -17,8 +18,8 @@ import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodul
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import EntityType
-from nemo_safe_synthesizer.pii_replacer.planning import load_plan
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -689,7 +690,9 @@ class TestRunReplacePii:
 
         nss = patched_run_dependencies["safe_synthesizer"]
         nss.with_data_source.assert_called_once_with(mock_dataframe)
-        nss.plan_pii_replacement.assert_called_once_with(output_path=mock_workdir.run_dir / "pii_replacement_plan.yaml")
+        nss.plan_pii_replacement.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "safe-synthesizer-config.yaml"
+        )
         nss.process_data.assert_not_called()
         nss.train.assert_not_called()
         nss.generate.assert_not_called()
@@ -762,9 +765,17 @@ class TestRunReplacePii:
         )
 
         assert result.exit_code == 0
-        plan_path = run_path / "pii_replacement_plan.yaml"
-        assert plan_path.exists()
-        plan = load_plan(plan_path)
+        resolved_config_path = run_path / "safe-synthesizer-config.yaml"
+        resolved_yaml = yaml.safe_load(resolved_config_path.read_text())
+        assert resolved_yaml["replace_pii"]["replacement_plan"] == "pii_replacement_plan.yaml"
+        serialized = yaml.safe_load((run_path / "pii_replacement_plan.yaml").read_text())
+        assert serialized["data_to_sampler_value_mapping"] == {}
+        assert "pattern" not in serialized["columns_to_replace"][0]
+        assert "depends_on" not in serialized["columns_to_replace"][0]
+        resolved_config = SafeSynthesizerParameters.from_yaml(resolved_config_path)
+        assert resolved_config.replace_pii is not None
+        plan = resolved_config.replace_pii.inline_plan
+        assert plan is not None
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
@@ -791,8 +802,8 @@ class TestRunReplacePii:
         responses = iter(
             [
                 '{"classifications":['
-                '{"column_name":"col1","entity_type":null,"pattern":null},'
-                '{"column_name":"col2","entity_type":null,"pattern":null}'
+                '{"column_name":"col1","entity_type":null},'
+                '{"column_name":"col2","entity_type":null}'
                 "]}",
             ]
         )

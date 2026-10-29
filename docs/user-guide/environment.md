@@ -170,8 +170,7 @@ for the full pre-cache checklist.
 
 ## PII Replacement
 
-Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
-enhancement. By default, NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
+Automatic PII plan discovery uses an LLM. By default, NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
 on the GPU for the duration of plan discovery, so no endpoint or key is needed
 and the data stays on this machine. Planning data leaves the machine only when
 `NSS_INFERENCE_ENDPOINT` points to a non-loopback host; see
