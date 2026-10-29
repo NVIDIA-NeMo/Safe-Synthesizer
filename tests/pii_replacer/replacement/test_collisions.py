@@ -245,9 +245,13 @@ class TestGroupingColumnIsOneToOne:
 
 @pytest.mark.unit
 class TestMaskWidening:
-    def test_a_mask_without_a_multi_choice_position_fails_instead_of_widening_forever(self) -> None:
-        dataframe = pd.DataFrame({"gid": ["ID-0", "ID-1"]})
-        spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="ID-[0]")
+    @pytest.mark.parametrize(("pattern", "groups"), [("ID-[0]", ["ID-0", "ID-1"]), ("[aA]", ["a", "A"])])
+    def test_a_mask_without_a_multi_choice_position_fails_instead_of_widening_forever(
+        self, pattern: str, groups: list[str]
+    ) -> None:
+        # [aA] has two characters but one value ignoring letter case, so widening it adds no room.
+        dataframe = pd.DataFrame({"gid": groups})
+        spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern=pattern)
         executor = StructuredReplacementExecutor(
             PiiReplacementPlan(columns_to_replace=[spec]), _ScriptedGenerator(), group_column="gid", base_seed=42
         )

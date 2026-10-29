@@ -112,15 +112,15 @@ class MaskSpace:
     def widened(self) -> MaskSpace | None:
         """Return this mask with its last multi-choice position repeated, or ``None`` if it has none.
 
-        Only a generated position with more than one allowed character adds room, so a mask such as
-        ``ID-[0]`` cannot widen.
+        Only a generated position with more than one allowed character, ignoring letter case, adds room,
+        since replacements are compared ignoring case. So masks such as ``ID-[0]`` and ``ID-[aA]`` cannot widen.
 
         Example:
             ``MaskSpace.from_pattern("ID-#").widened()`` produces ``"ID-00"`` through ``"ID-99"``.
         """
         for position_index in range(len(self.positions) - 1, -1, -1):
             position = self.positions[position_index]
-            if isinstance(position, tuple) and len(position) > 1:
+            if isinstance(position, tuple) and len({character.casefold() for character in position}) > 1:
                 return MaskSpace(
                     (*self.positions[: position_index + 1], position, *self.positions[position_index + 1 :])
                 )
