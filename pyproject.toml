@@ -84,8 +84,6 @@ test = [
 [project.optional-dependencies]
 engine = [
     "anyascii",
-    "pycountry",
-    "flashtext",
     "category-encoders",
     "dython>=0.7.12",
     "dateparser",
@@ -102,7 +100,6 @@ engine = [
     "scikit-learn",
     "range_regex>=0.1.0",
     "tenacity==9.1.4",
-    "tldextract",
     "tqdm>=4.67.1",
     "wandb==0.28.0",
 ]
