@@ -93,7 +93,7 @@ engine = [
     "datasets>=4.8.4",
     "huggingface-hub>=1.3.0,<2",
     "json-repair>=0.60.1",
-    "nameparser>=2.8.0,<3",
+    "nameparser[ja]>=2.8.0,<3",
     "outlines-core==0.2.14",
     "prv-accountant",
     "python-stdnum",

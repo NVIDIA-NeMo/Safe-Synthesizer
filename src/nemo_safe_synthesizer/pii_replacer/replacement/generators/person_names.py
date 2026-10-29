@@ -25,9 +25,8 @@ __all__ = ["FullNameLayout", "full_name_layout", "read_full_name", "write_full_n
 
 _FAKER_NAME_TOKEN = re.compile(r"\{\{(first|last)_name\w*\}\}")
 
-# nameparser locale packs, by language. The Japanese pack only splits unspaced names, which needs the optional
-# namedivider package, and full names are written spaced in ja_JP.
-_NAMEPARSER_PACKS = {"zh": "zh", "ru": "ru", "tr": "tr_az", "az": "tr_az"}
+# nameparser locale packs, by language. The Chinese and Japanese packs split unspaced names, such as 山田太郎.
+_NAMEPARSER_PACKS = {"zh": "zh", "ja": "ja", "ru": "ru", "tr": "tr_az", "az": "tr_az"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,4 +123,9 @@ def _parser(language: str, family_first: bool) -> Parser:
     # own: the order is always the one the name was written in.
     base = Parser(policy=Policy(name_order=FAMILY_FIRST if family_first else GIVEN_FIRST, script_orders=()))
     pack = _NAMEPARSER_PACKS.get(language)
-    return parser_for(locales.get(pack), base=base) if pack is not None else base
+    if pack is None:
+        return base
+    if pack == "ja":
+        # The Japanese splitter comes from nameparser's ja extra and takes about a second to load.
+        return parser_for(locales.get(pack), base=base, segmenter=locales.ja_segmenter())
+    return parser_for(locales.get(pack), base=base)

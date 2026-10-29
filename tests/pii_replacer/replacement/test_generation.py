@@ -435,6 +435,8 @@ class TestReplacementGenerator:
             ("Lee Eric", "en_US", "{Last} {First}", ("Eric", "", "Lee")),
             ("Nagy Péter", "hu_HU", None, ("Péter", "", "Nagy")),
             ("山田 太郎", "ja_JP", None, ("太郎", "", "山田")),
+            ("山田太郎", "ja_JP", None, ("太郎", "", "山田")),
+            ("長谷川あかり", "ja_JP", None, ("あかり", "", "長谷川")),
             ("太郎 山田", "ja_JP", "{First} {Last}", ("太郎", "", "山田")),
             ("欧阳小明", "zh_CN", None, ("小明", "", "欧阳")),
             ("김민준", "ko_KR", None, ("민준", "", "김")),

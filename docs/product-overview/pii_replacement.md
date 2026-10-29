@@ -119,7 +119,9 @@ replacement must stay consistent with. A dependency works in one of two ways:
   reads the full name in the order of its column's pattern, such as
   `{Last}, {First}`, or else in the order of `replace_pii.locale`. A comma
   always marks the last name first, as in `Hopper, Grace`, a particle such as
-  `van` stays with the last name, and titles and suffixes are left out.
+  `van` stays with the last name, titles and suffixes are left out, and
+  unspaced Chinese, Japanese, and Korean names, such as `山田太郎`, are split
+  into family and given names.
 
 Only these dependencies are allowed:
 
