@@ -366,21 +366,26 @@ class FreeTextReplacementExecutor:
                 self._register(scope_identity, original_type, original_value, replacement_value)
 
     def _register_name_parts(self, scope_identity: Hashable, original: str, replacement: str) -> None:
-        """Register each name word of a full name against the word in the same position of its replacement.
+        """Register each name word of a full name against the word of the same part in its replacement.
 
-        Titles and suffixes are skipped on both sides, so ``John Smith Jr``
-        replaced by ``Mark Brown`` registers ``John`` and ``Smith``. A position
-        where either side is an initial is skipped, because a one-letter mapping
-        would replace every matching letter in later text.
+        Words pair by part, not position, so ``Lovelace, Ada`` replaced by
+        ``Grace Hopper`` registers ``Ada`` as ``Grace`` and ``Lovelace`` as
+        ``Hopper``. Middle names pair in order, and a part with a different
+        number of words on each side is skipped. Titles and suffixes are
+        skipped, so ``John Smith Jr`` replaced by ``Mark Brown`` registers
+        ``John`` and ``Smith``. A pair where either side is an initial is
+        skipped, because a one-letter mapping would replace every matching
+        letter in later text.
         """
-        original_parts = _positional_name_words(original, self._locale)
-        replacement_parts = _positional_name_words(replacement, self._locale)
-        if original_parts is None or replacement_parts is None or len(original_parts) != len(replacement_parts):
-            return
-        for original_word, replacement_word in zip(original_parts, replacement_parts, strict=True):
-            if original_word.part_type is None or original_word.is_initial or replacement_word.is_initial:
+        original_parts = _name_words_by_part(original, self._locale)
+        replacement_parts = _name_words_by_part(replacement, self._locale)
+        for part_type, original_words in original_parts.items():
+            replacement_words = replacement_parts.get(part_type, [])
+            if len(original_words) != len(replacement_words):
                 continue
-            self._register(scope_identity, original_word.part_type, original_word.text, replacement_word.text)
+            for original_word, replacement_word in zip(original_words, replacement_words, strict=True):
+                if not (original_word.is_initial or replacement_word.is_initial):
+                    self._register(scope_identity, part_type, original_word.text, replacement_word.text)
 
     def _register_address_component(
         self,
@@ -696,10 +701,13 @@ def _name_parts(value: str, locale: str) -> tuple[_NameWord, ...] | None:
     return tuple(words)
 
 
-def _positional_name_words(value: str, locale: str) -> tuple[_NameWord, ...] | None:
-    """Return the first, middle, and last name words of ``value`` without titles or suffixes."""
-    words = _name_parts(value, locale)
-    return None if words is None else tuple(word for word in words if word.part_type is not None)
+def _name_words_by_part(value: str, locale: str) -> dict[EntityType, list[_NameWord]]:
+    """Return the first, middle, and last name words of ``value`` by part, in order, without titles or suffixes."""
+    by_part: dict[EntityType, list[_NameWord]] = {}
+    for word in _name_parts(value, locale) or ():
+        if word.part_type is not None:
+            by_part.setdefault(word.part_type, []).append(word)
+    return by_part
 
 
 def _registrable_name_words(value: str, locale: str) -> tuple[tuple[EntityType, str], ...]:

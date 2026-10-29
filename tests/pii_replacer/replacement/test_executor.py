@@ -990,6 +990,22 @@ class TestStructuredReplacementExecutor:
         assert result.dataframe["notes"].iloc[0] == "Grace Hopper Jr called. Hopper agreed."
         assert [request.entity_type for request in generator.requests] == [EntityType.FIRST_NAME, EntityType.LAST_NAME]
 
+    def test_structured_last_name_first_full_name_registers_parts_by_role(self) -> None:
+        text = "Ada called Lovelace"
+        dataframe = pd.DataFrame({"full_name": ["Lovelace, Ada"], "notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Ada", EntityType.FIRST_NAME),
+                _span(0, "notes", text, "Lovelace", EntityType.LAST_NAME),
+            ]
+        )
+
+        result = _execute(dataframe, plan, _CompositeNameGenerator(), free_text_detector=detector)
+
+        assert result.dataframe["full_name"].iloc[0] == "Grace Hopper"
+        assert result.dataframe["notes"].iloc[0] == "Grace called Hopper"
+
     def test_structured_full_name_with_a_suffix_registers_its_surname(self) -> None:
         dataframe = pd.DataFrame({"full_name": ["John Smith Jr"], "notes": ["Ask Smith to call"]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
