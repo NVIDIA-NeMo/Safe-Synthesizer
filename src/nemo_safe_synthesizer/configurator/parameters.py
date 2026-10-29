@@ -39,10 +39,13 @@ from .parameter import (
 )
 from .parameter_paths import PARAMETER_PATH_SEPARATOR, ParameterSchema, format_parameter_path
 
-__all__ = ["Parameters"]
+__all__ = ["CONFIG_DIR_CONTEXT_KEY", "Parameters"]
 
 PathT = str | Path
 _MISSING = object()
+
+CONFIG_DIR_CONTEXT_KEY = "config_dir"
+"""Validation-context key holding the directory of the file being loaded, so nested paths resolve beside it."""
 
 
 class Parameters(BaseModel, metaclass=ABCMeta):
@@ -290,7 +293,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """
         with open(path, "r") as f:
             data = json.load(f)
-        params = cls.model_validate(data)
+        params = cls.model_validate(data, context={CONFIG_DIR_CONTEXT_KEY: Path(path).parent})
         if overrides:
             params = params.model_copy(update=overrides)
         return params
@@ -314,7 +317,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             raise FileNotFoundError(f"File {pth} does not exist")
         with pth.open("r") as f:
             data = yaml.safe_load(f)
-        params = cls.model_validate(data)
+        params = cls.model_validate(data, context={CONFIG_DIR_CONTEXT_KEY: pth.parent})
         if overrides:
             params = params.model_copy(update=overrides)
         return params

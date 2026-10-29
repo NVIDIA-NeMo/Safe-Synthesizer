@@ -20,6 +20,7 @@ from ..config import (
 )
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
+from ..defaults import PII_REPLACEMENT_PLAN_FILENAME, RESOLVED_CONFIG_FILENAME
 from ..errors import ParameterError
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
@@ -40,7 +41,7 @@ from .config_builder import ConfigBuilder
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from ..config.replace_pii import PiiReplacementPlan
+    from ..config.replace_pii import ReplacePiiConfig
     from ..evaluation.evaluator import Evaluator
     from ..generation.backend import GeneratorBackend
     from ..llm.metadata import ModelMetadata
@@ -361,24 +362,32 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.plan_pii_replacement", category=LogCategory.RUNTIME)
-    def plan_pii_replacement(self, output_path: Path | str | None = None) -> PiiReplacementPlan:
-        """Resolve a PII replacement plan from the full input dataframe.
+    def plan_pii_replacement(self, output_path: Path | str | None = None) -> ReplacePiiConfig:
+        """Resolve a PII plan and its dependency mappings from the full input dataframe.
 
         This plan-only workflow does not split the input or enter model
         metadata, training, generation, replacement, or evaluation stages.
-        When ``output_path`` is provided, the resolved plan is also written as
-        reusable YAML.
+        When ``output_path`` is provided, the complete NSS configuration is
+        written there, and its ``replace_pii.replacement_plan``, the part to
+        review, is written to ``pii_replacement_plan.yaml`` in the same directory;
+        the configuration names that file, so either can be reused.
 
         Args:
-            output_path: Optional destination for the replacement-plan YAML.
+            output_path: Optional destination for the reusable NSS configuration YAML.
 
         Returns:
-            The dataframe-aware validated replacement plan.
+            The dataframe-aware resolved PII replacement configuration.
 
         Raises:
-            ParameterError: If PII replacement is disabled.
+            ParameterError: If PII replacement is disabled, or ``output_path`` is named
+                ``pii_replacement_plan.yaml``.
             ValueError: If no valid data source is configured.
         """
+        if output_path is not None and Path(output_path).name == PII_REPLACEMENT_PLAN_FILENAME:
+            raise ParameterError(
+                f"output_path cannot be named {PII_REPLACEMENT_PLAN_FILENAME}; NSS writes the replacement plan to that "
+                "file next to the configuration"
+            )
         self._ensure_observability()
         self.resolve()
 
@@ -388,15 +397,22 @@ class SafeSynthesizer(ConfigBuilder):
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
 
-        from ..pii_replacer.planning import resolve_plan
+        from ..pii_replacer.planning import resolve_replacement_config
 
-        return resolve_plan(
+        resolved = resolve_replacement_config(
             self._data_source,
             replace_pii,
             self._nss_config.data,
             self._nss_config.time_series,
-            output_path=output_path,
         )
+        self._nss_config = self._nss_config.model_copy(update={"replace_pii": resolved})
+        if output_path is not None:
+            from ..pii_replacer.planning.io import save_config
+
+            config_path = Path(output_path)
+            plan_path = config_path.parent / PII_REPLACEMENT_PLAN_FILENAME
+            save_config(self._nss_config, config_path, plan_path=plan_path)
+        return resolved
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:
@@ -507,8 +523,10 @@ class SafeSynthesizer(ConfigBuilder):
         if check_only:
             assert self._workdir is not None
             self._workdir.ensure_directories()
-            config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
-            self._nss_config.to_yaml(config_path, exclude_unset=False)
+            config_path = self._workdir.run_dir / RESOLVED_CONFIG_FILENAME
+            from ..pii_replacer.planning.io import save_config
+
+            save_config(self._nss_config, config_path)
             self._preflight_config_path = config_path
 
         preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)

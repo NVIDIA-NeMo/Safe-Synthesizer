@@ -12,9 +12,15 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import EntityType, PiiColumnPlan, PiiReplacementPlan, ReplacePiiConfig
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.pii_replacer.planning import load_plan
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 
@@ -38,11 +44,14 @@ def test_importing_safe_synthesizer_does_not_load_model_stack() -> None:
 def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"row_id": range(100), "email": [f"person-{i}@example.com" for i in range(100)]})
     config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
-    expected = PiiReplacementPlan()
+    expected = ReplacePiiConfig(replacement_plan=PiiReplacementPlan())
     nss = SafeSynthesizer(config=config, save_path=tmp_path).with_data_source(dataframe)
 
     with (
-        patch("nemo_safe_synthesizer.pii_replacer.planning.resolve_plan", return_value=expected) as resolve_plan,
+        patch(
+            "nemo_safe_synthesizer.pii_replacer.planning.resolve_replacement_config",
+            return_value=expected,
+        ) as resolve_config,
         patch.object(nss, "process_data") as process_data,
         patch.object(nss, "train") as train,
         patch.object(nss, "generate") as generate,
@@ -51,12 +60,12 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
         result = nss.plan_pii_replacement()
 
     assert result is expected
-    args = resolve_plan.call_args.args
+    args = resolve_config.call_args.args
     assert args[0] is dataframe
     assert args[1] == config.replace_pii
     assert args[2] == config.data
     assert args[3] == config.time_series
-    assert resolve_plan.call_args.kwargs == {"output_path": None}
+    assert resolve_config.call_args.kwargs == {}
     process_data.assert_not_called()
     train.assert_not_called()
     generate.assert_not_called()
@@ -64,12 +73,16 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
 
 
 def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Path) -> None:
-    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"], "visit_id": ["V1", "V2"]})
     inline_plan = PiiReplacementPlan(
-        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
     )
-    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=inline_plan))
-    output_path = tmp_path / "review" / "pii_replacement_plan.yaml"
+    config = SafeSynthesizerParameters(
+        replace_pii=ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), replacement_plan=inline_plan
+        )
+    )
+    output_path = tmp_path / "review" / "safe-synthesizer-config.yaml"
 
     result = (
         SafeSynthesizer(config=config, save_path=tmp_path / "artifacts")
@@ -77,8 +90,23 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
         .plan_pii_replacement(output_path=output_path)
     )
 
-    assert result == inline_plan
-    assert load_plan(output_path) == inline_plan
+    assert result.inline_plan == inline_plan
+    assert result.inline_plan is not None
+    assert result.inline_plan.data_to_sampler_value_mapping == {}
+    assert SafeSynthesizerParameters.from_yaml(output_path).replace_pii == result
+    plan_text = (output_path.parent / "pii_replacement_plan.yaml").read_text()
+    assert plan_text.startswith(
+        "# PII replacement plan for this dataset, written for the faker sampler in locale en_US."
+    )
+    assert "Draft review" not in plan_text
+
+
+def test_plan_pii_replacement_rejects_an_output_path_named_like_the_plan_file(tmp_path: Path) -> None:
+    nss = SafeSynthesizer(save_path=tmp_path).with_data_source(pd.DataFrame({"email": ["a@example.com"]}))
+    nss.with_replace_pii(replacement_plan={"columns_to_replace": []})
+
+    with pytest.raises(ParameterError, match="output_path cannot be named pii_replacement_plan.yaml"):
+        nss.plan_pii_replacement(output_path=tmp_path / "pii_replacement_plan.yaml")
 
 
 def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:
