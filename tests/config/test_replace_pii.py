@@ -64,7 +64,7 @@ class TestPiiColumnPlan:
 
     def test_pattern_rejected_when_entity_has_no_pattern_syntax(self) -> None:
         with pytest.raises(ValidationError, match="does not allow pattern"):
-            PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN, pattern="###-##-####")
+            PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID, pattern="###-##-####")
         with pytest.raises(ValidationError, match="does not allow pattern"):
             PiiColumnPlan(column_name="addr", entity_type=EntityType.STREET_ADDRESS, pattern="#### Main St")
         with pytest.raises(ValidationError, match="does not allow pattern"):
@@ -593,7 +593,6 @@ class TestReplacePiiConfig:
             EntityType.PHONE_NUMBER: 0.990,
             EntityType.DATE_OF_BIRTH: 0.9998,
             EntityType.STREET_ADDRESS: 0.985,
-            EntityType.SSN: 0.050,
             EntityType.NATIONAL_ID: 0.982,
             EntityType.API_KEY: 0.992,
             EntityType.UNIQUE_IDENTIFIER: 0.947,

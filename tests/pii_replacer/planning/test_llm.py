@@ -470,7 +470,7 @@ class TestLLMPlanEnhancer:
         enhancer, transport = _enhancer(
             [
                 _classifications(
-                    {"phone": "phone_number", "email": "email", "ssn": "ssn", "visits": None},
+                    {"phone": "phone_number", "email": "email", "ssn": "national_id", "visits": None},
                     patterns={"phone": "&#-%#"},
                 )
             ]
@@ -865,7 +865,7 @@ class TestLLMPlanEnhancer:
 
     def test_patterns_request_is_skipped_when_no_column_takes_a_pattern(self) -> None:
         dataframe = pd.DataFrame({"ssn": ["123-45-6789"], "visits": [3]})
-        enhancer, transport = _enhancer([_classifications({"ssn": "ssn", "visits": None})])
+        enhancer, transport = _enhancer([_classifications({"ssn": "national_id", "visits": None})])
 
         plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
 

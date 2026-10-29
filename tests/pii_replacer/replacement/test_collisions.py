@@ -58,8 +58,8 @@ class TestAllDistinct:
 @pytest.mark.unit
 class TestCandidateChooser:
     def test_another_original_is_accepted_and_a_used_value_only_repeats(self) -> None:
-        chooser = CandidateChooser(EntityType.SSN, "111-11-1111", used={"333-33-3333"})
-        request = _request(EntityType.SSN, "111-11-1111")
+        chooser = CandidateChooser(EntityType.NATIONAL_ID, "111-11-1111", used={"333-33-3333"})
+        request = _request(EntityType.NATIONAL_ID, "111-11-1111")
 
         assert not chooser.offer(request, "111-11-1111")
         assert not chooser.offer(request, "333-33-3333")
@@ -67,8 +67,8 @@ class TestCandidateChooser:
         assert chooser.offer(request, "222-22-2222")
 
     def test_without_a_used_set_any_value_but_the_own_original_is_accepted(self) -> None:
-        chooser = CandidateChooser(EntityType.SSN, "111-11-1111")
-        request = _request(EntityType.SSN, "111-11-1111")
+        chooser = CandidateChooser(EntityType.NATIONAL_ID, "111-11-1111")
+        request = _request(EntityType.NATIONAL_ID, "111-11-1111")
 
         assert not chooser.offer(request, "111-11-1111")
         assert chooser.offer(request, "222-22-2222")
@@ -88,7 +88,9 @@ class TestDistinctColumns:
         dataframe = pd.DataFrame({"ssn": ["111-11-1111", "222-22-2222"]})
         generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "444-44-4444")
 
-        result = _execute(dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN), generator=generator)
+        result = _execute(
+            dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID), generator=generator
+        )
 
         assert result["ssn"].tolist() == ["333-33-3333", "444-44-4444"]
 
@@ -96,7 +98,9 @@ class TestDistinctColumns:
         dataframe = pd.DataFrame({"ssn": ["111-11-1111", "111-11-1111", "222-22-2222"]})
         generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "333-33-3333")
 
-        result = _execute(dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN), generator=generator)
+        result = _execute(
+            dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID), generator=generator
+        )
 
         assert result["ssn"].tolist() == ["333-33-3333"] * 3
 
@@ -106,8 +110,8 @@ class TestDistinctColumns:
 
         result = _execute(
             dataframe,
-            PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN),
-            PiiColumnPlan(column_name="spouse_ssn", entity_type=EntityType.SSN),
+            PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID),
+            PiiColumnPlan(column_name="spouse_ssn", entity_type=EntityType.NATIONAL_ID),
             generator=generator,
         )
 
@@ -193,7 +197,7 @@ class TestCrossColumnSharing:
             }
         )
         generator = _ScriptedGenerator("444-44-4444", "444-44-4444", "777-77-7777", "888-88-8888", "999-99-9999")
-        specs = [PiiColumnPlan(column_name=column, entity_type=EntityType.SSN) for column in ("ssn", "alt_ssn")]
+        specs = [PiiColumnPlan(column_name=column, entity_type=EntityType.NATIONAL_ID) for column in ("ssn", "alt_ssn")]
 
         result = _execute(dataframe, *specs, generator=generator)
 

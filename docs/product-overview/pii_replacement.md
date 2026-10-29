@@ -139,7 +139,7 @@ must match at least 99% of the column's non-null values: a plan whose pattern
 matches fewer is rejected, and discovery drops a proposed pattern that matches
 fewer. Each entity
 type uses one of three pattern syntaxes, and the remaining types, such as
-`street_address`, `ssn`, and `ipv4`, take no pattern.
+`street_address`, `national_id`, and `ipv4`, take no pattern.
 
 Name templates, for `first_name`, `middle_name`, `last_name`, `full_name`, and
 `email`, combine literal text with placeholders such as `{First} {Last}` or
@@ -183,6 +183,16 @@ A full name with no pattern is written in the order of `replace_pii.locale`,
 as Faker writes that locale's names: given name first in `en_US`, family name
 first in `ja_JP` and `hu_HU`, and family name first with no space in `zh_CN`
 and `ko_KR`.
+
+A national ID is replaced with a new ID of the locale's own kind when the
+original is one, as checked by [python-stdnum](https://pypi.org/project/python-stdnum/):
+a Social Security number in `en_US`, SIN in `en_CA`, NIR in `fr_FR`, codice
+fiscale in `it_IT`, resident registration number in `ko_KR`, BSN in `nl_NL`,
+PESEL in `pl_PL`, CPF in `pt_BR`, personnummer in `sv_SE`, and resident ID in
+`zh_CN`. Faker generates the new ID, written with the original's separators,
+so `123456789` in `en_US` becomes another SSN without dashes. Every other value,
+and every value in another locale, keeps its layout with each letter and digit
+replaced: `D1234567` becomes a value such as `Q8051937`.
 
 ### Dependencies
 
@@ -487,7 +497,7 @@ full name also avoids the original's first and last name; when no such name is
 found, NSS keeps one that shares a part and logs a warning with the count. A
 replacement may equal another row's original value, and replacements may repeat
 across rows. The exception is an identifier-like column (email, phone number,
-SSN, national ID, card number, API key, IP address, unique identifier) whose
+national ID, card number, API key, IP address, unique identifier) whose
 original values are all distinct, such as a key column: its replacements stay
 distinct too, ignoring case, and when no unused value is found, NSS repeats one
 and logs a warning with the count. Without a pattern, digit-only identifiers are
@@ -537,7 +547,6 @@ replace_pii:
       phone_number: 0.990
       date_of_birth: 0.9998
       street_address: 0.985
-      ssn: 0.050
       national_id: 0.982
       api_key: 0.992
       unique_identifier: 0.947
@@ -571,8 +580,7 @@ Several checkpoint labels map to one NSS entity type:
 |---|---|
 | `phone_number` | `phone_number`, `fax_number` |
 | `street_address` | `street_address` |
-| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, and `government_id` values that are not SSNs |
-| `ssn` | `government_id` values shaped `ddd-dd-dddd` that python-stdnum accepts as US SSNs: never area 000, 666, or 900-999, group 00, serial 0000, or a number made public in advertising |
+| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, `government_id` |
 | `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number`, `certificate_number` |
 
 Identifiers are requested only by the kinds that text names, such as "customer
@@ -588,8 +596,11 @@ with names. NSS therefore configures a confidence threshold for every
 GLiNER2-detected entity type. The defaults come from tuning on the development
 split of the NSS PII detection evaluation for exact-span F0.5, which weights
 precision over recall. The checkpoint's scores cluster just below 1.0 for most
-types, so most defaults are above 0.97. `ssn` is low because the SSN format
-check, not the score, separates SSNs from other government IDs. Regex-owned
+types, so most defaults are above 0.97. A `government_id` span shaped
+`ddd-dd-dddd` that python-stdnum accepts as a US SSN needs a score of only
+0.050, because the format check, not the score, separates SSNs from other
+government IDs; python-stdnum rejects area 000, 666, and 900-999, group 00,
+serial 0000, and numbers made public in advertising. Regex-owned
 types have no confidence threshold. Checkpoint aliases use the threshold of the
 NSS entity they normalize to.
 

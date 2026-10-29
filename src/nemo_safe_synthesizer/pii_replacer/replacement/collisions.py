@@ -35,7 +35,6 @@ IDENTIFIER_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
         EntityType.PHONE_NUMBER,
-        EntityType.SSN,
         EntityType.NATIONAL_ID,
         EntityType.CREDIT_DEBIT_CARD,
         EntityType.API_KEY,

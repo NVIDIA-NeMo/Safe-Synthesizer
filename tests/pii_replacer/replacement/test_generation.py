@@ -18,6 +18,16 @@ import pytest
 from faker import Faker
 from faker.providers.person.en_US import Provider as FakerPersonProvider
 from faker.providers.person.fr_FR import Provider as FrenchFakerPersonProvider
+from stdnum.br import cpf as br_cpf
+from stdnum.ca import sin as ca_sin
+from stdnum.cn import ric as cn_ric
+from stdnum.fr import nir as fr_nir
+from stdnum.it import codicefiscale as it_codicefiscale
+from stdnum.kr import rrn as kr_rrn
+from stdnum.nl import bsn as nl_bsn
+from stdnum.pl import pesel as pl_pesel
+from stdnum.se import personnummer as se_personnummer
+from stdnum.us import ssn as us_ssn
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
@@ -176,7 +186,6 @@ class TestReplacementGenerator:
             (EntityType.PHONE_NUMBER, "+1-202-555-0101"),
             (EntityType.DATE_OF_BIRTH, "1815-12-10"),
             (EntityType.STREET_ADDRESS, "1 Main Street"),
-            (EntityType.SSN, "123-45-6789"),
             (EntityType.NATIONAL_ID, "123-45-6789"),
             (EntityType.CREDIT_DEBIT_CARD, "4111111111111111"),
             (EntityType.API_KEY, "sk-ABC123"),
@@ -633,16 +642,44 @@ class TestReplacementGenerator:
         assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
         assert birth_dates.birth_date_is_supported(original)
 
-    @pytest.mark.parametrize("locale", ["fr_FR", "en_GB", "de_DE"])
     @pytest.mark.parametrize(
-        ("entity_type", "original"), [(EntityType.SSN, "123-45-6789"), (EntityType.NATIONAL_ID, "123-45-6789")]
+        ("locale", "original", "is_valid"),
+        [
+            ("en_US", "244-76-8917", us_ssn.is_valid),
+            ("en_US", "244768917", us_ssn.is_valid),
+            ("en_CA", "317 280 675", ca_sin.is_valid),
+            ("en_CA", "317-280-675", ca_sin.is_valid),
+            ("fr_FR", "175091730037964", fr_nir.is_valid),
+            ("it_IT", "VRCCCL47R16G698J", it_codicefiscale.is_valid),
+            ("ko_KR", "950218-1326531", kr_rrn.is_valid),
+            ("nl_NL", "382749066", nl_bsn.is_valid),
+            ("pl_PL", "83071182590", pl_pesel.is_valid),
+            ("pt_BR", "38274906500", br_cpf.is_valid),
+            ("sv_SE", "870629-6061", se_personnummer.is_valid),
+            ("zh_CN", "11010519491231002X", cn_ric.is_valid),
+        ],
     )
-    def test_ssn_is_a_us_ssn_in_every_locale(self, locale: str, entity_type: EntityType, original: str) -> None:
+    def test_national_id_of_the_locales_kind_gets_a_valid_one_in_its_layout(
+        self, locale: str, original: str, is_valid: Callable[[str], bool]
+    ) -> None:
         generator = _faker_generator(locale=locale)
 
-        replacement = generator.generate(_request(entity_type, original))
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed))
 
-        assert re.fullmatch(r"[0-8][0-9]{2}-[0-9]{2}-[0-9]{4}", replacement)
+            assert is_valid(replacement), replacement
+            assert [character.isalnum() for character in replacement] == [character.isalnum() for character in original]
+            assert replacement != original
+
+    @pytest.mark.parametrize(("locale", "original"), [("de_DE", "123-45-6789"), ("en_US", "912-45-6789")])
+    def test_national_id_of_another_kind_keeps_its_layout(self, locale: str, original: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacements = [generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed)) for seed in range(20)]
+
+        assert all(re.fullmatch(r"[0-9]{3}-[0-9]{2}-[0-9]{4}", replacement) for replacement in replacements)
+        # A layout copy draws every digit, so some replacements are not valid SSNs, which Faker never produces.
+        assert not all(us_ssn.is_valid(replacement) for replacement in replacements)
 
     def test_street_address_stays_on_one_line(self) -> None:
         generator = _faker_generator(locale="en_GB")

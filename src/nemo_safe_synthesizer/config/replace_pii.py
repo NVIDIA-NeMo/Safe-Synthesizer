@@ -98,7 +98,6 @@ class EntityType(StrEnum):
     PHONE_NUMBER = "phone_number"
     DATE_OF_BIRTH = "date_of_birth"
     STREET_ADDRESS = "street_address"
-    SSN = "ssn"
     NATIONAL_ID = "national_id"
     CREDIT_DEBIT_CARD = "credit_debit_card"
     API_KEY = "api_key"  # pragma: allowlist secret
@@ -248,13 +247,10 @@ ENTITIES: tuple[Entity, ...] = (
         description="A street address, possibly including city, state, or postal code.",
     ),
     Entity(
-        EntityType.SSN, action=EntityAction.REPLACE, can_condition=False, description="A US Social Security number."
-    ),
-    Entity(
         EntityType.NATIONAL_ID,
         action=EntityAction.REPLACE,
         can_condition=False,
-        description="A government-issued personal identification number other than a US Social Security number.",
+        description="A government-issued personal identification number, such as a US Social Security number.",
     ),
     Entity(
         EntityType.CREDIT_DEBIT_CARD,
@@ -365,7 +361,6 @@ _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType
         EntityType.PHONE_NUMBER: 0.990,
         EntityType.DATE_OF_BIRTH: 0.9998,
         EntityType.STREET_ADDRESS: 0.985,
-        EntityType.SSN: 0.050,
         EntityType.NATIONAL_ID: 0.982,
         EntityType.API_KEY: 0.992,
         EntityType.UNIQUE_IDENTIFIER: 0.947,
@@ -878,7 +873,7 @@ class FreeTextDetectionConfig(NSSBaseModel):
         description=(
             "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.946 for "
             "first_name; 0.7 for middle_name; 0.618 for last_name; 0.964 for full_name; 0.990 for phone_number; 0.9998 for "
-            "date_of_birth; 0.985 for street_address; 0.050 for ssn; 0.982 for national_id; 0.992 for api_key; "
+            "date_of_birth; 0.985 for street_address; 0.982 for national_id; 0.992 for api_key; "
             "and 0.947 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
             "take no threshold."
         ),

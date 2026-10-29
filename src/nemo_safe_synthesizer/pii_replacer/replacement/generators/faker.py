@@ -5,12 +5,22 @@
 
 from __future__ import annotations
 
-import re
+from collections.abc import Callable, Mapping
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
 
 from faker import Faker
+from stdnum.br import cpf
+from stdnum.ca import sin
+from stdnum.cn import ric
+from stdnum.fr import nir
+from stdnum.it import codicefiscale
+from stdnum.kr import rrn
+from stdnum.nl import bsn
+from stdnum.pl import pesel
+from stdnum.se import personnummer
+from stdnum.us import ssn
 
 from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import GenerationError, InternalError
@@ -98,10 +108,8 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.STREET_ADDRESS:
             # Some locales, such as en_GB, put a flat or unit on its own line.
             return fake.street_address().replace("\n", ", ")
-        if entity_type is EntityType.SSN:
-            return _us_ssn(request.seed)
         if entity_type is EntityType.NATIONAL_ID:
-            return _national_id(request, rng)
+            return _national_id(request.original_value, self._locale, fake, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
@@ -203,35 +211,67 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
     return shaped if shaped != request.original_value else None
 
 
-_SSN_SHAPE = re.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
+_NATIONAL_ID_CHECKS: Mapping[str, Callable[[str], bool]] = {
+    "en_US": ssn.is_valid,
+    "en_CA": sin.is_valid,
+    "fr_FR": nir.is_valid,
+    "it_IT": codicefiscale.is_valid,
+    "ko_KR": rrn.is_valid,
+    "nl_NL": bsn.is_valid,
+    "pl_PL": pesel.is_valid,
+    "pt_BR": cpf.is_valid,
+    "sv_SE": personnummer.is_valid,
+    "zh_CN": ric.is_valid,
+}
+"""python-stdnum check for each locale whose national ID Faker's ``ssn()`` generates.
+
+Faker returns a US SSN for many other locales, such as ``de_DE`` and ``ja_JP``, so those are left out.
+"""
+
+_MAX_NATIONAL_ID_DRAWS = 200
+"""Faker draws tried for a valid national ID; some ``zh_CN`` and ``ko_KR`` draws fail python-stdnum's check."""
 
 
-def _us_ssn(seed: int) -> str:
-    """Return a US Social Security number whatever the configured locale.
+def _national_id(original: str, locale: str, fake: Faker, rng: Random) -> str:
+    """Return a national ID for ``original``: the locale's own ID when ``original`` is one, else the same layout.
 
-    The ``ssn`` entity is a US SSN, but ``Faker.ssn()`` returns each locale's own national ID, such as a
-    15-digit French number for ``fr_FR``.
-    """
-    fake = Faker("en_US")
-    fake.seed_instance(seed)
-    return fake.ssn()
-
-
-def _national_id(request: ReplacementGenerationRequest, rng: Random) -> str:
-    """Return a national ID in the original's shape: an SSN for SSN-shaped values, else the same layout.
-
-    National IDs include driver's licenses, tax IDs, and non-US identifiers, so only an SSN-shaped
-    original gets an SSN. Any other value keeps its layout, with every letter and digit replaced.
+    When ``original`` passes python-stdnum's check for the locale's national ID, Faker generates a new one,
+    written in the original's layout when both have as many letters and digits. Any other value keeps its
+    layout, with every letter and digit replaced, since national IDs include driver's licenses, tax IDs, and
+    other countries' IDs.
 
     Example:
-        ``"123-45-6789"`` becomes another SSN, ``"D1234567"`` becomes a value such as
-        ``"Q8051937"``, and ``"12-3456789"`` keeps its ``dd-ddddddd`` layout.
+        In ``en_US``, ``"123-45-6789"`` becomes another SSN and ``"123456789"`` another SSN without dashes.
+        ``"D1234567"`` becomes a value such as ``"Q8051937"`` in every locale.
     """
-    if _SSN_SHAPE.fullmatch(request.original_value) is None:
-        shaped = shape_preserving_value(request.original_value, rng)
-        if shaped != request.original_value:
-            return shaped
-    return _us_ssn(request.seed)
+    is_valid = _NATIONAL_ID_CHECKS.get(locale)
+    if is_valid is not None and _passes(is_valid, original):
+        for _ in range(_MAX_NATIONAL_ID_DRAWS):
+            candidate = _in_layout(fake.ssn(), original)
+            if candidate.casefold() != original.casefold() and _passes(is_valid, candidate):
+                return candidate
+    return shape_preserving_value(original, rng)
+
+
+def _passes(is_valid: Callable[[str], bool], value: str) -> bool:
+    # cn.ric.is_valid raises KeyError for some unknown region codes instead of returning False.
+    try:
+        return is_valid(value)
+    except Exception:
+        return False
+
+
+def _in_layout(generated: str, original: str) -> str:
+    """Return ``generated``'s letters and digits in ``original``'s layout, or ``generated`` if their counts differ.
+
+    Example:
+        ``_in_layout("258 032 739", "317-280-675")`` is ``"258-032-739"``.
+    """
+    characters = [character for character in generated if character.isalnum()]
+    if len(characters) != sum(character.isalnum() for character in original):
+        return generated
+    fill = iter(characters)
+    return "".join(next(fill) if character.isalnum() else character for character in original)
 
 
 def _is_uuid(value: str) -> bool:

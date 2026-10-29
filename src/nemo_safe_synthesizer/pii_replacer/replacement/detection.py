@@ -63,6 +63,7 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "fax_number": EntityType.PHONE_NUMBER,
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,
+    "government_id": EntityType.NATIONAL_ID,
     "national_id_number": EntityType.NATIONAL_ID,
     "passport_number": EntityType.NATIONAL_ID,
     "tax_id": EntityType.NATIONAL_ID,
@@ -75,13 +76,10 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "health_plan_beneficiary_number": EntityType.UNIQUE_IDENTIFIER,
     "certificate_number": EntityType.UNIQUE_IDENTIFIER,
 }
-_GLINER_UNION_LABELS: dict[str, tuple[EntityType, ...]] = {
-    "government_id": (EntityType.SSN, EntityType.NATIONAL_ID),
-}
-_GLINER_LABEL_ENTITY_TYPES = {
-    **{label: (entity_type,) for label, entity_type in _GLINER_LABELS.items()},
-    **_GLINER_UNION_LABELS,
-}
+# The v6 tuning gave government_id spans that pass the US SSN check a far lower threshold than other
+# national IDs, since the check rather than the score tells SSNs apart. Kept until evals retune national_id.
+_VALID_SSN_LABEL = "government_id"
+_VALID_SSN_THRESHOLD = 0.050
 _SSN_SHAPE = regex.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
 _NAME_ENTITY_TYPES = frozenset(
     {EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME, EntityType.FULL_NAME}
@@ -197,7 +195,7 @@ class Gliner2Detector:
         *,
         model_loader: Callable[[str, str | None], _GlinerModel] | None = None,
     ) -> None:
-        colliding = sorted(set(_exclusion_thresholds(config)) & set(_GLINER_LABEL_ENTITY_TYPES))
+        colliding = sorted(set(_exclusion_thresholds(config)) & set(_GLINER_LABELS))
         if colliding:
             raise ParameterError(
                 f"free_text_detection.name_exclusion_thresholds cannot use GLiNER2 detection labels: {colliding}"
@@ -412,8 +410,8 @@ def _requested_labels(
     allowed = frozenset(chain.from_iterable(cell.allowed_entity_types for cell in cells))
     labels = {
         label: {"threshold": _model_label_threshold(label, config)}
-        for label, entity_types in sorted(_GLINER_LABEL_ENTITY_TYPES.items())
-        if allowed.intersection(entity_types)
+        for label, entity_type in sorted(_GLINER_LABELS.items())
+        if entity_type in allowed
     }
     if allowed & _NAME_ENTITY_TYPES:
         labels.update(
@@ -465,10 +463,14 @@ def _normalize_chunk_span(
         return None, False
     original_start, original_end = offsets
     value = chunk.original_text[original_start:original_end]
-    entity_type = _normalize_gliner_label(label, value)
+    normalized_label = _normalize_label(label)
+    entity_type = _GLINER_LABELS.get(normalized_label)
     if entity_type is None:
         return None, False
-    if score < config.entity_thresholds[entity_type]:
+    threshold = config.entity_thresholds[entity_type]
+    if normalized_label == _VALID_SSN_LABEL and _is_valid_ssn(value):
+        threshold = min(threshold, _VALID_SSN_THRESHOLD)
+    if score < threshold:
         return None, False
 
     # An identifier without a digit is almost always a word the model mistook for one.
@@ -550,10 +552,10 @@ def _has_name_neighbors(middle: _TextSpan, spans: Sequence[_TextSpan]) -> bool:
 
 def _model_label_threshold(label: str, config: FreeTextDetectionConfig) -> float:
     """Return a safe model-side floor for one checkpoint label."""
-    candidates = _GLINER_LABEL_ENTITY_TYPES[_normalize_label(label)]
-    # Union labels are normalized from the returned value, so inference must
-    # preserve candidates accepted by any possible NSS entity type.
-    return min(config.entity_thresholds[entity_type] for entity_type in candidates)
+    normalized_label = _normalize_label(label)
+    threshold = config.entity_thresholds[_GLINER_LABELS[normalized_label]]
+    # Valid SSNs are accepted below the national_id threshold, so inference must keep them.
+    return min(threshold, _VALID_SSN_THRESHOLD) if normalized_label == _VALID_SSN_LABEL else threshold
 
 
 def _copy_span_to_cells(span: _TextSpan, cells: list[DetectionCell]) -> tuple[DetectedSpan, ...]:
@@ -715,15 +717,6 @@ def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple
         yield start, end, label, float(score)
 
 
-def _normalize_gliner_label(label: str, value: str) -> EntityType | None:
-    """Normalize one documented checkpoint label, including validated union labels."""
-    normalized = _normalize_label(label)
-    entity_type = _GLINER_LABELS.get(normalized)
-    if normalized == "government_id":
-        return EntityType.SSN if _is_valid_ssn(value) else EntityType.NATIONAL_ID
-    return entity_type
-
-
 def _normalize_label(label: str) -> str:
     """Normalize a checkpoint label's case and separators for lookup."""
     return label.strip().casefold().replace("-", "_").replace(" ", "_")
@@ -734,7 +727,7 @@ def _is_valid_ssn(value: str) -> bool:
 
     python-stdnum rejects numbers never assigned, such as area 000, 666, or 900-999 (ITINs and other tax IDs use the
     9xx range), group 00, or serial 0000, and numbers made public in advertising, such as ``078-05-1120``. Such
-    values are typed ``national_id`` instead.
+    values need the ``national_id`` threshold.
     """
     return _SSN_SHAPE.fullmatch(value) is not None and us_ssn.is_valid(value)
 

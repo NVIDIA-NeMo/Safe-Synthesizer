@@ -199,18 +199,19 @@ class TestGliner2Detector:
         assert "address" not in labels
         assert labels["phone_number"] == {"threshold": 0.990}
 
-    def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
-        texts = ["123-45-6789", "AB-12345"]
+    @pytest.mark.parametrize(
+        "not_an_ssn",
+        ["AB-12345", "912-45-6789", "666-45-6789", "123-00-6789", "123-45-0000", "078-05-1120", "١٢٣-٤٥-٦٧٨٩"],
+    )
+    def test_government_id_spans_that_are_valid_ssns_use_the_lower_threshold(self, not_an_ssn: str) -> None:
+        texts = [not_an_ssn, "123-45-6789"]
         model = _FakeModel(
             [
                 {"entities": {"government_id": [{"start": 0, "end": len(texts[0]), "confidence": 0.7}]}},
                 {"entities": {"government_id": [{"start": 0, "end": len(texts[1]), "confidence": 0.7}]}},
             ]
         )
-        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {
-            EntityType.SSN: 0.8,
-            EntityType.NATIONAL_ID: 0.6,
-        }
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {EntityType.NATIONAL_ID: 0.8}
         detector = Gliner2Detector(
             FreeTextDetectionConfig(entity_thresholds=entity_thresholds),
             model_loader=lambda *_: model,
@@ -227,7 +228,7 @@ class TestGliner2Detector:
             (1, EntityType.NATIONAL_ID),
         ]
         labels = model.calls[0][1]
-        assert labels["government_id"] == {"threshold": 0.6}
+        assert labels["government_id"] == {"threshold": 0.05}
 
     def test_remaps_overlapping_chunk_offsets_to_the_complete_cell(self) -> None:
         model = _FakeModel(
@@ -360,14 +361,8 @@ class TestGliner2Detector:
             ("fax_number", "+1 202 555 0102", EntityType.PHONE_NUMBER),
             ("date_of_birth", "5 April 1990", EntityType.DATE_OF_BIRTH),
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
-            ("government_id", "123-45-6789", EntityType.SSN),
+            ("government_id", "123-45-6789", EntityType.NATIONAL_ID),
             ("government_id", "AB-12345", EntityType.NATIONAL_ID),
-            ("government_id", "912-45-6789", EntityType.NATIONAL_ID),
-            ("government_id", "666-45-6789", EntityType.NATIONAL_ID),
-            ("government_id", "123-00-6789", EntityType.NATIONAL_ID),
-            ("government_id", "123-45-0000", EntityType.NATIONAL_ID),
-            ("government_id", "078-05-1120", EntityType.NATIONAL_ID),
-            ("government_id", "١٢٣-٤٥-٦٧٨٩", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
             ("passport_number", "X1234567", EntityType.NATIONAL_ID),
             ("tax_id", "12-3456789", EntityType.NATIONAL_ID),
@@ -543,7 +538,7 @@ class TestGliner2Detector:
 
         assert detector.detect([_cell(text)]).spans == ()
 
-    def test_normalizes_documented_government_id_label_to_ssn(self) -> None:
+    def test_normalizes_documented_government_id_label_to_national_id(self) -> None:
         text = "Identifier 123-45-6789"
         model = _FakeModel(
             [{"entities": {"government_id": [{"text": "123-45-6789", "start": 11, "end": 22, "confidence": 0.9}]}}]
@@ -552,7 +547,7 @@ class TestGliner2Detector:
 
         spans = detector.detect([_cell(text)]).spans
 
-        assert [(span.entity_type, span.start, span.end) for span in spans] == [(EntityType.SSN, 11, 22)]
+        assert [(span.entity_type, span.start, span.end) for span in spans] == [(EntityType.NATIONAL_ID, 11, 22)]
 
     def test_wraps_model_load_failures_as_generation_errors(self) -> None:
         detector = Gliner2Detector(

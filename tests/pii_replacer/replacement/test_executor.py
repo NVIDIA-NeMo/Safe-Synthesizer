@@ -464,7 +464,7 @@ class TestStructuredReplacementExecutor:
         )
         plan = _plan(
             _target("email", EntityType.EMAIL, ("organization", EntityType.ORGANIZATION)),
-            _target("ssn", EntityType.SSN),
+            _target("ssn", EntityType.NATIONAL_ID),
         )
 
         result = _execute(dataframe, plan, _ConstantGenerator(), group_column="patient")
@@ -472,7 +472,7 @@ class TestStructuredReplacementExecutor:
         email, ssn = result.column_statistics["email"], result.column_statistics["ssn"]
         assert email.dependency_drift_count == 1
         assert ssn.repeated_replacement_count == 2
-        assert ssn.detected_entity_values == {"ssn": {"111-11-1111", "222-22-2222", "333-33-3333"}}
+        assert ssn.detected_entity_values == {"national_id": {"111-11-1111", "222-22-2222", "333-33-3333"}}
         assert "detected_entity_values" not in ssn.model_dump()
         assert "111-11-1111" not in repr(ssn)
 
