@@ -384,8 +384,12 @@ class StructuredReplacementExecutor:
         """Take the next usable value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        distinct = spec.column_name in self._used_by_distinct_column or spec.column_name == self._group_column
-        allocation = allocator.allocate(seed, original_text, distinct=distinct)
+        avoid = (
+            self._group_replacements
+            if spec.column_name == self._group_column
+            else self._used_by_distinct_column.get(spec.column_name)
+        )
+        allocation = allocator.allocate(seed, original_text, avoid=avoid)
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(
@@ -457,7 +461,8 @@ def _widen_for_one_to_one(
     widened: MaskSpace | None = space
     final_space = space
     # Each group needs its own value that differs from its original, so the mask needs more values than groups.
-    while widened is not None and allocator.space.size <= distinct:
+    # Values are compared ignoring case, so a mask that allows both cases counts each letter once.
+    while widened is not None and widened.folded_size <= distinct:
         widened = widened.widened()
         if widened is not None:
             final_space = widened

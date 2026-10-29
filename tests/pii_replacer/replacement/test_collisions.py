@@ -217,3 +217,21 @@ class TestPatternsSurviveLetterCase:
         result = _execute(dataframe, spec, generator=_ScriptedGenerator())
 
         assert result["code"].tolist() == ["a"]
+
+    def test_a_mask_allowing_both_cases_never_restores_the_original(self) -> None:
+        dataframe = pd.DataFrame({"code": ["a"] * 20})
+        spec = PiiColumnPlan(column_name="code", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="[aAb]")
+
+        result = _execute(dataframe, spec, generator=_ScriptedGenerator())
+
+        assert result["code"].tolist() == ["b"] * 20
+
+    def test_a_distinct_column_stays_distinct_after_letter_case_is_restored(self) -> None:
+        # Lowercase originals get every replacement in lowercase, so "Ab" and "aB" would both become "ab".
+        dataframe = pd.DataFrame({"key": [f"{first}{second}" for first in "abcdefghij" for second in "abcdefghij"]})
+        spec = PiiColumnPlan(column_name="key", entity_type=EntityType.API_KEY, pattern="**")
+
+        result = _execute(dataframe, spec, generator=_ScriptedGenerator())
+
+        assert result["key"].str.casefold().nunique() == 100
+        assert (result["key"].str.casefold() != dataframe["key"]).all()

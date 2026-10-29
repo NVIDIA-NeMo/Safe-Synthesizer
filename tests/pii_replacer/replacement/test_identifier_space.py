@@ -66,8 +66,8 @@ class TestIdentifierSpace:
     def test_distinct_allocation_uses_every_other_value_before_repeating(self) -> None:
         allocator = IdentifierAllocator(NumberSpace(1))
 
-        first = [allocator.allocate(seed, "0", distinct=True) for seed in range(9)]
-        repeated = [allocator.allocate(seed, "0", distinct=True) for seed in range(3)]
+        first = [allocator.allocate(seed, "0", avoid=set()) for seed in range(9)]
+        repeated = [allocator.allocate(seed, "0", avoid=set()) for seed in range(3)]
 
         assert sorted(first) == [(str(value), "new") for value in range(1, 10)]
         assert all(allocation is not None and allocation[1] == "repeat" for allocation in repeated)
@@ -75,17 +75,17 @@ class TestIdentifierSpace:
     def test_allocation_without_distinctness_only_skips_the_own_original(self) -> None:
         allocator = IdentifierAllocator(NumberSpace(1))
 
-        allocations = [allocator.allocate(seed, "7", distinct=False) for seed in range(20)]
+        allocations = [allocator.allocate(seed, "7", avoid=None) for seed in range(20)]
 
         assert all(allocation is not None and allocation[1] == "new" for allocation in allocations)
         assert "7" not in {allocation[0] for allocation in allocations if allocation is not None}
         # Seed 9 starts at 7, the own original, so allocation steps to the next value.
-        assert allocator.allocate(9, "7", distinct=False) == ("8", "new")
+        assert allocator.allocate(9, "7", avoid=None) == ("8", "new")
 
     def test_long_masks_vary_their_leading_positions(self) -> None:
         allocator = IdentifierAllocator(MaskSpace.from_pattern("ADM-" + "&" * 32))
 
-        values = [allocator.allocate(seed, "ADM-" + "0" * 32, distinct=True) for seed in range(20)]
+        values = [allocator.allocate(seed, "ADM-" + "0" * 32, avoid=set()) for seed in range(20)]
 
         leading = {allocation[0][4:16] for allocation in values if allocation is not None}
         assert len(leading) == 20
@@ -94,14 +94,37 @@ class TestIdentifierSpace:
     def test_allocator_returns_nothing_when_only_the_own_original_exists(self) -> None:
         allocator = IdentifierAllocator(MaskSpace.from_pattern("ID-[0]"))
 
-        assert allocator.allocate(5, "ID-0", distinct=True) is None
+        assert allocator.allocate(5, "ID-0", avoid=set()) is None
+
+    def test_allocation_skips_the_own_original_ignoring_letter_case(self) -> None:
+        # The executor writes "A" in the case of "a", which would restore the original.
+        assert IdentifierAllocator(MaskSpace.from_pattern("[aA]")).allocate(0, "a", avoid=None) is None
+        allocator = IdentifierAllocator(MaskSpace.from_pattern("[aAb]"))
+
+        assert {allocator.allocate(seed, "a", avoid=None) for seed in range(20)} == {("b", "new")}
+
+    def test_distinct_allocation_skips_avoided_values_ignoring_letter_case(self) -> None:
+        allocator = IdentifierAllocator(MaskSpace.from_pattern("[aAbBcC]"))
+        used = {"b"}
+
+        first = allocator.allocate(3, "a", avoid=used)
+        assert first is not None and first[0].casefold() == "c"
+        used.add(first[0].casefold())
+
+        repeated = allocator.allocate(3, "a", avoid=used)
+        assert repeated == (first[0], "repeat")
+
+    def test_folded_size_counts_each_letter_once(self) -> None:
+        assert MaskSpace.from_pattern("ID-*").size == 62
+        assert MaskSpace.from_pattern("ID-*").folded_size == 36
+        assert MaskSpace.from_pattern("ID-##").folded_size == 100
 
     def test_allocator_is_deterministic_for_the_same_seeds(self) -> None:
         first = IdentifierAllocator(MaskSpace.from_pattern("ID-###"))
         second = IdentifierAllocator(MaskSpace.from_pattern("ID-###"))
 
-        assert [first.allocate(seed, "ID-001", distinct=True) for seed in (1, 1, 7)] == [
-            second.allocate(seed, "ID-001", distinct=True) for seed in (1, 1, 7)
+        assert [first.allocate(seed, "ID-001", avoid=set()) for seed in (1, 1, 7)] == [
+            second.allocate(seed, "ID-001", avoid=set()) for seed in (1, 1, 7)
         ]
 
     @pytest.mark.parametrize(

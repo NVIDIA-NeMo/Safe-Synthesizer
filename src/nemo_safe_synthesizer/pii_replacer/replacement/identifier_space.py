@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Sequence
+from collections.abc import Container, Sequence
 from dataclasses import dataclass
 from random import Random
 from typing import Literal
@@ -84,6 +84,19 @@ class MaskSpace:
     def size(self) -> int:
         """Number of distinct values the mask can produce."""
         return math.prod(len(position) for position in self.positions if isinstance(position, tuple))
+
+    @property
+    def folded_size(self) -> int:
+        """Number of values that still differ when letter case is ignored.
+
+        Example:
+            ``MaskSpace.from_pattern("*")`` has 62 values but only 36 ignoring case.
+        """
+        return math.prod(
+            len({character.casefold() for character in position})
+            for position in self.positions
+            if isinstance(position, tuple)
+        )
 
     def value_at(self, index: int) -> str:
         """Return the value at ``index``, where ``0 <= index < size``."""
@@ -173,35 +186,54 @@ class IdentifierAllocator:
         """Number of values not yet allocated to a column that must stay distinct."""
         return self.space.size - len(self._allocated_set)
 
-    def allocate(self, seed: int, own_original: str, *, distinct: bool) -> tuple[str, AllocationKind] | None:
+    def allocate(
+        self, seed: int, own_original: str, *, avoid: Container[str] | None
+    ) -> tuple[str, AllocationKind] | None:
         """Return a replacement for ``own_original`` and how it was chosen, or ``None`` if none differs from it.
 
         The replacement is the first value at or after a position drawn uniformly from the whole space
-        by ``seed`` that differs from ``own_original``. When ``distinct`` is true it must also not have
-        been allocated before; if no such value is left, a seeded choice among earlier replacements is
-        repeated.
+        by ``seed`` that differs from ``own_original`` ignoring letter case: the executor writes each
+        replacement in its occurrence's case, which would turn ``"A"`` back into an original ``"a"``. When
+        ``avoid`` is given, the column must stay distinct: the replacement must also not have been
+        allocated here before or be in ``avoid``, ignoring case. If no such value is left, a seeded choice
+        among earlier replacements is repeated.
 
         The start is drawn over the whole space rather than taken as ``seed % size``: a seed has 64 bits,
         and a long mask such as ``ADM-`` followed by 32 alphanumeric positions has far more, so a modulo
         would only ever vary the last positions and leave the rest at the first allowed character.
 
+        Args:
+            seed: Seed that picks the starting position.
+            own_original: The original value being replaced.
+            avoid: Case-folded values the column must not get, such as values it received from another
+                column, or ``None`` when replacements may repeat.
+
         Example:
-            In ``NumberSpace(1)``, seed 9 starts at 7, so ``allocate(9, "7", distinct=False)`` skips ``"7"``
+            In ``NumberSpace(1)``, seed 9 starts at 7, so ``allocate(9, "7", avoid=None)`` skips ``"7"``
             and returns ``("8", "new")``.
         """
         size = self.space.size
-        own = self.space.index_of(own_original)
+        own_index = self.space.index_of(own_original)
+        own_folded = own_original.casefold()
+        distinct = avoid is not None
         index = Random(seed).randrange(size)
         for _ in range(size):
-            if index != own and not (distinct and index in self._allocated_set):
-                if distinct:
-                    self._allocated.append(index)
-                    self._allocated_set.add(index)
-                return self.space.value_at(index), "new"
+            if index != own_index and not (distinct and index in self._allocated_set):
+                value = self.space.value_at(index)
+                folded = value.casefold()
+                if folded != own_folded and (avoid is None or folded not in avoid):
+                    if distinct:
+                        self._allocated.append(index)
+                        self._allocated_set.add(index)
+                    return value, "new"
             index = (index + 1) % size
-        repeats = [allocated for allocated in self._allocated if allocated != own]
+        repeats = [
+            value
+            for value in (self.space.value_at(allocated) for allocated in self._allocated)
+            if value.casefold() != own_folded
+        ]
         if repeats:
-            return self.space.value_at(repeats[seed % len(repeats)]), "repeat"
+            return repeats[seed % len(repeats)], "repeat"
         return None
 
 
