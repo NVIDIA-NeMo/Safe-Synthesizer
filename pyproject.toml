@@ -121,8 +121,8 @@ engine = [
 cpu = [
     "accelerate>=1.15.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.18.post1; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.18.post1; sys_platform == 'linux'",
+    "flashinfer-python==0.7.0.post1; sys_platform == 'linux'",
+    "flashinfer-cubin==0.7.0.post1; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -140,15 +140,15 @@ cpu = [
     "torchcodec==0.16.0; sys_platform == 'darwin'",
     "torchcodec==0.16.0+cpu; sys_platform == 'linux'",
     "torchao==0.17.0",
-    "transformers==5.12.0",
+    "transformers>=5.16.1,<5.20.0",
     "triton>=2.0.0; sys_platform=='linux'",
-    "vllm==0.30.0; sys_platform=='linux'",
+    "vllm==0.32.0; sys_platform=='linux'",
 ]
 cu129 = [
     "accelerate>=1.15.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.18.post1; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.18.post1; sys_platform == 'linux'",
+    "flashinfer-python==0.7.0.post1; sys_platform == 'linux'",
+    "flashinfer-cubin==0.7.0.post1; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -157,24 +157,30 @@ cu129 = [
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
-    "flashinfer-jit-cache==0.6.18.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm80==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm89==0.7.0.post1+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu129; sys_platform == 'linux'",
     "nvidia-cublas-cu12; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
     "triton>=2.0.0; sys_platform == 'linux'",
-    "transformers>=5.12,<5.12.1",
+    "transformers>=5.16.1,<5.20.0",
     "torch==2.13.0+cu129; sys_platform == 'linux'",
     "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
     "torchvision==0.28.0+cu129; sys_platform == 'linux'",
     "torchcodec==0.16.0+cu129; sys_platform == 'linux'",
     "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "vllm==0.30.0+cu129; sys_platform == 'linux'",
+    "vllm==0.32.0+cu129; sys_platform == 'linux'",
 ]
 cu130 = [
     "accelerate>=1.15.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.18.post1; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.18.post1; sys_platform == 'linux'",
+    "flashinfer-python==0.7.0.post1; sys_platform == 'linux'",
+    "flashinfer-cubin==0.7.0.post1; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -183,18 +189,26 @@ cu130 = [
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
-    "flashinfer-jit-cache==0.6.18.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm80==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm89==0.7.0.post1+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu130; sys_platform == 'linux'",
     "nvidia-cublas; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
     "triton>=2.0.0; sys_platform == 'linux'",
-    "transformers>=5.12,<5.12.1",
+    "transformers>=5.16.1,<5.20.0",
     "torch==2.13.0+cu130; sys_platform == 'linux'",
     "torchaudio==2.11.0+cu130; sys_platform == 'linux'",
     "torchvision==0.28.0+cu130; sys_platform == 'linux'",
     "torchcodec==0.16.0+cu130; sys_platform == 'linux'",
     "torchao==0.17.0+cu130; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "vllm==0.30.0; sys_platform == 'linux'",
+    "flashinfer-jit-cache-sm110a==0.7.0.post1+cu130; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm121a==0.7.0.post1+cu130; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "vllm==0.32.0; sys_platform == 'linux'",
 ]
 # <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
@@ -242,6 +256,8 @@ constraint-dependencies = [
     "cbor2>=5.9.0",
     "certifi>=2026.10.19", # Updated CA bundle for the eMudhra compromise
     "cryptography>=50.0.0",
+    "dnspython>=2.9.0",
+    "filelock>=4.2.1",
     "fsspec>=2026.6.0",
     "grpcio>=1.80.0",
     "idna>=3.15",
@@ -265,10 +281,27 @@ constraint-dependencies = [
     "urllib3>=2.8.0",
 ]
 
-# vLLM 0.30.0 caps setuptools below 81, excluding the fix for
+# vLLM 0.32.0 caps setuptools below 81, excluding the fix for
 # GHSA-h35f-9h28-mq5c. Use the patched release across runtime profiles.
 override-dependencies = [
     "setuptools>=83.0.0",
+]
+
+# FlashInfer's CUDA 13 cache shim has different requirements in its ARM64
+# and x86_64 wheels. uv uses one wheel's metadata for universal resolution;
+# mark the ARM64-only providers explicitly so both platforms remain installable.
+[[tool.uv.dependency-metadata]]
+name = "flashinfer-jit-cache"
+version = "0.7.0.post1+cu130"
+requires-dist = [
+    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm110a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm121a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm80==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm89==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu130",
 ]
 
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
@@ -283,8 +316,8 @@ flashinfer-cubin = [
     { index = "flashinfer-cubin", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 vllm = [
-    { index = "vllm-v0-30-0-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
-    { index = "vllm-v0-30-0-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+    { index = "vllm-v0-32-0-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "vllm-v0-32-0-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'" },
@@ -307,6 +340,30 @@ torchcodec = [
     { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 flashinfer-jit-cache = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm100a = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm103a = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm120f = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm80 = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm89 = [
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
+]
+flashinfer-jit-cache-sm90a = [
     { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
     { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
@@ -356,6 +413,12 @@ nvidia-nvshmem-cu12 = [
 ]
 nvidia-nvtx-cu12 = [
     { index = "pytorch-cu129" },
+]
+flashinfer-jit-cache-sm110a = [
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+]
+flashinfer-jit-cache-sm121a = [
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
 ]
 nvidia-cublas = [
     { index = "nvidia-pypi-public" },
@@ -433,13 +496,13 @@ url = "https://flashinfer.ai/whl/"
 explicit = true
 
 [[tool.uv.index]]
-name = "vllm-v0-30-0-cu129"
-url = "https://wheels.vllm.ai/0.30.0/cu129"
+name = "vllm-v0-32-0-cu129"
+url = "https://wheels.vllm.ai/0.32.0/cu129"
 explicit = true
 
 [[tool.uv.index]]
-name = "vllm-v0-30-0-cu130"
-url = "https://wheels.vllm.ai/0.30.0/cu130"
+name = "vllm-v0-32-0-cu130"
+url = "https://wheels.vllm.ai/0.32.0/cu130"
 explicit = true
 # <<< END GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT >>>
 [build-system]
