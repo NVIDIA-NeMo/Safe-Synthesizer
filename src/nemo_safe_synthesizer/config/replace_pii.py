@@ -348,36 +348,37 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-# Thresholds come from the nss-pii-ner-eval v6 tuning on its dev split (entity-type exact F0.5),
-# rounded. Name thresholds were tuned together with the name exclusion labels below and assume them.
+# Thresholds come from tuning on a labeled development set of PII text (entity-type exact F0.5),
+# rounded, with checked_national_id_threshold tuned jointly. Name thresholds were tuned together with the name exclusion labels below and assume them.
 # Dev has no gold middle names, so middle_name was set by review and relies on the middle-name
 # neighbour rule to reject words such as clothing sizes.
 _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType(
     {
-        EntityType.FIRST_NAME: 0.946,
+        EntityType.FIRST_NAME: 0.944,
         EntityType.MIDDLE_NAME: 0.7,
-        EntityType.LAST_NAME: 0.618,
-        EntityType.FULL_NAME: 0.964,
-        EntityType.PHONE_NUMBER: 0.990,
+        EntityType.LAST_NAME: 0.614,
+        EntityType.FULL_NAME: 0.963,
+        EntityType.PHONE_NUMBER: 0.992,
         EntityType.DATE_OF_BIRTH: 0.9998,
-        EntityType.STREET_ADDRESS: 0.985,
-        EntityType.NATIONAL_ID: 0.982,
-        EntityType.API_KEY: 0.992,
-        EntityType.UNIQUE_IDENTIFIER: 0.947,
+        EntityType.STREET_ADDRESS: 0.987,
+        EntityType.NATIONAL_ID: 0.979,
+        EntityType.API_KEY: 0.991,
+        EntityType.UNIQUE_IDENTIFIER: 0.946,
     }
 )
-# Same v6 tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
+# Same tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
 # span overlapping one of these labels is dropped. Earlier tunings also requested medical_procedure, but tuned it to
 # 1.0, which never fires, so it is not requested.
 _DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
     {
-        "body_part": 0.062,
-        "family_relationship": 0.062,
-        "gender": 0.385,
-        "medical_condition": 0.393,
-        "organism": 0.051,
+        "body_part": 0.053,
+        "family_relationship": 0.229,
+        "gender": 0.485,
+        "medical_condition": 0.378,
+        "organism": 0.061,
     }
 )
+_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD = 0.733
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
 
 
@@ -871,11 +872,20 @@ class FreeTextDetectionConfig(NSSBaseModel):
     entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
         default_factory=_default_gliner_entity_thresholds,
         description=(
-            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.946 for "
-            "first_name; 0.7 for middle_name; 0.618 for last_name; 0.964 for full_name; 0.990 for phone_number; 0.9998 for "
-            "date_of_birth; 0.985 for street_address; 0.982 for national_id; 0.992 for api_key; "
-            "and 0.947 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.944 for "
+            "first_name; 0.7 for middle_name; 0.614 for last_name; 0.963 for full_name; 0.992 for phone_number; 0.9998 for "
+            "date_of_birth; 0.987 for street_address; 0.979 for national_id; 0.991 for api_key; "
+            "and 0.946 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
             "take no threshold."
+        ),
+    )
+    checked_national_id_threshold: _ConfidenceThreshold = Field(
+        default=_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD,
+        description=(
+            "Minimum GLiNER2 confidence score for a detected national ID that python-stdnum accepts as a personal "
+            "ID of replace_pii.locale's country, such as a US Social Security number for en_US. It replaces "
+            "entity_thresholds.national_id for those values, since the check rather than the score tells them "
+            "apart. Locales without a check, such as en_GB, use only the national_id threshold."
         ),
     )
     name_exclusion_thresholds: dict[str, _ConfidenceThreshold] = Field(

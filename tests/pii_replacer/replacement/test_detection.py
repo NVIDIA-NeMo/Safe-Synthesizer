@@ -191,29 +191,34 @@ class TestGliner2Detector:
             (2, EntityType.PHONE_NUMBER),
         ]
         labels = model.calls[0][1]
-        assert labels["full_name"] == {"threshold": 0.964}
-        assert labels["first_name"] == {"threshold": 0.946}
+        assert labels["full_name"] == {"threshold": 0.963}
+        assert labels["first_name"] == {"threshold": 0.944}
         assert labels["middle_name"] == {"threshold": 0.7}
-        assert labels["last_name"] == {"threshold": 0.618}
+        assert labels["last_name"] == {"threshold": 0.614}
         assert "person" not in labels
         assert "address" not in labels
-        assert labels["phone_number"] == {"threshold": 0.990}
+        assert labels["phone_number"] == {"threshold": 0.992}
 
+    @pytest.mark.parametrize("label", ["government_id", "social_security_number", "tax_id"])
+    @pytest.mark.parametrize("ssn", ["123-45-6789", "123456789", "123 45 6789"])
     @pytest.mark.parametrize(
         "not_an_ssn",
         ["AB-12345", "912-45-6789", "666-45-6789", "123-00-6789", "123-45-0000", "078-05-1120", "١٢٣-٤٥-٦٧٨٩"],
     )
-    def test_government_id_spans_that_are_valid_ssns_use_the_lower_threshold(self, not_an_ssn: str) -> None:
-        texts = [not_an_ssn, "123-45-6789"]
+    def test_national_ids_that_pass_the_locale_check_use_the_checked_threshold(
+        self, label: str, ssn: str, not_an_ssn: str
+    ) -> None:
+        texts = [not_an_ssn, ssn]
         model = _FakeModel(
             [
-                {"entities": {"government_id": [{"start": 0, "end": len(texts[0]), "confidence": 0.7}]}},
-                {"entities": {"government_id": [{"start": 0, "end": len(texts[1]), "confidence": 0.7}]}},
+                {"entities": {label: [{"start": 0, "end": len(texts[0]), "confidence": 0.75}]}},
+                {"entities": {label: [{"start": 0, "end": len(texts[1]), "confidence": 0.75}]}},
             ]
         )
         entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {EntityType.NATIONAL_ID: 0.8}
         detector = Gliner2Detector(
-            FreeTextDetectionConfig(entity_thresholds=entity_thresholds),
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds, checked_national_id_threshold=0.7),
+            locale="en_US",
             model_loader=lambda *_: model,
         )
 
@@ -227,8 +232,20 @@ class TestGliner2Detector:
         assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [
             (1, EntityType.NATIONAL_ID),
         ]
-        labels = model.calls[0][1]
-        assert labels["government_id"] == {"threshold": 0.05}
+        assert model.calls[0][1][label] == {"threshold": 0.7}
+
+    def test_locale_without_a_check_uses_only_the_national_id_threshold(self) -> None:
+        text = "123-45-6789"
+        model = _FakeModel([{"entities": {"government_id": [{"start": 0, "end": len(text), "confidence": 0.75}]}}])
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {EntityType.NATIONAL_ID: 0.8}
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds, checked_national_id_threshold=0.7),
+            locale="en_GB",
+            model_loader=lambda *_: model,
+        )
+
+        assert detector.detect([_cell(text)]).spans == ()
+        assert model.calls[0][1]["government_id"] == {"threshold": 0.8}
 
     def test_remaps_overlapping_chunk_offsets_to_the_complete_cell(self) -> None:
         model = _FakeModel(
@@ -363,6 +380,7 @@ class TestGliner2Detector:
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
             ("government_id", "123-45-6789", EntityType.NATIONAL_ID),
             ("government_id", "AB-12345", EntityType.NATIONAL_ID),
+            ("social_security_number", "123-45-6789", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
             ("passport_number", "X1234567", EntityType.NATIONAL_ID),
             ("tax_id", "12-3456789", EntityType.NATIONAL_ID),
@@ -424,7 +442,7 @@ class TestGliner2Detector:
             ProtectedSpan(cell.cell_id, *mother),
             ProtectedSpan(cell.cell_id, raynaud[0], text.index(";")),
         )
-        assert model.calls[0][1]["family_relationship"] == {"threshold": 0.062}
+        assert model.calls[0][1]["family_relationship"] == {"threshold": 0.229}
 
     def test_exclusion_below_its_threshold_keeps_the_name(self) -> None:
         text = "Mother"

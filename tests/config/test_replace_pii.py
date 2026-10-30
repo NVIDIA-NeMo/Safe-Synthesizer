@@ -586,29 +586,30 @@ class TestReplacePiiConfig:
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
         expected_thresholds = {
-            EntityType.FIRST_NAME: 0.946,
+            EntityType.FIRST_NAME: 0.944,
             EntityType.MIDDLE_NAME: 0.7,
-            EntityType.LAST_NAME: 0.618,
-            EntityType.FULL_NAME: 0.964,
-            EntityType.PHONE_NUMBER: 0.990,
+            EntityType.LAST_NAME: 0.614,
+            EntityType.FULL_NAME: 0.963,
+            EntityType.PHONE_NUMBER: 0.992,
             EntityType.DATE_OF_BIRTH: 0.9998,
-            EntityType.STREET_ADDRESS: 0.985,
-            EntityType.NATIONAL_ID: 0.982,
-            EntityType.API_KEY: 0.992,
-            EntityType.UNIQUE_IDENTIFIER: 0.947,
+            EntityType.STREET_ADDRESS: 0.987,
+            EntityType.NATIONAL_ID: 0.979,
+            EntityType.API_KEY: 0.991,
+            EntityType.UNIQUE_IDENTIFIER: 0.946,
         }
         expected_exclusions = {
-            "body_part": 0.062,
-            "family_relationship": 0.062,
-            "gender": 0.385,
-            "medical_condition": 0.393,
-            "organism": 0.051,
+            "body_part": 0.053,
+            "family_relationship": 0.229,
+            "gender": 0.485,
+            "medical_condition": 0.378,
+            "organism": 0.061,
         }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
             model_id=DEFAULT_GLINER2_MODEL_ID,
             model_revision=DEFAULT_GLINER2_MODEL_REVISION,
             entity_thresholds=expected_thresholds,
+            checked_national_id_threshold=0.733,
             name_exclusion_thresholds=expected_exclusions,
             require_middle_name_neighbors=True,
             batch_size=8,
@@ -621,6 +622,7 @@ class TestReplacePiiConfig:
             "entity_thresholds": {
                 entity_type.value: threshold for entity_type, threshold in expected_thresholds.items()
             },
+            "checked_national_id_threshold": 0.733,
             "name_exclusion_thresholds": expected_exclusions,
             "require_middle_name_neighbors": True,
             "find_and_replace": True,

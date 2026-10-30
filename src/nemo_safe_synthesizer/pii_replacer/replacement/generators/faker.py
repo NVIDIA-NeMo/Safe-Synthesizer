@@ -5,22 +5,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
 
 from faker import Faker
-from stdnum.br import cpf
-from stdnum.ca import sin
-from stdnum.cn import ric
-from stdnum.fr import nir
-from stdnum.it import codicefiscale
-from stdnum.kr import rrn
-from stdnum.nl import bsn
-from stdnum.pl import pesel
-from stdnum.se import personnummer
-from stdnum.us import ssn
 
 from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import GenerationError, InternalError
@@ -28,6 +17,7 @@ from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
 from ...sampler_catalog import PERSONA_SEX_VALUES
 from ..birth_dates import random_birth_date, shift_birth_date
+from ..national_ids import national_id_check
 from ._common import (
     NAME_ENTITY_TYPES,
     default_email_pattern,
@@ -211,19 +201,10 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
     return shaped if shaped != request.original_value else None
 
 
-_NATIONAL_ID_CHECKS: Mapping[str, Callable[[str], bool]] = {
-    "en_US": ssn.is_valid,
-    "en_CA": sin.is_valid,
-    "fr_FR": nir.is_valid,
-    "it_IT": codicefiscale.is_valid,
-    "ko_KR": rrn.is_valid,
-    "nl_NL": bsn.is_valid,
-    "pl_PL": pesel.is_valid,
-    "pt_BR": cpf.is_valid,
-    "sv_SE": personnummer.is_valid,
-    "zh_CN": ric.is_valid,
-}
-"""python-stdnum check for each locale whose national ID Faker's ``ssn()`` generates.
+_FAKER_NATIONAL_ID_LOCALES = frozenset(
+    {"en_CA", "en_US", "fr_FR", "it_IT", "ko_KR", "nl_NL", "pl_PL", "pt_BR", "sv_SE", "zh_CN"}
+)
+"""Locales whose personal national ID Faker's ``ssn()`` generates.
 
 Faker returns a US SSN for many other locales, such as ``de_DE`` and ``ja_JP``, so those are left out. Some
 ``en_CA``, ``zh_CN``, and ``ko_KR`` values Faker generates fail python-stdnum's check.
@@ -242,20 +223,12 @@ def _national_id(original: str, locale: str, fake: Faker, rng: Random) -> str:
         In ``en_US``, ``"123-45-6789"`` becomes another SSN and ``"123456789"`` another SSN without dashes.
         ``"D1234567"`` becomes a value such as ``"Q8051937"`` in every locale.
     """
-    is_valid = _NATIONAL_ID_CHECKS.get(locale)
-    if is_valid is not None and _passes(is_valid, original):
+    is_national_id = national_id_check(locale, loose=True) if locale in _FAKER_NATIONAL_ID_LOCALES else None
+    if is_national_id is not None and is_national_id(original):
         generated = _in_layout(fake.ssn(), original)
         if generated.casefold() != original.casefold():
             return generated
     return shape_preserving_value(original, rng)
-
-
-def _passes(is_valid: Callable[[str], bool], value: str) -> bool:
-    # cn.ric.is_valid raises KeyError for some unknown region codes instead of returning False.
-    try:
-        return is_valid(value)
-    except Exception:
-        return False
 
 
 def _in_layout(generated: str, original: str) -> str:

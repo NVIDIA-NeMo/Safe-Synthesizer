@@ -17,7 +17,6 @@ from unicodedata import normalize
 
 import regex
 from stdnum import luhn
-from stdnum.us import ssn as us_ssn
 from typing_extensions import TypeIs
 
 from ...config.replace_pii import (
@@ -30,6 +29,7 @@ from ...config.replace_pii import (
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
+from .national_ids import national_id_check
 from .types import DetectedSpan, DetectionCell, DetectionCellId, FreeTextDetections, ProtectedSpan
 
 logger = get_logger(__name__)
@@ -49,10 +49,11 @@ _FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
-# Labels and default thresholds follow the nss-pii-ner-eval v6 study. Request only labels from the
-# checkpoint's fine-tuning label list: a label outside it competes with the trained labels and collapses
-# their recall. Identifiers are requested only by the kinds that prose names ("customer ID 1234");
-# generic labels such as "identifier" or "unique_id" mostly fire on device, vehicle, and biometric codes
+# Labels were chosen on a labeled development set of PII text. Request only labels from the checkpoint's
+# fine-tuning label list: a label outside it competes with the trained labels and collapses their recall.
+# The one exception is social_security_number: government_id scores most SSNs low, and the extra label
+# found more of them while every other type's F0.5 moved by at most 0.003. Identifiers are requested only
+# by the kinds that prose names ("customer ID 1234"); generic labels such as "identifier" or "unique_id" mostly fire on device, vehicle, and biometric codes
 # and stay unrequested.
 _GLINER_LABELS: dict[str, EntityType] = {
     "full_name": EntityType.FULL_NAME,
@@ -64,6 +65,7 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,
     "government_id": EntityType.NATIONAL_ID,
+    "social_security_number": EntityType.NATIONAL_ID,
     "national_id_number": EntityType.NATIONAL_ID,
     "passport_number": EntityType.NATIONAL_ID,
     "tax_id": EntityType.NATIONAL_ID,
@@ -76,11 +78,6 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "health_plan_beneficiary_number": EntityType.UNIQUE_IDENTIFIER,
     "certificate_number": EntityType.UNIQUE_IDENTIFIER,
 }
-# The v6 tuning gave government_id spans that pass the US SSN check a far lower threshold than other
-# national IDs, since the check rather than the score tells SSNs apart. Kept until evals retune national_id.
-_VALID_SSN_LABEL = "government_id"
-_VALID_SSN_THRESHOLD = 0.050
-_SSN_SHAPE = regex.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
 _NAME_ENTITY_TYPES = frozenset(
     {EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME, EntityType.FULL_NAME}
 )
@@ -180,6 +177,8 @@ class Gliner2Detector:
     Args:
         config: Detection settings: model ID and revision, entity and
             name-exclusion thresholds, chunk geometry, and batch size.
+        locale: Locale whose country's personal IDs, checked by python-stdnum,
+            use ``config.checked_national_id_threshold``.
         model_loader: Callable that loads a model from a model ID and an
             optional revision. Defaults to loading the local GLiNER2
             checkpoint; tests pass a fake.
@@ -193,6 +192,7 @@ class Gliner2Detector:
         self,
         config: FreeTextDetectionConfig,
         *,
+        locale: str = "en_US",
         model_loader: Callable[[str, str | None], _GlinerModel] | None = None,
     ) -> None:
         colliding = sorted(set(_exclusion_thresholds(config)) & set(_GLINER_LABELS))
@@ -201,6 +201,7 @@ class Gliner2Detector:
                 f"free_text_detection.name_exclusion_thresholds cannot use GLiNER2 detection labels: {colliding}"
             )
         self._config = config
+        self._is_national_id = national_id_check(locale)
         self._model_loader = model_loader or _load_gliner2_model
         self._model: _GlinerModel | None = None
 
@@ -217,12 +218,12 @@ class Gliner2Detector:
             return FreeTextDetections(())
 
         chunks = list(chain.from_iterable(_chunks(text, self._config) for text in cells_by_text))
-        results = self._infer(chunks, _requested_labels(cells, self._config))
+        results = self._infer(chunks, _requested_labels(cells, self._config, self._is_national_id))
         candidates: dict[str, _TextCandidates] = defaultdict(_TextCandidates)
         rejected_birth_dates = 0
         for chunk, result in zip(chunks, results, strict=True):
             rejected_birth_dates += _collect_chunk_candidates(
-                chunk, result, candidates[chunk.original_text], self._config
+                chunk, result, candidates[chunk.original_text], self._config, self._is_national_id
             )
         spans: list[DetectedSpan] = []
         protected: list[ProtectedSpan] = []
@@ -371,10 +372,11 @@ class CompositeFreeTextDetector:
         self,
         config: FreeTextDetectionConfig,
         *,
+        locale: str = "en_US",
         gliner: FreeTextDetector | None = None,
         regex_detector: FreeTextDetector | None = None,
     ) -> None:
-        self._gliner = gliner or Gliner2Detector(config)
+        self._gliner = gliner or Gliner2Detector(config, locale=locale)
         self._regex = regex_detector or RegexDetector()
 
     def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
@@ -402,6 +404,7 @@ def _cells_by_text(cells: Sequence[DetectionCell]) -> dict[str, list[DetectionCe
 def _requested_labels(
     cells: Sequence[DetectionCell],
     config: FreeTextDetectionConfig,
+    is_national_id: Callable[[str], bool] | None,
 ) -> dict[str, dict[str, float]]:
     """Return applicable checkpoint labels with their effective thresholds.
 
@@ -409,7 +412,7 @@ def _requested_labels(
     """
     allowed = frozenset(chain.from_iterable(cell.allowed_entity_types for cell in cells))
     labels = {
-        label: {"threshold": _model_label_threshold(label, config)}
+        label: {"threshold": _model_label_threshold(label, config, is_national_id)}
         for label, entity_type in sorted(_GLINER_LABELS.items())
         if entity_type in allowed
     }
@@ -430,6 +433,7 @@ def _collect_chunk_candidates(
     result: object,
     candidates: _TextCandidates,
     config: FreeTextDetectionConfig,
+    is_national_id: Callable[[str], bool] | None,
 ) -> int:
     """Add one chunk's accepted spans to its text's candidates and return the rejected-DOB count."""
     exclusion_thresholds = _exclusion_thresholds(config)
@@ -443,7 +447,7 @@ def _collect_chunk_candidates(
             if offsets is not None and score >= exclusion_threshold:
                 candidates.exclusions.append(offsets)
             continue
-        normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config)
+        normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config, is_national_id)
         rejected_birth_dates += int(rejected_birth_date)
         if normalized is not None:
             candidates.spans.append(normalized)
@@ -454,6 +458,7 @@ def _normalize_chunk_span(
     chunk: _Chunk,
     raw_span: tuple[int, int, str, float],
     config: FreeTextDetectionConfig,
+    is_national_id: Callable[[str], bool] | None,
 ) -> tuple[_TextSpan | None, bool]:
     """Validate offsets and normalize one checkpoint label to an NSS entity type."""
     start, end, label, score = raw_span
@@ -463,13 +468,12 @@ def _normalize_chunk_span(
         return None, False
     original_start, original_end = offsets
     value = chunk.original_text[original_start:original_end]
-    normalized_label = _normalize_label(label)
-    entity_type = _GLINER_LABELS.get(normalized_label)
+    entity_type = _GLINER_LABELS.get(_normalize_label(label))
     if entity_type is None:
         return None, False
     threshold = config.entity_thresholds[entity_type]
-    if normalized_label == _VALID_SSN_LABEL and _is_valid_ssn(value):
-        threshold = min(threshold, _VALID_SSN_THRESHOLD)
+    if entity_type is EntityType.NATIONAL_ID and is_national_id is not None and is_national_id(value):
+        threshold = config.checked_national_id_threshold
     if score < threshold:
         return None, False
 
@@ -546,12 +550,16 @@ def _has_name_neighbors(middle: _TextSpan, spans: Sequence[_TextSpan]) -> bool:
     return inside_full_name or (first_before and last_after)
 
 
-def _model_label_threshold(label: str, config: FreeTextDetectionConfig) -> float:
+def _model_label_threshold(
+    label: str, config: FreeTextDetectionConfig, is_national_id: Callable[[str], bool] | None
+) -> float:
     """Return a safe model-side floor for one checkpoint label."""
-    normalized_label = _normalize_label(label)
-    threshold = config.entity_thresholds[_GLINER_LABELS[normalized_label]]
-    # Valid SSNs are accepted below the national_id threshold, so inference must keep them.
-    return min(threshold, _VALID_SSN_THRESHOLD) if normalized_label == _VALID_SSN_LABEL else threshold
+    entity_type = _GLINER_LABELS[_normalize_label(label)]
+    threshold = config.entity_thresholds[entity_type]
+    # National IDs that pass the locale's check have their own threshold, so inference must keep them.
+    if entity_type is EntityType.NATIONAL_ID and is_national_id is not None:
+        return min(threshold, config.checked_national_id_threshold)
+    return threshold
 
 
 def _copy_span_to_cells(span: _TextSpan, cells: list[DetectionCell]) -> tuple[DetectedSpan, ...]:
@@ -580,8 +588,7 @@ def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSp
 
     Spans are ranked by length, then confidence (regex spans count as 1.0 and
     known-value matches as 0.0), then position, then source, GLiNER2 score, and entity order, and each is
-    kept unless it overlaps an already kept span. This is the rule
-    nss-pii-ner-eval scores with.
+    kept unless it overlaps an already kept span.
 
     Example:
         Two overlapping five-character spans at offsets 0 and 2 with scores
@@ -716,16 +723,6 @@ def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple
 def _normalize_label(label: str) -> str:
     """Normalize a checkpoint label's case and separators for lookup."""
     return label.strip().casefold().replace("-", "_").replace(" ", "_")
-
-
-def _is_valid_ssn(value: str) -> bool:
-    """Return whether ``value`` is a US Social Security number written ``ddd-dd-dddd``.
-
-    python-stdnum rejects numbers never assigned, such as area 000, 666, or 900-999 (ITINs and other tax IDs use the
-    9xx range), group 00, or serial 0000, and numbers made public in advertising, such as ``078-05-1120``. Such
-    values need the ``national_id`` threshold.
-    """
-    return _SSN_SHAPE.fullmatch(value) is not None and us_ssn.is_valid(value)
 
 
 def _load_gliner2_model(model_id: str, revision: str | None) -> _GlinerModel:

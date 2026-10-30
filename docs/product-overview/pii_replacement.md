@@ -542,22 +542,23 @@ replace_pii:
     model_id: fastino/gliner2-privacy-filter-PII-multi
     model_revision: c153999da5f4c509df4322b0c6a1baf3d2c284d7
     entity_thresholds:
-      first_name: 0.946
+      first_name: 0.944
       middle_name: 0.7
-      last_name: 0.618
-      full_name: 0.964
-      phone_number: 0.990
+      last_name: 0.614
+      full_name: 0.963
+      phone_number: 0.992
       date_of_birth: 0.9998
-      street_address: 0.985
-      national_id: 0.982
-      api_key: 0.992
-      unique_identifier: 0.947
+      street_address: 0.987
+      national_id: 0.979
+      api_key: 0.991
+      unique_identifier: 0.946
+    checked_national_id_threshold: 0.733
     name_exclusion_thresholds:
-      body_part: 0.062
-      family_relationship: 0.062
-      gender: 0.385
-      medical_condition: 0.393
-      organism: 0.051
+      body_part: 0.053
+      family_relationship: 0.229
+      gender: 0.485
+      medical_condition: 0.378
+      organism: 0.061
     require_middle_name_neighbors: true
     find_and_replace: true
     batch_size: 8
@@ -582,7 +583,7 @@ Several checkpoint labels map to one NSS entity type:
 |---|---|
 | `phone_number` | `phone_number`, `fax_number` |
 | `street_address` | `street_address` |
-| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, `government_id` |
+| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, `government_id`, `social_security_number` |
 | `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number`, `certificate_number` |
 
 Identifiers are requested only by the kinds that text names, such as "customer
@@ -591,18 +592,24 @@ biometric codes. Certificate and professional license numbers are identifiers.
 Tax numbers are national IDs,
 including business tax IDs, which the checkpoint does not distinguish from
 personal ones. Driver's license labels are not requested because they mostly
-match license plates and other vehicle codes.
+match license plates and other vehicle codes. `social_security_number` is not
+one of the checkpoint's trained labels, but it finds SSNs that `government_id`
+scores low without lowering accuracy on other types.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every
 GLiNER2-detected entity type. The defaults come from tuning on the development
 split of the NSS PII detection evaluation for exact-span F0.5, which weights
 precision over recall. The checkpoint's scores cluster just below 1.0 for most
-types, so most defaults are above 0.97. A `government_id` span shaped
-`ddd-dd-dddd` that python-stdnum accepts as a US SSN needs a score of only
-0.050, because the format check, not the score, separates SSNs from other
-government IDs; python-stdnum rejects area 000, 666, and 900-999, group 00,
-serial 0000, and numbers made public in advertising. Regex-owned
+types, so most defaults are above 0.97. A detected national ID that
+python-stdnum accepts as a personal ID of `replace_pii.locale`'s country, such
+as a US Social Security number in `en_US`, needs only
+`checked_national_id_threshold`, 0.733 by default, because the check rather than
+the score tells it apart; whitespace and dashes are ignored, so `123456789` and
+`123 45 6789` count. For US SSNs, python-stdnum rejects area 000, 666, and
+900-999, group 00, serial 0000, and numbers made public in advertising. Locales
+whose country has no check, such as `en_GB`, use only the `national_id`
+threshold. Regex-owned
 types have no confidence threshold. Checkpoint aliases use the threshold of the
 NSS entity they normalize to.
 
