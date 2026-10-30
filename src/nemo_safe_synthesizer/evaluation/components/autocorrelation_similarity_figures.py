@@ -41,6 +41,8 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     datasets. Columns contribute ``AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN``
     consecutive traces in ``order_autocorrelation_columns`` order, and only the
     first column is visible so the report can switch columns by trace index.
+    Pairs whose synthetic values are constant have no synthetic ACF, so both
+    medians leave them out and compare the same pairs.
 
     Args:
         profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
@@ -54,7 +56,11 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     columns = order_autocorrelation_columns(profiles)
     figure = go.Figure()
     for column_index, column in enumerate(columns):
-        column_profiles = [item for item in profiles if item["column"] == column]
+        column_profiles = [
+            item
+            for item in profiles
+            if item["column"] == column and any(value is not None for value in item["synthetic_acf"])
+        ]
         visible = column_index == 0
         for key, name, line_color, band_color in (
             ("training_acf", "Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
@@ -279,6 +285,9 @@ def _profile_quantiles(
     key: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return lags with finite values and their 25th, 50th, and 75th percentiles."""
+    if not profiles:
+        empty = np.array([], dtype=float)
+        return empty, empty, empty, empty
     matrix = _profile_matrix(profiles, key)
     valid = np.any(np.isfinite(matrix), axis=0)
     lags = np.arange(1, matrix.shape[1] + 1)[valid]
