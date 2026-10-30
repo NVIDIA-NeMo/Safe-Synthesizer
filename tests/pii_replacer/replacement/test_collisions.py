@@ -16,7 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.collisions import CandidateChooser, all_distinct
-from nemo_safe_synthesizer.pii_replacer.replacement.executor import StructuredReplacementExecutor
+from nemo_safe_synthesizer.pii_replacer.replacement.executor import ReplacementExecutor
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
 
 
@@ -39,7 +39,7 @@ def _request(entity_type: EntityType, original: str) -> ReplacementGenerationReq
 
 
 def _execute(dataframe: pd.DataFrame, *specs: PiiColumnPlan, generator: _ScriptedGenerator) -> pd.DataFrame:
-    executor = StructuredReplacementExecutor(
+    executor = ReplacementExecutor(
         PiiReplacementPlan(columns_to_replace=list(specs)), generator, group_column=None, base_seed=42
     )
     return executor.execute(dataframe).dataframe
@@ -223,7 +223,7 @@ class TestCrossColumnSharing:
 class TestGroupingColumnIsOneToOne:
     @staticmethod
     def _execute_grouped(dataframe: pd.DataFrame, spec: PiiColumnPlan, generator: _ScriptedGenerator) -> pd.DataFrame:
-        executor = StructuredReplacementExecutor(
+        executor = ReplacementExecutor(
             PiiReplacementPlan(columns_to_replace=[spec]), generator, group_column=spec.column_name, base_seed=42
         )
         return executor.execute(dataframe).dataframe
@@ -268,7 +268,7 @@ class TestMaskWidening:
         # [aA] has two characters but one value ignoring letter case, so widening it adds no room.
         dataframe = pd.DataFrame({"gid": groups})
         spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern=pattern)
-        executor = StructuredReplacementExecutor(
+        executor = ReplacementExecutor(
             PiiReplacementPlan(columns_to_replace=[spec]), _ScriptedGenerator(), group_column="gid", base_seed=42
         )
 

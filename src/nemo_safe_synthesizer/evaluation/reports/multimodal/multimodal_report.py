@@ -65,7 +65,7 @@ logger = get_logger(__name__)
 _DETECTION_LABELS = {
     "gliner": "GLiNER",
     "structured_value": "values from replaced columns",
-    "detected_value": "values detected in other rows",
+    "detected_value": "values detected elsewhere in the same record or group",
 }
 
 

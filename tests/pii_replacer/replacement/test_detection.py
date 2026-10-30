@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import sys
 from collections.abc import Sequence
@@ -316,7 +317,7 @@ class TestGliner2Detector:
             ("Contact Ada Lovelace", len("Contact Ada Lovelace") + 2),
         ],
     )
-    def test_rejects_span_overruns_other_than_gliner2_synthetic_period(self, text: str, end: int) -> None:
+    def test_drops_span_overruns_other_than_gliner2_synthetic_period(self, text: str, end: int) -> None:
         model = _FakeModel(
             [
                 {
@@ -334,8 +335,39 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        with pytest.raises(GenerationError, match="invalid span offsets"):
-            detector.detect([_cell(text)]).spans
+        assert detector.detect([_cell(text)]).spans == ()
+
+    @pytest.mark.parametrize(
+        "invalid",
+        [
+            "not a span",
+            {"start": 0, "confidence": 0.9},
+            {"start": "0", "end": 3, "confidence": 0.9},
+            {"start": 0, "end": 3, "confidence": 1.5},
+            {"start": 0, "end": 3, "confidence": math.nan},
+            {"start": 3, "end": 3, "confidence": 0.9},
+        ],
+    )
+    def test_drops_invalid_spans_with_a_warning_and_keeps_valid_ones(
+        self, invalid: object, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        text = "Ada met Grace"
+        valid = {"start": text.index("Grace"), "end": len(text), "confidence": 0.99}
+        model = _FakeModel([{"entities": {"first_name": [invalid, valid]}}])
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+
+        with caplog.at_level(logging.WARNING):
+            spans = detector.detect([_cell(text)]).spans
+
+        assert [(span.start, span.end) for span in spans] == [(valid["start"], valid["end"])]
+        assert "GLiNER2 spans were ignored" in caplog.text
+
+    def test_result_with_an_invalid_shape_still_fails(self) -> None:
+        model = _FakeModel([{"entities": {"first_name": "Ada"}}])
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+
+        with pytest.raises(GenerationError, match="invalid entities"):
+            detector.detect([_cell("Ada")])
 
     def test_rejects_unparseable_birth_date_model_spans_without_logging_the_value(
         self,
@@ -535,19 +567,6 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert sorted(span.entity_type for span in detector.detect([_cell(text)]).spans) == sorted(kept)
-
-    def test_middle_name_rule_can_be_disabled(self) -> None:
-        text = "between a small and medium"
-        start = text.index("medium")
-        model = _FakeModel(
-            [{"entities": {"middle_name": [{"start": start, "end": start + len("medium"), "confidence": 0.99}]}}]
-        )
-        detector = Gliner2Detector(
-            FreeTextDetectionConfig(require_middle_name_neighbors=False),
-            model_loader=lambda *_: model,
-        )
-
-        assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.MIDDLE_NAME]
 
     def test_keeps_identifier_predictions_without_a_digit(self) -> None:
         text = "ABCD-EFGH"

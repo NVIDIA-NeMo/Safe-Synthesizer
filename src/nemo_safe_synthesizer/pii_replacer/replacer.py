@@ -21,7 +21,7 @@ from ..errors import InternalError
 from ..observability import get_logger
 from .planning import resolve_replacement_config
 from .replacement.detection import CompositeFreeTextDetector
-from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
+from .replacement.executor import ReplacementExecutor, resolve_base_seed
 from .replacement.generation import ReplacementGenerator
 from .transform_result import DetectionResult, TransformResult
 
@@ -140,7 +140,7 @@ class TabularPiiReplacer:
 
     def _executor(
         self, resolved_config: ReplacePiiConfig, *, capture_replacement_map: bool = False
-    ) -> StructuredReplacementExecutor:
+    ) -> ReplacementExecutor:
         plan = resolved_config.inline_plan
         if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
@@ -153,7 +153,7 @@ class TabularPiiReplacer:
             )
             else None
         )
-        return StructuredReplacementExecutor(
+        return ReplacementExecutor(
             plan,
             self._replacement_generator(resolved_config.sampler, resolved_config.locale),
             group_column=self._data_config.group_training_examples_by,

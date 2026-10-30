@@ -43,7 +43,7 @@ from .types import (
 
 logger = get_logger(__name__)
 
-__all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resolve_base_seed"]
+__all__ = ["ReplacementExecutionResult", "ReplacementExecutor", "resolve_base_seed"]
 
 _MAX_GENERATION_ATTEMPTS = 10
 # A grouping column has no fallback, so it gets more attempts to find a value no other group uses.
@@ -85,8 +85,8 @@ class _CachedReplacement:
     """Dependencies of the group occurrence that generated the value, or ``None`` in record scope."""
 
 
-class StructuredReplacementExecutor:
-    """Execute structured targets in dependency order on a dataframe copy."""
+class ReplacementExecutor:
+    """Execute a replacement plan's structured and free-text columns in dependency order on a dataframe copy."""
 
     def __init__(
         self,

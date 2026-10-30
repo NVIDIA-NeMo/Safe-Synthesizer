@@ -278,8 +278,7 @@ class FreeTextReplacementExecutor:
         for spec in specs:
             statistics = self._statistics_for(spec)
             for to_replace in self._cells_to_replace(dataframe, spec, group_identities, detections, known_values):
-                for span in to_replace.spans:
-                    _record_detection(statistics, span, detected_text(to_replace.cell, span))
+                _record_cell_detections(statistics, to_replace)
         return self._statistics
 
     def _known_values(
@@ -474,12 +473,18 @@ class FreeTextReplacementExecutor:
         for to_replace in cells:
             for span in to_replace.spans:
                 key = free_text_mapping_key(to_replace.cell, span, scope_identity=to_replace.scope_identity)
-                if key.entity_type in _NAME_PART_ENTITY_TYPES:
-                    self._replacement_for(key, statistics)
-                elif key.entity_type is EntityType.FULL_NAME and key not in self._cache:
-                    for word in _name_parts(key.original_value, self._locale) or ():
-                        if word.part_type is not None and not word.is_initial:
-                            self._name_word_replacement(key.scope_identity, word)
+                self._map_span_name_words(key, statistics)
+
+    def _map_span_name_words(self, key: FreeTextMappingKey, statistics: FreeTextColumnStatistics) -> None:
+        """Map one span's name words: a name part itself, or each whole word of a full name not mapped yet."""
+        if key.entity_type in _NAME_PART_ENTITY_TYPES:
+            self._replacement_for(key, statistics)
+            return
+        if key.entity_type is not EntityType.FULL_NAME or key in self._cache:
+            return
+        for word in _name_parts(key.original_value, self._locale) or ():
+            if word.part_type is not None and not word.is_initial:
+                self._name_word_replacement(key.scope_identity, word)
 
     def _write_cells(
         self,
@@ -829,6 +834,12 @@ def _validated_candidates(
         detected_text(cell, span)
         candidates.setdefault(span.cell_id, []).append(span)
     return candidates
+
+
+def _record_cell_detections(statistics: FreeTextColumnStatistics, to_replace: _CellToReplace) -> None:
+    """Add every span ``to_replace`` would replace to column statistics."""
+    for span in to_replace.spans:
+        _record_detection(statistics, span, detected_text(to_replace.cell, span))
 
 
 def _record_detection(statistics: FreeTextColumnStatistics, span: DetectedSpan, value: str) -> None:

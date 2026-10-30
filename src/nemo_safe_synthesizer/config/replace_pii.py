@@ -897,14 +897,6 @@ class FreeTextDetectionConfig(NSSBaseModel):
             "finds more real names at the cost of more false names in clinical text."
         ),
     )
-    require_middle_name_neighbors: bool = Field(
-        default=True,
-        description=(
-            "Replace a detected middle name only when it sits inside a detected full name or directly between a "
-            "detected first and last name. This rejects words such as clothing sizes that GLiNER2 tags as "
-            "middle names."
-        ),
-    )
     find_and_replace: bool = Field(
         default=True,
         description=(

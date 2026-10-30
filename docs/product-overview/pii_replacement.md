@@ -559,7 +559,6 @@ replace_pii:
       gender: 0.485
       medical_condition: 0.378
       organism: 0.061
-    require_middle_name_neighbors: true
     find_and_replace: true
     batch_size: 8
     chunk_length: 384
@@ -620,9 +619,8 @@ both in place. First, NSS also asks GLiNER2 for the labels in
 spans. This removes words such as "mother" or "male" from the names found in
 clinical text, but it can also drop a real name the model scores as, for
 example, a `gender` term. Set `name_exclusion_thresholds: {}` to turn exclusion
-off for text where missed names matter more than false ones. Second, with
-`require_middle_name_neighbors`, a middle name is kept only inside a detected
-full name or directly between a detected first and last name, which rejects
+off for text where missed names matter more than false ones. Second, a middle
+name is kept only inside a detected full name or directly between a detected first and last name, which rejects
 clothing sizes such as "medium" in product reviews.
 
 GLiNER2 runs on a CUDA GPU; a run that needs it fails when PyTorch reports no
@@ -754,14 +752,6 @@ in `.parquet`, and as CSV otherwise. The resolved configuration and plan file
 are always written, as in the [Plan-only workflow](#plan-only-workflow), so the
 exact plan and sampler mappings can be reviewed and reused. Replacement maps
 and raw detector results are not persisted.
-
-For CSV and TXT inputs, every cell that replacement leaves unchanged is written
-exactly as it appears in the input file. For example, ZIP code `02054` stays
-`02054` rather than becoming `2054`, and `N/A` stays `N/A` rather than
-becoming an empty cell. The
-SDK does the same when `with_data_source` is given a CSV path or URL; for a
-dataframe source, pass the input read as text with
-`source_text=pd.read_csv(path, dtype=str, na_filter=False)`.
 
 The SDK equivalent returns the complete `TransformResult` and writes files only
 for paths supplied by the caller:

@@ -156,6 +156,17 @@ class _TextSpan(NamedTuple):
     """GLiNER2 confidence score."""
 
 
+class _InvalidSpanError(Exception):
+    """One GLiNER2 span has invalid metadata, score, or offsets and is dropped."""
+
+
+class _RejectedCounts(NamedTuple):
+    """Spans one chunk dropped: unparseable birth dates and invalid spans."""
+
+    birth_dates: int
+    invalid_spans: int
+
+
 @dataclass(slots=True)
 class _TextCandidates:
     """Accepted entity spans and name-exclusion spans for one unique cell text."""
@@ -220,15 +231,17 @@ class Gliner2Detector:
         chunks = list(chain.from_iterable(_chunks(text, self._config) for text in cells_by_text))
         results = self._infer(chunks, _requested_labels(cells, self._config, self._is_national_id))
         candidates: dict[str, _TextCandidates] = defaultdict(_TextCandidates)
-        rejected_birth_dates = 0
+        rejected_birth_dates = invalid_spans = 0
         for chunk, result in zip(chunks, results, strict=True):
-            rejected_birth_dates += _collect_chunk_candidates(
+            rejected = _collect_chunk_candidates(
                 chunk, result, candidates[chunk.original_text], self._config, self._is_national_id
             )
+            rejected_birth_dates += rejected.birth_dates
+            invalid_spans += rejected.invalid_spans
         spans: list[DetectedSpan] = []
         protected: list[ProtectedSpan] = []
         for text, text_cells in cells_by_text.items():
-            for span in _filter_name_spans(candidates[text], self._config):
+            for span in _filter_name_spans(candidates[text]):
                 spans.extend(_copy_span_to_cells(span, text_cells))
             # Overlapping chunks can report the same exclusion span twice.
             for start, end in sorted(set(candidates[text].exclusions)):
@@ -237,6 +250,11 @@ class Gliner2Detector:
             logger.user.warning(
                 "GLiNER2 birth-date candidates were ignored because they were not complete parseable dates",
                 extra={"rejected_candidate_count": rejected_birth_dates},
+            )
+        if invalid_spans:
+            logger.user.warning(
+                "GLiNER2 spans were ignored because their offsets, score, or metadata were invalid",
+                extra={"invalid_span_count": invalid_spans},
             )
         return FreeTextDetections(tuple(spans), tuple(protected))
 
@@ -434,24 +452,42 @@ def _collect_chunk_candidates(
     candidates: _TextCandidates,
     config: FreeTextDetectionConfig,
     is_national_id: Callable[[str], bool] | None,
-) -> int:
-    """Add one chunk's accepted spans to its text's candidates and return the rejected-DOB count."""
+) -> _RejectedCounts:
+    """Add one chunk's accepted spans to its text's candidates and count the rejected ones.
+
+    A span with invalid metadata, score, or offsets is dropped rather than failing detection; a result
+    whose overall shape is invalid still raises ``GenerationError``.
+    """
     exclusion_thresholds = _exclusion_thresholds(config)
-    rejected_birth_dates = 0
+    rejected_birth_dates = invalid_spans = 0
     for raw_span in _result_spans(result):
-        start, end, label, score = raw_span
-        exclusion_threshold = exclusion_thresholds.get(_normalize_label(label))
-        if exclusion_threshold is not None:
-            _validate_score(score)
-            offsets = _original_offsets(chunk, start, end)
-            if offsets is not None and score >= exclusion_threshold:
-                candidates.exclusions.append(offsets)
+        try:
+            if raw_span is None:
+                raise _InvalidSpanError
+            start, end, label, score = raw_span
+            exclusion_threshold = exclusion_thresholds.get(_normalize_label(label))
+            if exclusion_threshold is not None:
+                _add_exclusion(chunk, raw_span, exclusion_threshold, candidates)
+                continue
+            normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config, is_national_id)
+        except _InvalidSpanError:
+            invalid_spans += 1
             continue
-        normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config, is_national_id)
         rejected_birth_dates += int(rejected_birth_date)
         if normalized is not None:
             candidates.spans.append(normalized)
-    return rejected_birth_dates
+    return _RejectedCounts(rejected_birth_dates, invalid_spans)
+
+
+def _add_exclusion(
+    chunk: _Chunk, raw_span: tuple[int, int, str, float], threshold: float, candidates: _TextCandidates
+) -> None:
+    """Add a name-exclusion span to ``candidates`` when it meets ``threshold``."""
+    start, end, _, score = raw_span
+    _validate_score(score)
+    offsets = _original_offsets(chunk, start, end)
+    if offsets is not None and score >= threshold:
+        candidates.exclusions.append(offsets)
 
 
 def _normalize_chunk_span(
@@ -486,7 +522,7 @@ def _normalize_chunk_span(
 def _validate_score(score: float) -> None:
     """Reject confidence scores outside the closed unit interval."""
     if not math.isfinite(score) or not 0 <= score <= 1:
-        raise GenerationError("GLiNER2 free-text PII inference returned an invalid confidence score")
+        raise _InvalidSpanError
 
 
 def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | None:
@@ -501,11 +537,11 @@ def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | 
             return None
 
     if start < 0 or end <= start or end > len(chunk.text):
-        raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
+        raise _InvalidSpanError
     original_start = chunk.offset + start
     original_end = chunk.offset + end
     if original_end > len(chunk.original_text):
-        raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
+        raise _InvalidSpanError
     # A word too long to fit one chunk is still cut at a chunk edge, and the model can label the
     # fragment; replacing it would rewrite part of a word.
     if _cuts_word(chunk.words, original_start) or _cuts_word(chunk.words, original_end):
@@ -513,14 +549,15 @@ def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | 
     return original_start, original_end
 
 
-def _filter_name_spans(candidates: _TextCandidates, config: FreeTextDetectionConfig) -> list[_TextSpan]:
-    """Drop names overlapping an exclusion span, then middle names without neighbouring name pieces."""
+def _filter_name_spans(candidates: _TextCandidates) -> list[_TextSpan]:
+    """Drop names overlapping an exclusion span, then middle names without neighbouring name pieces.
+
+    A middle name is kept only inside a detected full name or directly between a detected first and last
+    name, which rejects words such as clothing sizes that GLiNER2 tags as middle names. The name thresholds
+    were tuned with this rule in place.
+    """
     kept = [span for span in candidates.spans if not _is_excluded_name(span, candidates.exclusions)]
-    if config.require_middle_name_neighbors:
-        kept = [
-            span for span in kept if span.entity_type is not EntityType.MIDDLE_NAME or _has_name_neighbors(span, kept)
-        ]
-    return kept
+    return [span for span in kept if span.entity_type is not EntityType.MIDDLE_NAME or _has_name_neighbors(span, kept)]
 
 
 def _is_excluded_name(span: _TextSpan, exclusions: Sequence[tuple[int, int]]) -> bool:
@@ -689,8 +726,8 @@ def _word_at(words: Sequence[tuple[int, int]], index: int) -> tuple[int, int] | 
     return None
 
 
-def _result_spans(result: object) -> Iterable[tuple[int, int, str, float]]:
-    """Yield validated primitive span metadata from one GLiNER2 result object."""
+def _result_spans(result: object) -> Iterable[tuple[int, int, str, float] | None]:
+    """Yield primitive span metadata from one GLiNER2 result object, or ``None`` for an invalid span."""
     if not _is_string_keyed_mapping(result):
         raise GenerationError("GLiNER2 free-text PII inference returned an invalid result")
     entities = result.get("entities")
@@ -707,16 +744,18 @@ def _is_string_keyed_mapping(value: object) -> TypeIs[Mapping[str, object]]:
     return isinstance(value, Mapping) and all(isinstance(key, str) for key in value)
 
 
-def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple[int, int, str, float]]:
-    """Yield primitive span metadata for one GLiNER entity label."""
+def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple[int, int, str, float] | None]:
+    """Yield primitive span metadata for one GLiNER entity label, or ``None`` for a span missing or mistyping it."""
     for value in values:
         if not _is_string_keyed_mapping(value):
-            raise GenerationError("GLiNER2 free-text PII inference omitted required span metadata")
+            yield None
+            continue
         start = value.get("start")
         end = value.get("end")
         score = value.get("confidence", 1.0)
         if type(start) is not int or type(end) is not int or not isinstance(score, int | float):
-            raise GenerationError("GLiNER2 free-text PII inference returned invalid span metadata")
+            yield None
+            continue
         yield start, end, label, float(score)
 
 

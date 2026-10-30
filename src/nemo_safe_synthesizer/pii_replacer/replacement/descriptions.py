@@ -27,7 +27,7 @@ _PERSONA_STREET_LOCALE = "en_US"
 def describe_replacement(column: PiiColumnPlan, settings: ReplacePiiConfig) -> str:
     """Describe how replacement values for a planned column are generated, for reports.
 
-    The description follows the routing in ``StructuredReplacementExecutor``, which allocates patterned and
+    The description follows the routing in ``ReplacementExecutor``, which allocates patterned and
     integer identifiers itself, and in the Faker and Nemotron-Personas generators, so it must change with
     them. It names the method a column is planned to use, not per-value fallbacks.
 

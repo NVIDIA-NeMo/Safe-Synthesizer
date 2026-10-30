@@ -23,7 +23,7 @@ from nemo_safe_synthesizer.errors import DataError, GenerationError, ParameterEr
 from nemo_safe_synthesizer.pii_replacer.replacement.compiler import compile_plan
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
     ReplacementExecutionResult,
-    StructuredReplacementExecutor,
+    ReplacementExecutor,
     resolve_base_seed,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
@@ -233,7 +233,7 @@ def _execute(
     capture_replacement_map: bool = False,
     find_and_replace: bool = False,
 ) -> ReplacementExecutionResult:
-    return StructuredReplacementExecutor(
+    return ReplacementExecutor(
         plan,
         generator,
         group_column=group_column,
@@ -274,7 +274,7 @@ class TestPlanCompiler:
 
 
 @pytest.mark.unit
-class TestStructuredReplacementExecutor:
+class TestReplacementExecutor:
     def test_replacement_map_is_opt_in(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-1"]})
         plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
@@ -610,9 +610,7 @@ class TestStructuredReplacementExecutor:
             locale="en_US",
         )
 
-        replaced = (
-            StructuredReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(dataframe).dataframe
-        )
+        replaced = ReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(dataframe).dataframe
 
         for first, last, domain, email in zip(
             replaced["first_name"],
@@ -1462,8 +1460,8 @@ class TestDetect:
         ]
         original = dataframe.copy(deep=True)
 
-        def executor(generator: _RecordingGenerator) -> StructuredReplacementExecutor:
-            return StructuredReplacementExecutor(
+        def executor(generator: _RecordingGenerator) -> ReplacementExecutor:
+            return ReplacementExecutor(
                 plan,
                 generator,
                 group_column=group_column,
