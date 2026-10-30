@@ -177,6 +177,23 @@ else
     mkdir -p "${stage}"
     if tar -xzf "${tarball}" -C "${stage}" --strip-components=3 \
       "${top}/docs/tutorials"; then
+      # The tagged install cell would reinstall from PyPI over this venv. See README.
+      "${VENV_DIR}/bin/python" - "${stage}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+NOTE = "**Already installed.** Safe Synthesizer is installed on this instance, so there is nothing to run here."
+for path in sorted(Path(sys.argv[1]).glob("*.ipynb")):
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    cells = notebook["cells"]
+    tagged = [i for i, c in enumerate(cells) if "install-safe-synthesizer" in c["metadata"].get("tags", [])]
+    for i in tagged:
+        cells[i] = {"cell_type": "markdown", "id": cells[i]["id"], "metadata": {}, "source": NOTE}
+    if tagged:
+        path.write_text(json.dumps(notebook, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"{path.name}: replaced {len(tagged)} install cell(s)")
+PY
       rm -rf "${TUTORIALS_DIR}"
       mv "${stage}" "${TUTORIALS_DIR}"
       # Written last; the guard keys on this, so partial runs are redone.
