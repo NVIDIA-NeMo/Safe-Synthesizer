@@ -40,12 +40,18 @@ readonly -a CUDA_FIND_LINKS_CPU=(
 )
 readonly -a CUDA_FIND_LINKS_CU129=(
     https://flashinfer.ai/whl/flashinfer-cubin/
-    https://wheels.vllm.ai/0.30.0/cu129/vllm/
+    https://wheels.vllm.ai/0.32.0/cu129/vllm/
     https://download.pytorch.org/whl/cu129/torch/
     https://download.pytorch.org/whl/cu129/torchaudio/
     https://download.pytorch.org/whl/cu129/torchvision/
     https://download.pytorch.org/whl/cu129/torchcodec/
     https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm100a/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm103a/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm120f/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm80/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm89/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm90a/
     https://download.pytorch.org/whl/cu129/triton/
     https://download.pytorch.org/whl/cu129/torchao/
     https://download.pytorch.org/whl/cu129/nvidia-cublas-cu12/
@@ -62,14 +68,22 @@ readonly -a CUDA_FIND_LINKS_CU129=(
 )
 readonly -a CUDA_FIND_LINKS_CU130=(
     https://flashinfer.ai/whl/flashinfer-cubin/
-    https://wheels.vllm.ai/0.30.0/cu130/vllm/
+    https://wheels.vllm.ai/0.32.0/cu130/vllm/
     https://download.pytorch.org/whl/cu130/torch/
     https://download.pytorch.org/whl/cu130/torchaudio/
     https://download.pytorch.org/whl/cu130/torchvision/
     https://download.pytorch.org/whl/cu130/torchcodec/
     https://flashinfer.ai/whl/cu130/flashinfer-jit-cache/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm100a/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm103a/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm120f/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm80/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm89/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm90a/
     https://download.pytorch.org/whl/cu130/triton/
     https://download.pytorch.org/whl/cu130/torchao/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm110a/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm121a/
     https://pypi.nvidia.com/nvidia-cublas/
     https://pypi.nvidia.com/nvidia-cuda-cupti/
     https://pypi.nvidia.com/nvidia-cuda-nvrtc/
