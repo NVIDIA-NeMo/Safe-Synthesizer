@@ -293,3 +293,46 @@ def test_batch_log_summary_includes_token_data(caplog, fixture_mock_processor_wi
     assert summary_ctx["tabular_data"]["valid_record_tokens"] == 60
     assert summary_ctx["tabular_data"]["invalid_record_tokens"] == 15
     assert summary_ctx["tabular_data"]["non_record_tokens"] == 125
+    assert "discarded_sample_tokens" not in summary_ctx["tabular_data"]
+
+
+def test_batch_discard_response_reports_completion_tokens_as_discarded():
+    processor = MagicMock(
+        side_effect=[
+            ParsedResponse(records=[ParsedRecord(text='{"a": 1}', parsed={"a": 1}, token_count=10)]),
+            ParsedResponse(records=[ParsedRecord(text='{"a": 2}', parsed={"a": 2}, token_count=20)]),
+        ]
+    )
+    batch = Batch(processor=processor)
+    batch.process(prompt_number=0, text="stub", completion_tokens=15)
+    batch.process(prompt_number=1, text="stub", completion_tokens=25)
+    discarded_record = batch._responses[1].records[0]
+
+    batch.discard_response(1, ("discarded", "test"))
+    batch.discard_response(1, ("discarded", "test"))
+
+    assert discarded_record.error == ("discarded", "test")
+    assert batch._responses[1].records == []
+    assert (batch.num_prompts, batch.num_valid_records, batch.num_invalid_records) == (2, 1, 0)
+    assert batch.total_discarded_sample_tokens == 25
+    assert batch.total_non_record_tokens == 15 - 10
+    with mock.patch.object(batch_module, "logger") as mock_logger:
+        batch.log_summary()
+    assert (
+        mock_logger.user.info.call_args_list[0].kwargs["extra"]["ctx"]["tabular_data"]["discarded_sample_tokens"] == 25
+    )
+
+
+def test_batch_discard_records_removes_them_and_reports_their_tokens():
+    kept = ParsedRecord(text='{"a": 1}', parsed={"a": 1}, token_count=10)
+    discarded = ParsedRecord(text='{"a": 2}', parsed={"a": 2}, token_count=20)
+    batch = Batch(processor=MagicMock(return_value=ParsedResponse(records=[kept, discarded])))
+    batch.process(prompt_number=0, text="stub", completion_tokens=35)
+
+    batch.discard_records(0, [discarded], ("past the end", "test"))
+
+    assert discarded.error == ("past the end", "test")
+    assert batch._responses[0].records == [kept]
+    assert (batch.num_valid_records, batch.num_invalid_records) == (1, 0)
+    assert batch.total_discarded_sample_tokens == 20
+    assert batch.total_non_record_tokens == 35 - 10 - 20
