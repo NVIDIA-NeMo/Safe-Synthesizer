@@ -11,9 +11,9 @@
 """NSS Top — a k9s-style TUI for monitoring SLURM jobs.
 
 Usage:
-    uv run nss_top.py [--user USERNAME] [--log-dir PATH] [--refresh SECONDS]
+    uv run nss_top.py [--user USERNAME] [--refresh SECONDS]
 
-Log directory defaults to $BASE_LOG_DIR if set, otherwise you must pass --log-dir.
+Log paths come from ``scontrol show job``, so the logs can live anywhere.
 """
 
 import argparse
@@ -48,6 +48,8 @@ STATE_STYLE: dict[str, str] = {
 }
 
 LOG_TAIL_LINES = 500
+# MARS cluster guidance: wait at least 60 seconds between scheduler queries.
+MIN_REFRESH_SECS = 60
 
 
 async def _run(*args: str) -> str:
@@ -91,18 +93,20 @@ async def fetch_sstat(job_id: str) -> str:
     return ""
 
 
-def find_log_pair(log_dir: Path, job_id: str) -> tuple[Path | None, Path | None]:
-    """Locate .out and .err files for a squeue job ID like '12345_3' or '12345'."""
-    if not log_dir.exists():
-        return None, None
+async def fetch_log_paths(job_id: str) -> tuple[Path | None, Path | None]:
+    """Return the stdout and stderr paths Slurm recorded for a job ID like '12345_3'.
 
-    # Normalise: squeue returns "12345_3" for array tasks
-    # Log files are named slurm_12345_3.{out,err}
-    safe_id = job_id.replace("[", "_").replace("]", "")
-
-    out_file = next(log_dir.rglob(f"slurm_{safe_id}.out"), None)
-    err_file = next(log_dir.rglob(f"slurm_{safe_id}.err"), None)
-    return out_file, err_file
+    ``scontrol show job`` expands filename patterns such as ``%A_%a``, so no
+    directory scan is needed. Searching the shared filesystem for log files is
+    expensive on Lustre and against cluster policy.
+    """
+    output = await _run("scontrol", "show", "job", job_id)
+    paths: dict[str, Path] = {}
+    for token in output.split():
+        key, _, value = token.partition("=")
+        if key in ("StdOut", "StdErr") and value and key not in paths:
+            paths[key] = Path(value)
+    return paths.get("StdOut"), paths.get("StdErr")
 
 
 def _tail_lines(path: Path, n: int) -> list[str]:
@@ -167,12 +171,13 @@ class NSSTop(App[None]):
     _selected_job: reactive[str | None] = reactive(None)
     _log_mode: reactive[str] = reactive("stdout")  # "stdout" | "stderr"
 
-    def __init__(self, user: str, log_dir: Path | None, refresh_secs: int) -> None:
+    def __init__(self, user: str, refresh_secs: int) -> None:
         super().__init__()
         self.user = user
-        self.log_dir = log_dir
         self.refresh_secs = refresh_secs
         self._jobs: list[dict[str, str]] = []
+        # Log paths never change for a job, so query Slurm once per job.
+        self._log_paths: dict[str, tuple[Path | None, Path | None]] = {}
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
@@ -248,20 +253,19 @@ class NSSTop(App[None]):
             log_widget.clear()
             return
 
-        if not self.log_dir:
-            label.update(f"[yellow]{job_id} — no log directory set (use --log-dir or $BASE_LOG_DIR)[/yellow]")
-            log_widget.clear()
-            return
-
-        out_file, err_file = find_log_pair(self.log_dir, job_id)
+        if job_id not in self._log_paths:
+            self._log_paths[job_id] = await fetch_log_paths(job_id)
+        out_file, err_file = self._log_paths[job_id]
         is_stdout = self._log_mode == "stdout"
         target = out_file if is_stdout else err_file
         mode_label = "stdout [l]" if is_stdout else "stderr [e]"
 
         if not target or not target.exists():
-            label.update(f"[yellow]{job_id} — {mode_label}: log not found in {self.log_dir}[/yellow]")
+            label.update(f"[yellow]{job_id} — {mode_label}: log not found ({target or 'path unknown'})[/yellow]")
             log_widget.clear()
-            log_widget.write("No log file found. The job may still be starting, or BASE_LOG_DIR may be wrong.")
+            log_widget.write("No log file found. The job may still be starting.")
+            # Pending jobs and finished jobs that left the controller have no usable path yet.
+            self._log_paths.pop(job_id, None)
             return
 
         label.update(f"{job_id} — {mode_label}: {target}")
@@ -299,23 +303,6 @@ class NSSTop(App[None]):
         await self._load_log()
 
 
-def _infer_log_dir(user: str) -> Path | None:
-    """Infer the NSS results directory using the same logic as env_variables.sh.
-
-    Resolution order:
-    1. $BASE_LOG_DIR
-    2. $LUSTRE_DIR/nss_results
-    3. /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/<user>/nss_results  (default LUSTRE_DIR)
-    """
-    if base := os.environ.get("BASE_LOG_DIR"):
-        return Path(base)
-    lustre_dir = (
-        os.environ.get("LUSTRE_DIR") or f"/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/{user}"
-    )
-    candidate = Path(lustre_dir) / "nss_results"
-    return candidate if candidate.exists() else None
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="NSS Top — SLURM job monitor TUI")
     parser.add_argument(
@@ -324,23 +311,19 @@ def main() -> None:
         help="SLURM username (default: $USER_NAME or $USER)",
     )
     parser.add_argument(
-        "--log-dir",
-        default=None,
-        help="Base log directory (default: $BASE_LOG_DIR, then $LUSTRE_DIR/nss_results)",
-    )
-    parser.add_argument(
         "--refresh",
         type=int,
-        default=30,
-        help="Auto-refresh interval in seconds (default: 30)",
+        default=MIN_REFRESH_SECS,
+        help=f"Auto-refresh interval in seconds (default and minimum: {MIN_REFRESH_SECS})",
     )
     args = parser.parse_args()
 
     if not args.user:
         parser.error("Could not determine SLURM username. Set $USER_NAME or pass --user.")
+    if args.refresh < MIN_REFRESH_SECS:
+        parser.error(f"--refresh must be at least {MIN_REFRESH_SECS} seconds to limit load on the Slurm controller.")
 
-    log_dir = Path(args.log_dir) if args.log_dir else _infer_log_dir(args.user)
-    NSSTop(user=args.user, log_dir=log_dir, refresh_secs=args.refresh).run()
+    NSSTop(user=args.user, refresh_secs=args.refresh).run()
 
 
 if __name__ == "__main__":

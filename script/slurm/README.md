@@ -8,104 +8,75 @@ The contents of this directly are often specific to internal NVIDIA slurm cluste
 
 Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `srun` (`slurm_srun.sh`) that executes the matrix runner (`slurm_nss_matrix.sh`). All paths and defaults are configured in one place: `env_variables.sh`.
 
+### Where things live
+
+The scripts follow the MARS [cluster storage rules](https://nvidia.atlassian.net/wiki/spaces/HWINFCSSUP/pages/2441645950/Cluster+Best+Practices): no code, builds, caches, or lock files on Lustre.
+
+| Location | Holds |
+| --- | --- |
+| `/home` | Your Safe-Synthesizer checkout, mounted read-only at the same path inside jobs |
+| Shared NSS image (`.sqsh` on Lustre) | Python, uv, and the locked dependencies in `/opt/venv`; unpacked to node-local disk when a job starts |
+| `/raid/scratch/$USER_NAME` (node-local) | uv and Hugging Face caches (kept per node), plus a per-job directory for every other cache, removed when the job ends |
+| Lustre | Images, datasets, pre-downloaded models, adapters, results, and logs |
+
+Each job runs `uv sync --frozen` against your checkout's `uv.lock`. If it matches the image, this only installs the project (a few seconds). If your branch changes dependencies, only the differences are installed. A new image is needed only when `.python-version` or system packages change, or after large torch, vLLM, or FlashInfer bumps.
+
 ### Files
-- `env_variables.sh`: Single source of truth for user, paths.
+- `env_variables.sh`: Single source of truth for user, paths, and the image.
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
-- `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
+- `nss_slurm.py`: Login-node CLI behind `submit_slurm_jobs.sh`, `build_image.sh`, and `download_models.sh` (subcommands `submit`, `build-image`, `download-models`). Standard library only; unit tested in `tests/tools/test_nss_slurm.py`.
+- `nss_slurm.sh`: Launcher for `nss_slurm.py`. Sources `env_variables.sh` and runs the CLI with `uv`, keeping uv's cache and Python in `/tmp` on the login node. Requires `uv` on `PATH`.
+- `slurm_nss_matrix.sh`: Sets up node-local caches, syncs dependencies, picks dataset and config, and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
-- `.mise/tasks/bootstrap-nss-slurm`: Installs a container-visible Python and project virtualenv under the current user's Lustre directory.
+- `build_image.sh`: Builds the shared NSS image on the cluster, without Docker. Its `--job` and `--container` steps run on compute nodes.
+- `download_models.sh`: Downloads pretrained models once into the shared, read-only models directory. Its `--job` and `--container` steps run on compute nodes.
 - `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
-Pipeline entrypoints invoked from the prebuilt project virtualenv:
-- `.venv/bin/safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
-- `.venv/bin/safe-synthesizer run train --run-path <path>` (PII replacement + training only)
-- `.venv/bin/safe-synthesizer run generate --run-path <path>` (generation + evaluation only)
+Pipeline entrypoints invoked from the image's virtualenv:
+- `/opt/venv/bin/safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
+- `/opt/venv/bin/safe-synthesizer run train --run-path <path>` (PII replacement + training only)
+- `/opt/venv/bin/safe-synthesizer run generate --run-path <path>` (generation + evaluation only)
 
 ### Prerequisites
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
 - An LLM inference endpoint and the API Key: You will need a `NSS_INFERENCE_KEY` to run column classification, if using the default `NSS_INFERENCE_ENDPOINT`. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com).
-- Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
+- Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Export `WANDB_MODE=disabled` before submitting to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
-- Clone Safe-Synthesizer
-
-The instructions below assume that Safe-Synthesizer is cloned directly under
-`LUSTRE_DIR` and that commands after cloning are run from the repository root.
+- Clone Safe-Synthesizer into your home directory, not Lustre. Git repositories and source code belong in `/home`:
 
 ```bash
-export USER_NAME="$USER" # Or hardcode username in slurm
-export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-cd "${LUSTRE_DIR}"
+mkdir -p "$HOME/code" && cd "$HOME/code"
 git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
 ```
 
-#### Bootstrap the Slurm Python environment
+No Python environment is needed on the login node. Jobs get Python and dependencies from the shared image.
 
-Do not use the general development bootstrap for Slurm. Slurm containers mount
-`/lustre`, but may not have access to the login node's `/home` directory. The
-Python interpreter, project virtualenv, package caches, and model caches must
-therefore resolve under Lustre.
+#### Shared image
 
-From the repository root, install the repository-pinned mise tools and run the
-Slurm-specific bootstrap:
+`env_variables.sh` sets `NSS_IMAGE` to the current shared image. Build a new one only when `submit_slurm_jobs.sh` reports a Python mismatch, or after a large dependency bump:
 
 ```bash
-make install-mise
-export PATH="${HOME}/.local/bin:${PATH}"
-export MISE_IGNORED_CONFIG_PATHS="${HOME}/.config/mise/config.toml"
-mise install --locked
-MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
+bash script/slurm/build_image.sh --wait
 ```
 
-Existing Slurm checkouts should run this bootstrap once after pulling the
-change. Scheduled launch environments, including GitLab jobs, must also add
-`${HOME}/.local/bin` to `PATH` before invoking `submit_slurm_jobs.sh`.
+The build runs as a CPU job (about 10 minutes), names the image after the Python version and a hash of `uv.lock`, publishes it to `$NSS_SHARED_DIR/images/`, and never overwrites an existing image. Point `NSS_IMAGE` in `env_variables.sh` at the new file. Keep `build_image.sh` in sync with `containers/Dockerfile.cuda`.
 
-The task requires the exported `LUSTRE_DIR`, derives the Slurm username from
-`id -un`, uses mise's pinned `uv`, installs the pinned Python under that Lustre
-directory, and creates `.venv` with that exact interpreter. If an existing
-`.venv` points outside Lustre, the task recreates it. Existing Python and uv
-installations under `/home` do not need to be removed.
+#### Shared models
 
-Override the inferred user or select a different Lustre project directory when
-the cluster account layout requires it:
+Jobs copy pretrained models from `NSS_MODELS_DIR` (default `$NSS_SHARED_DIR/models`) to node-local disk instead of downloading them. Models not found there are downloaded into the per-node Hugging Face cache. To add the models used by `configs/`:
 
 ```bash
-NSS_SLURM_USER="your_user" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
-LUSTRE_DIR="/custom/lustre/path" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
-```
-
-Verify the postcondition before submitting jobs:
-
-```bash
-readlink -f .venv/bin/python
-.venv/bin/safe-synthesizer --help >/dev/null
-```
-
-The Python path must resolve beneath the canonical path reported by
-`readlink -f "${LUSTRE_DIR}"`. `cu129` and `cuda` select the same CUDA 12.9
-dependency profile.
-
-Repo mode, the default when `--nss-version` is omitted, does not require a
-separate uv installation under Lustre. PyPI mode uses uv inside the container
-and still requires `${LUSTRE_DIR}/.uv/bin/env`.
-
-For PyPI mode only, install the same uv version that mise has pinned:
-
-```bash
-export USER_NAME="${USER_NAME:-$(id -un)}"
-export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-uv_version="$(mise exec -- uv --version | awk '{print $2}')"
-curl -LsSf "https://astral.sh/uv/${uv_version}/install.sh" \
-  | env UV_INSTALL_DIR="${LUSTRE_DIR}/.uv/bin" sh
+bash script/slurm/download_models.sh            # all models in configs/*.yaml
+bash script/slurm/download_models.sh mistralai/Mistral-7B-Instruct-v0.3
 ```
 
 #### Nice to have
 
 - Passwordless login See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode
 - Env vars in `.bashrc`
-  - This is optional for bootstrap, but avoids exporting the submission user in every shell.
+  - This is optional, but avoids exporting the submission user in every shell.
 
 ```bash
 export USER_NAME="<your slurm user name>"
@@ -144,10 +115,11 @@ Edit `env_variables.sh` to match your environment. Key items:
 - `CONFIGS=(...)`: base names of YAML configs to run (without `.yaml`), or provide via `--configs` argument to `submit_slurm_jobs.sh`.
 - `CONFIG_DIR`: directory where config files live.
 - `BASE_LOG_DIR`: where Slurm logs will be written.
-- `NSS_DIR`: path to this repository.
+- `NSS_DIR`: path to this repository; defaults to the checkout containing `env_variables.sh`.
 - `ADAPTER_PATH`: base path for workdirs (each run creates a subdirectory with adapter, logs, and outputs).
-- `VLLM_CACHE_ROOT`, `UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_BIN_DIR`, `UV_TOOL_DIR`, `HF_HOME`: cache locations to avoid stressing login nodes.
-- `NSS_PYTHON_VERSION`: Python version used for Slurm virtualenvs. Defaults to the repo's pinned version from `.python-version` (so it tracks Python bumps automatically) and falls back to `3.13`. For PyPI mode it is also included in the cached venv name to avoid reusing venvs created with older Python versions. Export it before sourcing `env_variables.sh` to override.
+- `NSS_IMAGE`: shared NSS image that jobs run in; built by `build_image.sh`.
+- `NSS_MODELS_DIR`: read-only directory of pre-downloaded models (`<org>/<name>`).
+- Cache locations are not configured here. `slurm_nss_matrix.sh` points every cache at node-local `/raid/scratch` for each job.
 - `NSS_SHARED_DIR`: location of shared files such as benchmark data and container images, see section below for details.
 
 NSS CLI Environment Variables (used by `safe-synthesizer` CLI via pydantic-settings):
@@ -164,13 +136,7 @@ In `slurm_nss_matrix.sh`, each job extracts the dataset and config that it shoul
 
 ### Submit jobs
 
-> **Run one submit at a time.** `submit_slurm_jobs.sh` builds the shared
-> `${NSS_DIR}/.venv` on the login node before submitting. Running multiple submits
-> concurrently (especially from different login nodes, where the build lock is not
-> reliable across hosts) can corrupt that venv and lets branch switches race. Let
-> one submit finish before starting another.
-
-Run the submit script (flags are order-independent) from this directory:
+Run the submit script from any directory (flags are order-independent; unknown flags are an error):
 
 ```bash
 bash submit_slurm_jobs.sh [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--dry-run]
@@ -235,6 +201,7 @@ Consider using a max of 2-3x the current allocation for nemotron_data_dev PPP in
 tail -f ${BASE_LOG_DIR}/${EXP_NAME}/slurm_*.out
 ```
 - W&B logging: `WANDB_MODE` is set to `online` by default to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
+  - W&B's local files go to node-local disk (`WANDB_DIR`) and are removed when the job ends. With `WANDB_MODE=offline`, the job first saves them as `wandb_offline_<jobid>.tar` in the run directory; extract it and run `wandb sync` to upload. If you export `WANDB_DIR` yourself, it now takes priority over the run directory, as in W&B itself.
 
   - When running in `two_stage` mode, be mindful not to submit multiple bash commands that run simutaneously because we aren't able to guarantee unique adapter path for each single run. As a result, two runs might be logged as one on W&B.
 
@@ -249,14 +216,14 @@ scancel <jobid>
 `nss_top.py` is a `k9s`-style terminal dashboard for watching your SLURM jobs and tailing their logs in real time. Run it from the login node:
 
 ```bash
-# Simplest — username and log dir are inferred from $USER_NAME / $BASE_LOG_DIR / $LUSTRE_DIR
+# Keep uv's cache off Lustre on the login node
+export UV_CACHE_DIR="/tmp/${USER}/uv-cache"
+
+# Username is inferred from $USER_NAME or $USER
 uv run script/slurm/nss_top.py
 
-# Explicit log dir (searches recursively, so the top-level nss_results dir is fine)
-uv run script/slurm/nss_top.py --log-dir ${BASE_LOG_DIR}
-
-# Override username or refresh interval
-uv run script/slurm/nss_top.py --user mkornfield --refresh 15
+# Override username or refresh interval (60 seconds minimum, per cluster guidance)
+uv run script/slurm/nss_top.py --user mkornfield --refresh 120
 ```
 
 Key bindings:
@@ -269,11 +236,7 @@ Key bindings:
 | `r` | Manual refresh |
 | `q` | Quit |
 
-Log directory resolution order (first match wins):
-1. `--log-dir` flag
-2. `$BASE_LOG_DIR` environment variable
-3. `$LUSTRE_DIR/nss_results` (constructed from `$LUSTRE_DIR`)
-4. `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/<user>/nss_results` (default)
+Log paths come from `scontrol show job`, so `nss_top` never searches the filesystem for log files.
 
 ### Collect results
 
@@ -285,7 +248,8 @@ W&B is enabled by default with `WANDB_MODE=online` in `env_variables.sh`. Make s
 - Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NSS_INFERENCE_KEY` and `chmod 600`.
 - Missing config files: verify `CONFIGS` in `env_variables.sh` and files in `CONFIG_DIR`.
 - Permission errors: confirm your `/lustre/.../${USER_NAME}` paths and file perms.
-- Virtualenv Python under `/home`: run `MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129`; the task recreates `.venv` with a Lustre-managed interpreter.
+- `NSS image not found` or a Python mismatch at submit: build a new image with `build_image.sh` and update `NSS_IMAGE`.
+- Slow job start after changing `uv.lock`: the first job on each node installs the changed packages; later jobs reuse the node's uv cache. For large changes, build a new image.
 
 #### cpu bind errors
 
@@ -303,21 +267,26 @@ Solution: Only submit slurm jobs from the login or vscode nodes. (May be ways to
 ### NSS Shared Directory
 
 To reduce duplicated files and make getting started a bit easier, we have a shared directory for common files that do not change across experiments and the people running them.
-At this time, the best recommendation is to place this in someone's user directory, so Kendrick created `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer` on the `cw-pdx-cs` and `cs-oci-ord` clusters.
-We will want to duplicate this to other clusters that we use.
+It lives at the project level, `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer`, so it does not depend on any one person's account.
+It is owned by group `llmservice` with setgid directories (mode `2775`), so every team member can add and remove files, and new files inherit the group.
+Keep new files group-writable (`umask 002`); `build_image.sh` and `download_models.sh` already do this.
+It currently exists on `cs-oci-ord`; duplicate it to other clusters as needed (see below).
 
 The `env_variables.sh` script sets the `NSS_SHARED_DIR` variable to provide access to this location. The structure is:
 
 - $NSS_SHARED_DIR
   - dataset_registry.yaml
   - images
-    - cuda_12_8_1_cudnn_runtime_ubuntu24_04.sqsh - container image used by current scripts
+    - cuda_12_8_1_cudnn_runtime_ubuntu24_04.sqsh - base image for `build_image.sh`
+    - nss-slurm-py<python>-<lockhash>.sqsh - NSS images that jobs run in
+  - models
+    - <org>/<name> - pre-downloaded models from `download_models.sh`
   - data
     - cleaned
       - <benchmark and other useful datasets for testing>
 
 These resources are used by the slurm scripts in the following ways:
-- Cuda image used for slurm jobs is pulled from `$NSS_SHARED_DIR/images` if possible, this improves job startup time and eliminates errors while pulling the image over the network.
+- Jobs run in an NSS image from `$NSS_SHARED_DIR/images`; images are never pulled from a registry per job.
 - `dataset_registry.yaml` is passed to safe synthesizer via `--dataset-registry` to enable referencing datasets by name, and for the `submit_slurm_jobs.sh` script to work properly.
   Add additional named datasets and any config overrides to this YAML file as needed.
 
@@ -325,10 +294,15 @@ These resources are used by the slurm scripts in the following ways:
 
 #### Duplicate shared directory to a new cluster
 
-From a file copier node on the new cluster, run the following to copy Kendrick's shared directory from `cs-oci-ord`. Took ~30 minutes when run in Jan 2026 to copy 16 GB.
+Create the directory with the team group and setgid first, then copy from `cs-oci-ord` on a file copier node (not a login node).
+Copying without preserving owner and group lets files inherit `llmservice` from the setgid directories.
 
 ```
-rsync -avzP cs-oci-ord-001-dc-02.cs-oci-ord-001.hpc.nvidia.com:/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/ /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/
+umask 002
+mkdir -p /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer
+chgrp llmservice /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer
+chmod 2775 /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer
+rsync -rltP --chmod=Dug+rwx,Do+rx,Fug+rw,Fo+r cs-oci-ord-001-dc-02.cs-oci-ord-001.hpc.nvidia.com:/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer/ /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer/
 ```
 
-Also good to check on ownership and permissions after copying to ensure 775 permissions (for directories) or 664 (for files).
+`dataset_registry.yaml` sets `base_url` to the absolute `data/` path, so update it if the path differs on the new cluster.
