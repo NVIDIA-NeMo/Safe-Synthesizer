@@ -7,11 +7,12 @@ import json
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import ClassVar, cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from pydantic import Field
 from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
@@ -20,6 +21,7 @@ from nemo_safe_synthesizer.config.evaluate import (
     AutocorrelationSimilarityParameters,
     EvaluationParameters,
     TimeSeriesEvaluationParameters,
+    TimeSeriesMetricParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -890,6 +892,53 @@ class TestTimeSeriesValueColumnCheck:
         )
 
         assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
+
+    @pytest.mark.parametrize("column", ["time", "series", PSEUDO_GROUP_COLUMN])
+    def test_timestamp_and_grouping_columns_are_rejected(self, column):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="series"),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+            evaluation=EvaluationParameters(
+                time_series=TimeSeriesEvaluationParameters(
+                    enabled=True,
+                    autocorrelation=AutocorrelationSimilarityParameters(value_columns=[column, "value"]),
+                ),
+            ),
+        )
+        data = pd.DataFrame(
+            {"time": [0, 1, 2], "series": [1, 1, 1], PSEUDO_GROUP_COLUMN: [0, 0, 0], "value": [1.0, 2.0, 3.0]}
+        )
+
+        issues = TimeSeriesValueColumnCheck().run(make_ctx(config=config, data=data))
+
+        assert [issue.code for issue in issues] == ["evaluation_column_reserved"]
+        assert "Autocorrelation" in issues[0].message
+        assert repr(column) in issues[0].message
+
+    def test_checks_value_columns_of_every_time_series_metric(self):
+        class FakeMetricParameters(TimeSeriesMetricParameters):
+            metric_label: ClassVar[str] = "Fake metric"
+
+        class TwoMetricParameters(TimeSeriesEvaluationParameters):
+            fake: FakeMetricParameters = Field(default_factory=FakeMetricParameters)
+
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            evaluation=EvaluationParameters(
+                time_series=TwoMetricParameters(
+                    enabled=True,
+                    autocorrelation=AutocorrelationSimilarityParameters(value_columns=["value"]),
+                    fake=FakeMetricParameters(value_columns=["missing"]),
+                ),
+            ),
+        )
+
+        issues = TimeSeriesValueColumnCheck().run(
+            make_ctx(config=config, data=pd.DataFrame({"value": [1.0, 2.0, 3.0]}))
+        )
+
+        assert [issue.code for issue in issues] == ["evaluation_column_not_found"]
+        assert "Fake metric value column 'missing'" in issues[0].message
 
 
 @pytest.mark.unit

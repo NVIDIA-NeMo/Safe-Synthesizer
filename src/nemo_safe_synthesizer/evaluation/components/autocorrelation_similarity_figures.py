@@ -5,16 +5,6 @@
 
 Each builder summarizes the per-pair profiles stored by the metric in
 ``AutocorrelationSimilarity.details``.
-
-Functions:
-    generate_autocorrelation_summary_figure: Plot median profiles and
-        interquartile bands across groups, one column at a time.
-    generate_autocorrelation_lag_error_figure: Plot the mean paired profile
-        difference at each lag.
-    generate_autocorrelation_pair_score_figure: Plot group and column pair
-        scores for the lowest-scoring columns against the overall score.
-    order_autocorrelation_columns: Order value columns by mean pair score.
-    shorten_column_label: Shorten long column names for axis labels.
 """
 
 from __future__ import annotations

@@ -1,0 +1,77 @@
+{% from "jinja/components/icon.j2" import icon %}
+
+{#- Notes, skipped comparisons, and one-sided group counts for a time-series metric card. -#}
+{% macro comparison_notes(metric) -%}
+{% if metric.score.notes %}
+<p class="chart-subheading">{{ metric.score.notes }}</p>
+{% endif %}
+{% if metric.details.skipped %}
+<h3 class="chart-subheading">Skipped comparisons</h3>
+<ul>
+{% for item in metric.details.skipped[:12] %}
+    <li>
+        {{ item.column }}{% if item.group is not none %}, group {{ item.group }}{% endif %}: {{ item.reason }}
+    </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if metric.details.groups_only_in_training %}
+<p class="chart-subheading">
+    Groups found only in training data: {{ metric.details.groups_only_in_training | length }}.
+</p>
+{% endif %}
+{% if metric.details.groups_only_in_synthetic %}
+<p class="chart-subheading">
+    Groups found only in synthetic data: {{ metric.details.groups_only_in_synthetic | length }}.
+</p>
+{% endif %}
+{%- endmacro %}
+
+{#- Pair summary, legend, and chart grid for a time-series metric card.
+    The caller block renders after the pair summary, for metric-specific notes. -#}
+{% macro chart_grid(metric) -%}
+{% if metric.figures %}
+<p class="chart-subheading">
+    {% set group_count = metric.evaluated_group_count %}
+    {% set column_count = metric.evaluated_column_count %}
+    Summarizing {{ metric.evaluated_profile_count }} group-column pairs
+    ({{ group_count }} {{ "group" if group_count == 1 else "groups" }},
+    {{ column_count }} numeric {{ "column" if column_count == 1 else "columns" }}).
+    {% if column_count > metric.pair_score_column_count %}
+    Pair scores shows the {{ metric.pair_score_column_count }} lowest-scoring columns.
+    {% endif %}
+</p>
+{{ caller() }}
+<div class="chart-legend" aria-label="Chart legend">
+    <span><i class="legend-training"></i>Training Data</span>
+    <span><i class="legend-synthetic"></i>Synthetic Data</span>
+</div>
+<div class="time-series-charts"{% if metric.score_colored_traces %} data-score-colored-traces{% endif %}>
+{% for row in metric.figures %}
+<figure>
+    <div class="time-series-chart-heading">
+        <span class="time-series-chart-title">
+            <h3 class="chart-subheading">{{ row.title }}</h3>
+            <button class="metric-info" type="button" data-tooltip-toggle
+                    aria-expanded="false" aria-controls="{{ row.tooltip_id }}"
+                    aria-label="About {{ row.title }}">{{ icon("info") }}</button>
+        </span>
+        {% if row.column_select and metric.summary_columns | length > 1 %}
+        <select class="time-series-column-select" data-time-series-column-select
+                data-traces-per-column="{{ metric.summary_traces_per_column }}"
+                aria-label="Numeric column">
+            {% for column in metric.summary_columns %}
+            <option value="{{ loop.index0 }}">{{ column }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    <div class="metric-tooltip time-series-chart-tooltip" id="{{ row.tooltip_id }}" role="tooltip" hidden>
+        {{ row.tooltip | trim }}
+    </div>
+    {{ row.html | safe }}
+</figure>
+{% endfor %}
+</div>
+{% endif %}
+{%- endmacro %}

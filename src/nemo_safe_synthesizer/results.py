@@ -47,6 +47,7 @@ _REPORT_SCORE_FIELDS: dict[str, str] = {
     "column_distribution_stability_score": "Column Distribution Stability",
     "text_semantic_similarity_score": "Text Semantic Similarity",
     "text_structure_similarity_score": "Text Structure Similarity",
+    "autocorrelation_similarity_score": "Autocorrelation Similarity",
     "data_privacy_score": "Data Privacy Score",
     "membership_inference_protection_score": "Membership Inference Protection",
     "attribute_inference_protection_score": "Attribute Inference Protection",

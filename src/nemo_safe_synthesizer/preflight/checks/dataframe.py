@@ -8,6 +8,7 @@ from __future__ import annotations
 from pandas.api.types import is_numeric_dtype
 from typing_extensions import override
 
+from ...config.evaluate import TimeSeriesMetricParameters
 from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
@@ -19,6 +20,7 @@ from ...data_processing.validation import (
     check_column_present,
     check_no_pseudo_column_collision,
 )
+from ...defaults import PSEUDO_GROUP_COLUMN
 from ...errors import DataError, ParameterError
 from ..base import DataFrameCheck, IssueCollector
 from ..helpers import emit_on_raise
@@ -214,7 +216,7 @@ class TimestampColumnCheck(DataFrameCheck):
 
 
 class TimeSeriesValueColumnCheck(DataFrameCheck):
-    """Validate explicitly configured time-series evaluation value columns."""
+    """Validate explicitly configured value columns for every time-series metric."""
 
     name = "timeseries.evaluation_columns"
     label = "Time-series evaluation columns"
@@ -227,21 +229,34 @@ class TimeSeriesValueColumnCheck(DataFrameCheck):
 
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
-        columns = ctx.config.evaluation.time_series.autocorrelation.value_columns
-        if columns is None:
-            return
-        for column in columns:
-            if column not in ctx.data:
-                collector.error(
-                    "evaluation_column_not_found",
-                    f"Autocorrelation value column {column!r} is missing from the training data.",
-                )
+        time_series = ctx.config.evaluation.time_series
+        reserved = {
+            ctx.config.time_series.timestamp_column,
+            ctx.config.data.group_training_examples_by,
+            PSEUDO_GROUP_COLUMN,
+        }
+        for field_name in type(time_series).model_fields:
+            metric = getattr(time_series, field_name)
+            if not isinstance(metric, TimeSeriesMetricParameters) or metric.value_columns is None:
                 continue
-            if not is_numeric_dtype(ctx.data[column]):
-                collector.error(
-                    "evaluation_column_not_numeric",
-                    f"Autocorrelation value column {column!r} must contain numeric training data.",
-                )
+            for column in metric.value_columns:
+                if column in reserved:
+                    collector.error(
+                        "evaluation_column_reserved",
+                        f"{metric.metric_label} value column {column!r} is used for timestamp or sequence grouping.",
+                    )
+                    continue
+                if column not in ctx.data:
+                    collector.error(
+                        "evaluation_column_not_found",
+                        f"{metric.metric_label} value column {column!r} is missing from the training data.",
+                    )
+                    continue
+                if not is_numeric_dtype(ctx.data[column]):
+                    collector.error(
+                        "evaluation_column_not_numeric",
+                        f"{metric.metric_label} value column {column!r} must contain numeric training data.",
+                    )
 
 
 class TimeSeriesDataShapeCheck(DataFrameCheck):

@@ -286,3 +286,32 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 4
     assert context["pair_score_column_count"] == 2
+
+
+def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
+    frame = pd.DataFrame({"time": range(60), "value": np.sin(np.arange(60) / 5)})
+
+    report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
+
+    cards = report.jinja_context["time_series_cards"]
+    assert cards == [report.jinja_context["autocorrelation_similarity"]]
+    assert cards[0]["card_id"] == "autocorrelation-similarity"
+    assert cards[0]["template"] == "jinja/components/autocorrelation_similarity.j2"
+    assert cards[0]["score_colored_traces"] is True
+    assert report.jinja_context["with_time_series"] is True
+    output = render_report(report)
+    assert output is not None
+    assert 'id="autocorrelation-similarity"' in output
+    assert "Measures whether numeric columns change over time like the training data" in output
+    assert 'class="time-series-charts" data-score-colored-traces' in output
+
+
+def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(multimodal_report_module, "TIME_SERIES_COMPONENTS", ())
+    frame = pd.DataFrame({"time": range(60), "value": np.sin(np.arange(60) / 5)})
+
+    report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
+
+    assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
+    assert report.jinja_context["time_series_cards"] == []
+    assert report.jinja_context["with_time_series"] is False

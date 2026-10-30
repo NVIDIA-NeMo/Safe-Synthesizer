@@ -18,14 +18,6 @@ from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
-from ....evaluation.components.autocorrelation_similarity_figures import (
-    AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
-    AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN,
-    generate_autocorrelation_lag_error_figure,
-    generate_autocorrelation_pair_score_figure,
-    generate_autocorrelation_summary_figure,
-    order_autocorrelation_columns,
-)
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -48,6 +40,7 @@ from ....evaluation.components.pii_replay import PIIReplay
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
+from ....evaluation.components.time_series_common import TimeSeriesComponent
 from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -58,6 +51,9 @@ from ....observability import get_logger
 from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
+
+TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity,)
+"""Components run when time-series evaluation is enabled, in report display order."""
 
 
 class MultimodalReport(EvaluationReport):
@@ -115,54 +111,8 @@ class MultimodalReport(EvaluationReport):
                     self.evaluation_datasets
                 )
 
-            ctx["with_time_series"] = "autocorrelation_similarity" in ctx
-            if ctx["with_time_series"]:
-                autocorrelation = ctx["autocorrelation_similarity"]
-                profiles = autocorrelation["details"].get("profiles", [])
-                autocorrelation["figures"] = []
-                autocorrelation["summary_columns"] = []
-                if profiles:
-                    figures = [
-                        (
-                            "Typical autocorrelation",
-                            generate_autocorrelation_summary_figure(profiles),
-                            True,
-                            "autocorrelation_typical_info",
-                        ),
-                        (
-                            "Difference by lag",
-                            generate_autocorrelation_lag_error_figure(profiles),
-                            False,
-                            "autocorrelation_difference_info",
-                        ),
-                        (
-                            "Pair scores",
-                            generate_autocorrelation_pair_score_figure(profiles, autocorrelation["score"]["score"]),
-                            False,
-                            "autocorrelation_pair_scores_info",
-                        ),
-                    ]
-                    autocorrelation["figures"] = [
-                        {
-                            "title": title,
-                            "html": figure.to_html(full_html=False, include_plotlyjs=False),
-                            "column_select": column_select,
-                            "tooltip_id": tooltip_key.replace("_", "-"),
-                            "tooltip": tooltips[tooltip_key],
-                        }
-                        for title, figure, column_select, tooltip_key in figures
-                    ]
-                    autocorrelation["summary_columns"] = order_autocorrelation_columns(profiles)
-                autocorrelation["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
-                autocorrelation["pair_score_column_count"] = min(
-                    len(autocorrelation["summary_columns"]), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS
-                )
-                autocorrelation["evaluated_profile_count"] = len(profiles)
-                autocorrelation["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
-                autocorrelation["evaluated_column_count"] = len({item["column"] for item in profiles})
-                autocorrelation["constant_synthetic_profile_count"] = sum(
-                    1 for item in profiles if item["evaluated_lags"] == 0
-                )
+            ctx["time_series_cards"] = [c.jinja_context for c in self.components if isinstance(c, TimeSeriesComponent)]
+            ctx["with_time_series"] = bool(ctx["time_series_cards"])
 
             return ctx
         except Exception:
@@ -288,7 +238,10 @@ class MultimodalReport(EvaluationReport):
                 column_statistics=column_statistics,
                 enable_sampling=False,
             )
-            components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
+            components.extend(
+                component_cls.from_evaluation_datasets(time_series_datasets, config)
+                for component_cls in TIME_SERIES_COMPONENTS
+            )
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets

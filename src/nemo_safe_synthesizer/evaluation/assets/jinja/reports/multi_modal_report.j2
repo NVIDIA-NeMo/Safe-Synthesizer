@@ -157,13 +157,15 @@
                     <p>Measures preservation of relationships between observations across time.</p></div>
                 </header>
                 <div class="metric-list">
-                    {% call metric_card("autocorrelation-similarity", ctx.autocorrelation_similarity.name,
-                            ctx.autocorrelation_similarity.score,
-                            "Measures whether numeric columns change over time like the training data",
-                            ctx.tooltips.autocorrelation_similarity_info,
+                    {% for card in ctx.time_series_cards %}
+                    {% call metric_card(card.card_id, card.name,
+                            card.score,
+                            card.description,
+                            ctx.tooltips[card.tooltip_key],
                             expandable=true) %}
-                        {% include "jinja/components/autocorrelation_similarity.j2" %}
+                        {% include card.template %}
                     {% endcall %}
+                    {% endfor %}
                 </div>
             </section>
             {% endif %}
