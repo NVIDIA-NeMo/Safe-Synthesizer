@@ -511,9 +511,9 @@ check of its own.
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
 | `inference_model_missing` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` is set but no model ID is (`replace_pii.llm.model_id`, `--inference-model-id`, or `NSS_INFERENCE_MODEL`) |
-| `inference_request_settings_invalid` | error | `env.inference` | `NSS_INFERENCE_TIMEOUT` is not a positive number of seconds, or `NSS_INFERENCE_REQUEST_OPTIONS` is not a JSON object or sets a field NSS manages |
+| `inference_request_settings_invalid` | error | `env.inference` | `NSS_INFERENCE_TIMEOUT` is not a positive number of seconds, or `NSS_INFERENCE_REQUEST_OPTIONS` is not a JSON object or sets a field Safe Synthesizer manages |
 | `inference_local_profile_invalid` | error | `env.inference` | The local vLLM profile cannot be loaded, `NSS_INFERENCE_ENDPOINT` is not a usable loopback address for it, or a configured model differs from the profile's model |
-| `inference_local_runtime_unavailable` | error | `env.inference` | No inference endpoint is set, so NSS would run a local vLLM server, but vLLM, a CUDA GPU, enough GPUs for the profile's `tensor_parallel_size`, or the profile's `min_gpu_memory_gib` is unavailable; set `NSS_INFERENCE_ENDPOINT` to use a remote service |
+| `inference_local_runtime_unavailable` | error | `env.inference` | No inference endpoint is set, so Safe Synthesizer would run a local vLLM server, but vLLM, a CUDA GPU, enough GPUs for the profile's `tensor_parallel_size`, or the profile's `min_gpu_memory_gib` is unavailable; set `NSS_INFERENCE_ENDPOINT` to use a remote service |
 | `inference_endpoint_invalid` | error | `env.inference` | The configured PII inference endpoint is not an absolute HTTP(S) URL, embeds credentials, or uses plain HTTP for a non-loopback host |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
@@ -558,11 +558,11 @@ instead of silently continuing with regex detection only.
 
 ### GLiNER2 Device and Throughput
 
-NSS loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
+Safe Synthesizer loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
 columns stops with `GLiNER2 free-text PII detection needs a CUDA GPU` instead of
 falling back to CPU, which is too slow for real datasets; full street-address
 values are then replaced whole, with a warning.
-Agent sandboxes and containers often hide a GPU the machine has; run NSS where
+Agent sandboxes and containers often hide a GPU the machine has; run Safe Synthesizer where
 `nvidia-smi` lists it. Model loading and inference emit completion records and a progress
 heartbeat every 30 seconds; the records include the selected device, chunk
 count, configured batch size, and requested-label count without source text.
@@ -603,7 +603,7 @@ Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`.
 missing, first download the dataset for `replace_pii.locale`, as described under
 [Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas). Set
 `replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
-stored elsewhere. When `replace_pii.sampler` is not set, NSS uses Faker if the locale file is
+stored elsewhere. When `replace_pii.sampler` is not set, Safe Synthesizer uses Faker if the locale file is
 missing, unless a discovered plan maps ethnicity values. When `replace_pii.sampler` names this
 sampler, or a discovered plan maps ethnicity values, and the locale file is missing or unreadable, replacement fails
 with a configuration error; set `replace_pii.sampler.backend: faker` and remove any ethnicity

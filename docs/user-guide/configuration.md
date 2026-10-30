@@ -291,7 +291,7 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement accepts automatic discovery, a plan written inline in the main NSS
+PII replacement accepts automatic discovery, a plan written inline in the main Safe Synthesizer
 configuration, or a path to a separate plan YAML. Data-to-sampler value
 mappings default to automatic discovery or can be supplied inline. See
 [PII Replacement](../product-overview/pii_replacement.md) for the plan-source

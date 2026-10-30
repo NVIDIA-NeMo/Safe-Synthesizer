@@ -29,8 +29,8 @@ _PLAN_SECTION_COMMENTS = {
     ),
     "data_to_sampler_value_mapping": (
         "THE NEXT SECTION IS SAFE TO IGNORE unless a run reports an error about it. It translates values in "
-        "depends_on columns, such as Latino in a race column, to values the sampler understands. NSS fills it "
-        "in, and it can get long."
+        "depends_on columns, such as Latino in a race column, to values the sampler understands. "
+        "Safe Synthesizer fills it in, and it can get long."
     ),
 }
 # The published PII replacement guide, linked from the plan file header.

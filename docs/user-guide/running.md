@@ -339,7 +339,7 @@ safe-synthesizer run replace-pii --plan-only \
 
 The plan-only command writes two files in the standard timestamped run
 directory beneath `--artifact-path`: `pii_replacement_plan.yaml`, the resolved
-plan, and `safe-synthesizer-config.yaml`, a complete reusable NSS configuration
+plan, and `safe-synthesizer-config.yaml`, a complete reusable Safe Synthesizer configuration
 that names it and records the sampler used.
 
 The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
@@ -652,7 +652,7 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-During the normal synthesis pipeline, NSS resolves the plan against the full
+During the normal synthesis pipeline, Safe Synthesizer resolves the plan against the full
 input and applies structured-column and free-text replacements only to the
 post-holdout training split. See
 [PII Replacement](../product-overview/pii_replacement.md) for Nemotron
