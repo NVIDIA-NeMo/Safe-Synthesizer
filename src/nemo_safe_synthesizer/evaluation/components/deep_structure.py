@@ -75,6 +75,7 @@ class DeepStructure(Component):
         training_pca, synthetic_pca = DeepStructure._calculate_pca(
             evaluation_datasets.training.reindex(columns=tabular_columns),
             evaluation_datasets.synthetic.reindex(columns=tabular_columns),
+            pii_columns=evaluation_datasets.structured_pii_columns,
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(
@@ -115,17 +116,24 @@ class DeepStructure(Component):
 
     @staticmethod
     def _encode_categorical_columns(
-        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, categorical_columns: list[str]
+        training_df: pd.DataFrame,
+        synthetic_df: pd.DataFrame,
+        categorical_columns: list[str],
+        pii_columns: frozenset[str] = frozenset(),
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
         """Frequency-encode categorical columns, fitted on the training data.
 
         New values in ``synthetic_df`` that were not seen in ``training_df`` are
-        encoded as 0.
+        encoded as 0. A PII column is instead encoded within each dataframe by
+        how many of its rows share the value, because its values are replaced or
+        should not reappear: a synthetic person with 94 transactions then lands
+        where a training person with 94 transactions does, whatever the names.
 
         Args:
             training_df: Training dataframe (used to fit the encoder).
             synthetic_df: Synthetic dataframe (transformed only).
             categorical_columns: Columns to encode.
+            pii_columns: Columns the PII plan lists as structured PII.
 
         Returns:
             Tuple of (encoded training, encoded synthetic), or ``(None, None)``
@@ -146,12 +154,17 @@ class DeepStructure(Component):
         encoder = CountEncoder(handle_missing="value", handle_unknown=0)
         training_df_cat_labels = pd.DataFrame(encoder.fit_transform(training_df_cat))
         synthetic_df_cat_labels = pd.DataFrame(encoder.transform(synthetic_df_cat))
+        for column in categorical_columns:
+            if column in pii_columns:
+                training_df_cat_labels[column] = _own_value_counts(training_df_cat[column])
+                synthetic_df_cat_labels[column] = _own_value_counts(synthetic_df_cat[column])
         return training_df_cat_labels, synthetic_df_cat_labels
 
     @staticmethod
     def _prep_datasets_for_joined_pca(
         training_df: pd.DataFrame,
         synthetic_df: pd.DataFrame,
+        pii_columns: frozenset[str] = frozenset(),
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Preprocess dataframes for joined PCA.
 
@@ -162,6 +175,7 @@ class DeepStructure(Component):
         Args:
             training_df: Training dataframe (used to fit encoders and PCA).
             synthetic_df: Synthetic dataframe (transformed only).
+            pii_columns: Columns the PII plan lists as structured PII; see ``_encode_categorical_columns``.
 
         Returns:
             Tuple of (preprocessed training, preprocessed synthetic) ready
@@ -202,7 +216,7 @@ class DeepStructure(Component):
             return pd.DataFrame(), pd.DataFrame()
 
         training_df_cat_labels, synthetic_df_cat_labels = DeepStructure._encode_categorical_columns(
-            training_df, synthetic_df, categorical_columns
+            training_df, synthetic_df, categorical_columns, pii_columns
         )
         training_df_num = DeepStructure._fill_in_numeric_columns(training_df, numeric_columns)
         synthetic_df_num = DeepStructure._fill_in_numeric_columns(synthetic_df, numeric_columns)
@@ -213,7 +227,9 @@ class DeepStructure(Component):
         return training_df, synthetic_df
 
     @staticmethod
-    def _calculate_pca(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> tuple:
+    def _calculate_pca(
+        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, pii_columns: frozenset[str] = frozenset()
+    ) -> tuple:
         """Compute PCA projections for training and synthetic dataframes.
 
         Subsamples, preprocesses, and runs joined PCA. Returns ``(None, None)``
@@ -222,6 +238,7 @@ class DeepStructure(Component):
         Args:
             training_df: Tabular training dataframe.
             synthetic_df: Tabular synthetic dataframe.
+            pii_columns: Columns the PII plan lists as structured PII; see ``_encode_categorical_columns``.
 
         Returns:
             Tuple of (training PCA dataframe, synthetic PCA dataframe).
@@ -254,7 +271,7 @@ class DeepStructure(Component):
 
             # Fill in missing values and encode categorical columns to numeric values
             training_subsample_prepped, synthetic_subsample_prepped = DeepStructure._prep_datasets_for_joined_pca(
-                training_subsample, synthetic_subsample
+                training_subsample, synthetic_subsample, pii_columns
             )
 
             training_ss_rows, training_ss_cols = training_subsample_prepped.shape
@@ -308,3 +325,8 @@ class DeepStructure(Component):
         except Exception as e:
             logger.exception("Failed to calculate Principal Component Stability SQS")
             return EvaluationScore(notes=str(e))
+
+
+def _own_value_counts(column: pd.Series) -> pd.Series:
+    """Return, for each row, how many rows of ``column`` share its value, counting missing values as one value."""
+    return column.groupby(column, dropna=False).transform("size")

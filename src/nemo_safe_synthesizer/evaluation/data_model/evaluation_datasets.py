@@ -92,6 +92,12 @@ class EvaluationDatasets(BaseModel):
         """Return columns classified as binary or categorical."""
         return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, based_on)
 
+    @property
+    def structured_pii_columns(self) -> frozenset[str]:
+        """Columns the PII plan lists as structured PII, which quality scores compare without their values."""
+        statistics = self.column_statistics or {}
+        return frozenset(name for name, stats_ in statistics.items() if EvaluationField.is_structured_pii(stats_))
+
     def get_text_columns(self, based_on: str = "training") -> list[str]:
         """Return columns classified as free text."""
         return self.get_columns_of_type({FieldType.TEXT}, based_on)

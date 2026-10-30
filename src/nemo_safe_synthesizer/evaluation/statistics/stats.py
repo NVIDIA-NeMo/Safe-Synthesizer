@@ -113,6 +113,27 @@ def get_categorical_field_distribution(field: pd.Series) -> DistributionDict:
     return distribution
 
 
+def get_ranked_field_distribution(field: pd.Series) -> DistributionDict:
+    """Compute the value-count distribution of a column by rank, without its values.
+
+    The most common value's share is ``"#1"``, the next ``"#2"``, and so on. Comparing two
+    ranked distributions asks whether the columns have a similar number of values with similar
+    shares, whatever the values are, which suits PII columns whose values are replaced.
+
+    Args:
+        field: Column series to analyze.
+
+    Returns:
+        Mapping of ``{"#rank": percentage}`` where percentages are in ``[0, 100]``.
+
+    Example:
+        ``["Ada", "Ada", "Ada", "Bo"]`` returns ``{"#1": 75.0, "#2": 25.0}``, as does
+        ``["Cy", "Di", "Di", "Di"]``.
+    """
+    counts = field.astype(str).value_counts()
+    return {f"#{rank}": count * 100 / len(field) for rank, count in enumerate(counts.tolist(), start=1)}
+
+
 def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series) -> np.ndarray:
     """Compute shared histogram bin edges for two numeric series.
 
