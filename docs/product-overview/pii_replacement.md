@@ -135,9 +135,10 @@ plan file path.
 ### Patterns
 
 A column's optional `pattern` sets the format of its replacement values. It
-must match at least 99% of the column's non-null values: a plan whose pattern
-matches fewer is rejected, and discovery drops a proposed pattern that matches
-fewer. Each entity
+should match at least 99% of the column's non-null values: discovery drops a
+proposed pattern that matches fewer, and a plan you write logs a warning
+instead. Values the pattern does not fit still get replacements written in the
+pattern. Each entity
 type uses one of three pattern syntaxes, and the remaining types, such as
 `street_address`, `national_id`, and `ipv4`, take no pattern.
 
@@ -276,7 +277,11 @@ replace_pii:
 Each list selects the union of sampler rows with those values, so listing every
 sampler value allows any match. Values without an entry use case-insensitive
 identity matching. A value that has no entry and matches no sampler value stops
-plan resolution with an error naming its column.
+plan resolution with an error naming its column when the plan was discovered.
+For a plan you write, NSS logs a warning instead and lets that value match any
+sampler value. A sampler-conditioned column with more than 1,000 distinct values
+or values over 128 characters is likewise an error for a discovered plan and,
+for a plan you write, a warning that drops the dependency.
 
 Gender values are `female` and `male` for every sampler and locale.
 Nemotron-Personas also accepts its locale's own words, such as `femme` and
@@ -285,9 +290,10 @@ locales whose dataset has an ethnicity column, such as `en_US`.
 
 A plan does not name its sampler: each run checks the mapping against its own
 `replace_pii.sampler` and `replace_pii.locale`. An entry the sampler cannot
-use stops plan resolution with one error that lists every such entry and names
-the sampler, for example a gender value such as `femme` with Faker, or any
-ethnicity mapping with Faker. If you switch samplers or locales, rerun automatic
+use, for example a gender value such as `femme` with Faker, or any ethnicity
+mapping with Faker, stops resolution of a discovered plan with one error that
+lists every such entry and names the sampler. In a plan you write, those
+entries are dropped with one warning that lists them. If you switch samplers or locales, rerun automatic
 discovery or edit those entries. NSS does not accept a separate mapping file or combine automatic
 discovery with manual overrides. Generate a resolved configuration, edit its
 plan if needed, and run that configuration again. An inline plan never runs a
@@ -468,8 +474,9 @@ replace_pii:
 When `replace_pii.sampler` is not set, NSS uses Nemotron-Personas if the
 dataset for the configured locale is present. Otherwise it uses Faker, logs a
 warning, and records `backend: faker` in the configuration it writes, unless
-the plan maps ethnicity values, which only Nemotron-Personas has; then
-resolution fails. A `sampler` you set is always used: if it names
+a discovered plan maps ethnicity values, which only Nemotron-Personas has; then
+resolution fails. A plan you write switches to Faker anyway, and its ethnicity
+entries are dropped with a warning. A `sampler` you set is always used: if it names
 Nemotron-Personas and the file is missing or cannot be read, replacement fails
 instead of switching to Faker. If the plan conditions on a value the dataset
 has no column for, such as ethnic background, replacement also fails. When a persona row lacks one generated field, or the entity type is

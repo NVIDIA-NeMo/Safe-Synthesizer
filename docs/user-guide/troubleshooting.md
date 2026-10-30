@@ -604,15 +604,15 @@ missing, first download the dataset for `replace_pii.locale`, as described under
 [Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas). Set
 `replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
 stored elsewhere. When `replace_pii.sampler` is not set, NSS uses Faker if the locale file is
-missing, unless the plan maps ethnicity values. When `replace_pii.sampler` names this sampler, or
-the plan maps ethnicity values, and the locale file is missing or unreadable, replacement fails
+missing, unless a discovered plan maps ethnicity values. When `replace_pii.sampler` names this
+sampler, or a discovered plan maps ethnicity values, and the locale file is missing or unreadable, replacement fails
 with a configuration error; set `replace_pii.sampler.backend: faker` and remove any ethnicity
 mapping to replace PII without persona data. Fields a persona row lacks, and entity types that are
 not persona fields, still use Faker. Dependency values that select no Nemotron-Personas candidates
 are configuration errors and must be fixed in `data_to_sampler_value_mapping`.
 
 If `data_to_sampler_value_mapping does not match the ... sampler` stops a run, the plan was likely
-written for another sampler or locale. The error lists every entry the sampler cannot use; change
+discovered for another sampler or locale. The error lists every entry the sampler cannot use; change
 those entries, or set `replace_pii.sampler` and `replace_pii.locale` to the ones the plan was
 written for. Gender entries may always use `female` and `male`.
 

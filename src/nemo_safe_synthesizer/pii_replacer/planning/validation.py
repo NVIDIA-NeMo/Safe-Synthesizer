@@ -21,9 +21,12 @@ from ...config.replace_pii import (
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
+from ...observability import get_logger
 from ..replacement.collisions import all_distinct
 from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
 from .patterns import compile_character_mask, compile_name_pattern
+
+logger = get_logger(__name__)
 
 __all__ = [
     "column_pattern_issue",
@@ -138,13 +141,28 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     Raises:
         InternalError: If the entity's pattern syntax has no matcher.
     """
+    if (issue := column_pattern_syntax_issue(spec)) is not None:
+        return issue
+    coverage = _pattern_coverage(df, spec)
+    if coverage is not None and coverage < MIN_PATTERN_COVERAGE:
+        return (
+            f"column {spec.column_name!r}: pattern {spec.pattern!r} covers {coverage:.1%} of non-null values; "
+            f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
+        )
+    return None
+
+
+def _pattern_coverage(df: pd.DataFrame, spec: PiiColumnPlan) -> float | None:
+    """Return the share of the column's non-null values ``spec.pattern`` matches, or ``None`` if there is none.
+
+    The pattern's syntax must already be valid.
+    """
     pattern = spec.pattern
     if pattern is None or spec.column_name not in df.columns:
         return None
-    if (issue := column_pattern_syntax_issue(spec)) is not None:
-        return issue
-
     values = df[spec.column_name].dropna().astype(str).tolist()
+    if not values:
+        return None
     if ENTITY_BY_TYPE[spec.entity_type].pattern_syntax is PatternSyntax.STRFTIME:
         matches = sum(_parses_datetime(value, pattern) for value in values)
     else:
@@ -155,14 +173,7 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
                 f"pattern {pattern!r} for column {spec.column_name!r} passed syntax checks without a matcher"
             )
         matches = sum(matcher.fullmatch(value) is not None for value in values)
-
-    if values and matches / len(values) < MIN_PATTERN_COVERAGE:
-        coverage = matches / len(values)
-        return (
-            f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
-            f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
-        )
-    return None
+    return matches / len(values)
 
 
 def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
@@ -191,14 +202,26 @@ def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str
     )
 
 
-def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool) -> Iterator[str]:
+def _iter_pattern_issues(
+    df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool, warn_on_low_coverage: bool
+) -> Iterator[str]:
     for spec in plan.columns_to_replace:
-        if check_coverage:
-            issue = column_pattern_issue(df, spec)
-        else:
-            issue = column_pattern_syntax_issue(spec) if spec.pattern is not None else None
-        if issue is not None:
+        if (issue := column_pattern_syntax_issue(spec)) is not None:
             yield issue
+            continue
+        coverage = _pattern_coverage(df, spec) if check_coverage else None
+        if coverage is None or coverage >= MIN_PATTERN_COVERAGE:
+            continue
+        if not warn_on_low_coverage:
+            yield (
+                f"column {spec.column_name!r}: pattern {spec.pattern!r} covers {coverage:.1%} of non-null values; "
+                f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
+            )
+            continue
+        logger.user.warning(
+            f"Column {spec.column_name!r}: pattern {spec.pattern!r} covers only {coverage:.1%} of non-null values. "
+            "Values it does not fit still get replacements written in the pattern."
+        )
 
 
 def _parses_datetime(value: str, pattern: str) -> bool:
@@ -235,6 +258,7 @@ def validate_plan(
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
     check_pattern_coverage: bool = True,
+    warn_on_low_pattern_coverage: bool = False,
 ) -> None:
     """Validate the selected final plan against the dataframe and data configuration.
 
@@ -252,6 +276,8 @@ def validate_plan(
             data the plan was already validated against, such as a training
             split: a subset can fall just below the threshold although the
             full input met it. Pattern syntax is checked either way.
+        warn_on_low_pattern_coverage: Log a warning instead of failing when a
+            pattern covers less than 99%, as for a plan the user supplied.
     """
     issues: list[str] = []
     group_column = data_config.group_training_examples_by
@@ -262,7 +288,11 @@ def validate_plan(
         issues.append(f"group column {group_column!r} is not present in the dataframe")
 
     issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
-    issues.extend(_iter_pattern_issues(df, plan, check_coverage=check_pattern_coverage))
+    issues.extend(
+        _iter_pattern_issues(
+            df, plan, check_coverage=check_pattern_coverage, warn_on_low_coverage=warn_on_low_pattern_coverage
+        )
+    )
 
     if issues:
         details = "\n".join(f"  - {issue}" for issue in issues)
