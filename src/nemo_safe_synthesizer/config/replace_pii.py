@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, ClassVar, Literal, Self, cast
 
 import yaml
@@ -44,6 +45,7 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
+    "DEFAULT_GLINER2_MODEL_REVISION",
     "DataToSamplerValueMapping",
     "ENTITIES",
     "ENTITY_BY_TYPE",
@@ -72,6 +74,8 @@ __all__ = [
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
 DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
+DEFAULT_GLINER2_MODEL_REVISION = "c153999da5f4c509df4322b0c6a1baf3d2c284d7"
+"""Hugging Face commit of ``DEFAULT_GLINER2_MODEL_ID`` that the default thresholds were tuned on."""
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -94,7 +98,6 @@ class EntityType(StrEnum):
     PHONE_NUMBER = "phone_number"
     DATE_OF_BIRTH = "date_of_birth"
     STREET_ADDRESS = "street_address"
-    SSN = "ssn"
     NATIONAL_ID = "national_id"
     CREDIT_DEBIT_CARD = "credit_debit_card"
     API_KEY = "api_key"  # pragma: allowlist secret
@@ -244,13 +247,10 @@ ENTITIES: tuple[Entity, ...] = (
         description="A street address, possibly including city, state, or postal code.",
     ),
     Entity(
-        EntityType.SSN, action=EntityAction.REPLACE, can_condition=False, description="A US Social Security number."
-    ),
-    Entity(
         EntityType.NATIONAL_ID,
         action=EntityAction.REPLACE,
         can_condition=False,
-        description="A government-issued personal identification number other than a US Social Security number.",
+        description="A government-issued personal identification number, such as a US Social Security number.",
     ),
     Entity(
         EntityType.CREDIT_DEBIT_CARD,
@@ -327,9 +327,7 @@ ENTITIES: tuple[Entity, ...] = (
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
 
 FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
-    entity.entity_type
-    for entity in ENTITIES
-    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
+    entity.entity_type for entity in ENTITIES if entity.action is EntityAction.REPLACE
 )
 """Entity types eligible for fresh detection and replacement inside free text."""
 
@@ -350,21 +348,55 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-_DEFAULT_NAME_ENTITY_THRESHOLDS = {
-    EntityType.FIRST_NAME: 0.9,
-    EntityType.MIDDLE_NAME: 0.9,
-    EntityType.LAST_NAME: 0.9,
-    EntityType.FULL_NAME: 0.95,
-}
+# Thresholds come from tuning on a labeled development set of PII text (entity-type exact F0.5),
+# rounded, with checked_national_id_threshold tuned jointly. Name thresholds were tuned together with the name exclusion labels below and assume them.
+# Dev has no gold middle names, so middle_name was set by review and relies on the middle-name
+# neighbour rule to reject words such as clothing sizes.
+_DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType(
+    {
+        EntityType.FIRST_NAME: 0.944,
+        EntityType.MIDDLE_NAME: 0.7,
+        EntityType.LAST_NAME: 0.614,
+        EntityType.FULL_NAME: 0.963,
+        EntityType.PHONE_NUMBER: 0.992,
+        EntityType.DATE_OF_BIRTH: 0.9998,
+        EntityType.STREET_ADDRESS: 0.987,
+        EntityType.NATIONAL_ID: 0.979,
+        EntityType.API_KEY: 0.991,
+        EntityType.UNIQUE_IDENTIFIER: 0.946,
+    }
+)
+# Same tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
+# span overlapping one of these labels is dropped. Earlier tunings also requested medical_procedure, but tuned it to
+# 1.0, which never fires, so it is not requested.
+_DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
+    {
+        "body_part": 0.053,
+        "family_relationship": 0.229,
+        "gender": 0.485,
+        "medical_condition": 0.378,
+        "organism": 0.061,
+    }
+)
+_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD = 0.733
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
 
 
 def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
     """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
     return {
-        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
-        for entity_type in GLINER_DETECTION_ENTITY_TYPES
+        entity_type: _DEFAULT_GLINER_ENTITY_THRESHOLDS[entity_type] for entity_type in GLINER_DETECTION_ENTITY_TYPES
     }
+
+
+def _default_name_exclusion_thresholds() -> dict[str, float]:
+    """Return a fresh copy of the tuned name exclusion labels."""
+    return dict(_DEFAULT_NAME_EXCLUSION_THRESHOLDS)
+
+
+def _normalize_gliner_label(label: str) -> str:
+    """Normalize a GLiNER2 label's case and separators so equivalent spellings compare equal."""
+    return label.strip().casefold().replace("-", "_").replace(" ", "_")
 
 
 # entity_type → allowed depends_on entity types (optional edges may be omitted).
@@ -809,17 +841,74 @@ class LLMConfig(NSSBaseModel):
 class FreeTextDetectionConfig(NSSBaseModel):
     """GLiNER2 and deterministic regex settings for free-text PII detection."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_default_revision_for_other_models(cls, data: object) -> object:
+        """Load the latest revision of a non-default model unless the caller pins one.
+
+        The default revision is a commit of the default model and does not exist in other repositories.
+        """
+        if not isinstance(data, Mapping):
+            return data
+        values = {str(key): value for key, value in data.items()}
+        if "model_revision" in values or values.get("model_id", DEFAULT_GLINER2_MODEL_ID) == DEFAULT_GLINER2_MODEL_ID:
+            return data
+        return {**values, "model_revision": None}
+
     model_id: str = Field(
         default=DEFAULT_GLINER2_MODEL_ID,
         min_length=1,
         description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
     )
+    model_revision: str | None = Field(
+        default=DEFAULT_GLINER2_MODEL_REVISION,
+        min_length=1,
+        description=(
+            "Hugging Face revision (commit, branch, or tag) of model_id to load. Defaults to the commit of the "
+            "default model that the default thresholds were tuned on. When model_id is changed and "
+            "model_revision is not set, the latest revision is loaded. Set null to load the latest revision."
+        ),
+    )
     entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
         default_factory=_default_gliner_entity_thresholds,
         description=(
-            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.95 for "
-            "full_name, 0.9 for first_name, middle_name, and last_name, and 0.5 for the rest. Email, "
-            "credit_debit_card, ipv4, and ipv6 are detected by regex and take no threshold."
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.944 for "
+            "first_name; 0.7 for middle_name; 0.614 for last_name; 0.963 for full_name; 0.992 for phone_number; 0.9998 for "
+            "date_of_birth; 0.987 for street_address; 0.979 for national_id; 0.991 for api_key; "
+            "and 0.946 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
+            "take no threshold."
+        ),
+    )
+    checked_national_id_threshold: _ConfidenceThreshold = Field(
+        default=_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD,
+        description=(
+            "Minimum GLiNER2 confidence score for a detected national ID that python-stdnum accepts as a personal "
+            "ID of replace_pii.locale's country, such as a US Social Security number for en_US. It replaces "
+            "entity_thresholds.national_id for those values, since the check rather than the score tells them "
+            "apart. Locales without a check, such as en_GB, use only the national_id threshold."
+        ),
+    )
+    name_exclusion_thresholds: dict[str, _ConfidenceThreshold] = Field(
+        default_factory=_default_name_exclusion_thresholds,
+        description=(
+            "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
+            "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
+            "replaced, and find_and_replace does not replace text inside them. A value replaces the whole default set; use an empty mapping to turn exclusion off, which "
+            "finds more real names at the cost of more false names in clinical text."
+        ),
+    )
+    find_and_replace: bool = Field(
+        default=True,
+        description=(
+            "Search free text for values already known in the same record or group and replace the occurrences "
+            "the detectors missed. Detected spans reuse a known value's replacement either way; this setting only "
+            "adds the search. Known values are original values of structured replacement columns, including the "
+            "words of a plain full name, and values detected elsewhere in free text. Only whole words are matched, ignoring case. Values shorter "
+            "than three characters, one-word values that are common English words, such as 'Will' or "
+            "'Brown', and missing-value placeholders such as 'Unknown' are not searched for, and text inside a "
+            "name-exclusion span, such as a medical condition, is never replaced this way. Set false to replace "
+            "only detected spans, for example to measure what the search adds. The search runs only when "
+            "replace_pii.locale is en_US, because the common-word list is English."
         ),
     )
     batch_size: int = Field(
@@ -857,6 +946,22 @@ class FreeTextDetectionConfig(NSSBaseModel):
             raise ParameterError(
                 "free_text_detection.entity_thresholds accepts only GLiNER-detected entity types; "
                 f"unsupported: {unsupported}"
+            )
+        return value
+
+    @field_validator("name_exclusion_thresholds")
+    @classmethod
+    def _validate_name_exclusion_labels(cls, value: dict[str, float]) -> dict[str, float]:
+        """Reject blank, duplicate, and entity-type labels, since each would silently change detection."""
+        normalized = {_normalize_gliner_label(label) for label in value}
+        if "" in normalized:
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be nonempty")
+        if len(normalized) != len(value):
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
+        colliding = sorted(normalized & {entity_type.value for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES})
+        if colliding:
+            raise ParameterError(
+                f"free_text_detection.name_exclusion_thresholds cannot use detected entity types: {colliding}"
             )
         return value
 

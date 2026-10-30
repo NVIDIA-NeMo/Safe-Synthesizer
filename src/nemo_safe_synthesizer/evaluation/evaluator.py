@@ -42,6 +42,7 @@ class Evaluator:
         training_df: Training dataframe.
         test_df: Holdout (test) dataframe used by text-similarity and privacy metrics.
         workdir: Working directory for persisting artifacts.
+        pii_replay_skipped_reason: Why PII replay could not run, shown in the report, or ``None``.
     """
 
     summary: SafeSynthesizerSummary
@@ -61,6 +62,7 @@ class Evaluator:
         training_df: pd.DataFrame | None = None,
         test_df: pd.DataFrame | None = None,
         workdir: Workdir | None = None,
+        pii_replay_skipped_reason: str | None = None,
     ):
         self.config = config
         self.generate_results = generate_results
@@ -69,6 +71,7 @@ class Evaluator:
         self.training_df = training_df
         self.test_df = test_df
         self.workdir = workdir
+        self.pii_replay_skipped_reason = pii_replay_skipped_reason
 
     def evaluate(self) -> None:
         """Run all configured evaluation components and store results.
@@ -85,6 +88,7 @@ class Evaluator:
             test=self.test_df,
             config=self.config,
             column_statistics=self.column_statistics,
+            pii_replay_skipped_reason=self.pii_replay_skipped_reason,
         )
         evaluation_time_sec = time.monotonic() - evaluation_start
         logger.info("Evaluation complete.")

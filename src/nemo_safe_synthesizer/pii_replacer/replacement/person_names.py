@@ -7,6 +7,9 @@ A full name without a plan pattern is written the way Faker writes the locale's 
 ``en_US``, family name first in ``ja_JP``, ``hu_HU``, and ``ru_RU``, and family name first with no space in
 ``zh_CN`` and ``ko_KR``. nameparser reads full names back, told which order to expect: the column's pattern's
 order, or else the locale's.
+
+This module lives outside ``replacement.generators`` so free-text replacement can read names without loading the
+generator implementations.
 """
 
 from __future__ import annotations
@@ -16,13 +19,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from faker import Faker
-from nameparser import FAMILY_FIRST, GIVEN_FIRST, Parser, Policy, locales, parser_for
+from nameparser import FAMILY_FIRST, GIVEN_FIRST, ParsedName, Parser, Policy, locales, parser_for
 
-from ....config.replace_pii import EntityType
-from ....errors import GenerationError
-from ...planning.patterns import parse_name_pattern
+from ...config.replace_pii import EntityType
+from ...errors import GenerationError
+from ..planning.patterns import parse_name_pattern
 
-__all__ = ["FullNameLayout", "full_name_layout", "read_full_name", "write_full_name"]
+__all__ = ["FullNameLayout", "full_name_layout", "parse_full_name", "read_full_name", "write_full_name"]
 
 _FAKER_NAME_TOKEN = re.compile(r"\{\{(first|last)_name\w*\}\}")
 
@@ -95,11 +98,19 @@ def read_full_name(full_name: str, *, locale: str, pattern: str | None = None) -
         ``read_full_name("Hopper, Grace", locale="en_US")`` and ``read_full_name("Nagy Péter", locale="hu_HU")``
         have first names ``Grace`` and ``Péter``.
     """
+    parsed = parse_full_name(full_name, locale=locale, pattern=pattern)
+    return {"first": parsed.given, "middle": parsed.middle, "last": parsed.family}
+
+
+def parse_full_name(full_name: str, *, locale: str, pattern: str | None = None) -> ParsedName:
+    """Return nameparser's reading of ``full_name``, in the order :func:`read_full_name` describes.
+
+    The result also gives each word's role and position, such as a title, given name, or family name.
+    """
     family_first = _pattern_family_first(pattern)
     if family_first is None:
         family_first = full_name_layout(locale).family_first
-    first, middle, last = _parse(full_name, locale.split("_", 1)[0].casefold(), family_first)
-    return {"first": first, "middle": middle, "last": last}
+    return _parse(full_name, locale.split("_", 1)[0].casefold(), family_first)
 
 
 def _pattern_family_first(pattern: str | None) -> bool | None:
@@ -115,10 +126,9 @@ def _pattern_family_first(pattern: str | None) -> bool | None:
 
 
 @lru_cache(maxsize=1024)
-def _parse(full_name: str, language: str, family_first: bool) -> tuple[str, str, str]:
+def _parse(full_name: str, language: str, family_first: bool) -> ParsedName:
     # Parsing takes about 0.1 ms, and every column of a row that depends on the full name reads it again.
-    parsed = _parser(language, family_first).parse(full_name)
-    return parsed.given, parsed.middle, parsed.family
+    return _parser(language, family_first).parse(full_name)
 
 
 @lru_cache(maxsize=None)

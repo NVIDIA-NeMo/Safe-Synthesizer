@@ -18,7 +18,8 @@ update it in the console for the change to take effect.
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
   build of Safe Synthesizer into a dedicated venv through the release installer,
   provisions Triton's runtime compiler, registers the venv as the default Jupyter
-  kernel, and drops the tutorial notebooks in `$HOME`.
+  kernel, and drops the tutorial notebooks in `$HOME` with their Safe Synthesizer
+  install cells replaced by a note.
 - `welcome.md`: Added to the Launchable's Source files so it renders on the Launchable
   webpage and appears as the customer's `$HOME/welcome.md`.
 
@@ -147,6 +148,13 @@ hard way on a real instance.
   required to have `git`. The tarball is pinned to the tag matching the installed wheel,
   falling back to `main`, so the notebooks can never call APIs newer than the package
   they run against.
+- Each tutorial's Safe Synthesizer install cell, the code cell tagged
+  `install-safe-synthesizer`, is replaced by a short "already installed" note. Running it
+  would spend several minutes reinstalling the PyPI release over the venv this script
+  just verified. Untagged cells that install a tutorial's other packages, such as
+  `kagglehub`, stay, so this script carries no list of tutorial dependencies. Notebooks
+  from releases older than the tag have no tagged cell and are copied unchanged, install
+  cell included.
 - The tar member is an exact path, not a glob. GNU tar does not enable wildcards for
   member names by default, and bsdtar rejects `--wildcards` outright, so no single glob
   form works on both. The archive's top-level directory name also varies by ref

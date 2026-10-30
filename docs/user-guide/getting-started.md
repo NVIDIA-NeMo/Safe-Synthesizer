@@ -137,6 +137,26 @@ Commands:
   run        Run the Safe Synthesizer end-to-end pipeline.
 ```
 
+### Optional Nemotron-Personas Data
+
+PII replacement draws replacement names from the Nemotron-Personas dataset for
+`replace_pii.locale` when it is downloaded. Names then follow the locale's real
+population and can match a row's ethnic background. Without it, Safe Synthesizer uses Faker
+and logs a warning. Downloading requires an NGC API key and the
+[NGC CLI](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling).
+For `en_US`:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+See [PII Replacement -- Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas)
+for other locales and storage locations.
+
 ### Optional Agent Skill
 
 This repository includes an Agent Skill at `skills/safe-synthesizer/`. The
@@ -224,8 +244,9 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 
 ### 2. PII Replacement
 
-PII replacement v3 will be added in a later update. On this branch, disable PII
-replacement before running the pipeline. See
+PII replacement v3 resolves a dataset-specific plan against the full input,
+then replaces structured and free-text PII only in the post-holdout training
+split. See
 [Configuration -- Replacing PII](configuration.md#replacing-pii) and
 [PII Replacement](../product-overview/pii_replacement.md).
 

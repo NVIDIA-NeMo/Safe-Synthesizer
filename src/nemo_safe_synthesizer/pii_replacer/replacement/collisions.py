@@ -35,7 +35,6 @@ IDENTIFIER_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
         EntityType.PHONE_NUMBER,
-        EntityType.SSN,
         EntityType.NATIONAL_ID,
         EntityType.CREDIT_DEBIT_CARD,
         EntityType.API_KEY,
@@ -80,6 +79,9 @@ class CandidateChooser:
             repeat. A candidate in this set is kept only as a repeat fallback.
         one_to_one: The same values for a grouping column. When given, a candidate in this set is
             rejected outright and no repeat fallback is allowed, so two groups never share one.
+        written_suffix: Text written after every candidate, such as the original locality kept after
+            a generated street. The one-to-one check applies to the candidate followed by this text,
+            since that is the value two groups must not share.
     """
 
     def __init__(
@@ -90,12 +92,14 @@ class CandidateChooser:
         *,
         used: set[str] | None = None,
         one_to_one: set[str] | None = None,
+        written_suffix: str = "",
     ) -> None:
         self._entity_type = entity_type
         self._original = original
         self._pattern = pattern
         self._used = used
         self._one_to_one = one_to_one
+        self._written_suffix = written_suffix
         self._repeat: str | None = None
         self._kept_name_part: str | None = None
 
@@ -103,7 +107,7 @@ class CandidateChooser:
         """Return whether ``candidate`` can be used as a new replacement; otherwise keep it as a fallback."""
         if not generated_value_is_valid(request, candidate):
             return False
-        if self._one_to_one is not None and candidate.casefold() in self._one_to_one:
+        if self._one_to_one is not None and (candidate + self._written_suffix).casefold() in self._one_to_one:
             return False
         # A full name that differs as a whole can still keep the real first or last name. Prefer one that
         # keeps neither; fall back to it only when no other name was found, so a plan whose dependencies

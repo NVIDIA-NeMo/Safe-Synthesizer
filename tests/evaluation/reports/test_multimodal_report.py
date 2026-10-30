@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from jinja2 import Environment, FunctionLoader, select_autoescape
 
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -13,12 +14,14 @@ from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
+from nemo_safe_synthesizer.evaluation.components.pii_replay import PIIReplay, PIIReplayData
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
-from nemo_safe_synthesizer.evaluation.render import render_report
+from nemo_safe_synthesizer.evaluation.render import _get_template, render_report
 from nemo_safe_synthesizer.evaluation.reports.multimodal import multimodal_report as multimodal_report_module
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
+from nemo_safe_synthesizer.pii_replacer import ColumnStatistics
 
 
 @pytest.fixture(autouse=True)
@@ -286,3 +289,82 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 4
     assert context["pair_score_column_count"] == 2
+
+
+def _replacement_off_report(
+    column_statistics: dict[str, ColumnStatistics] | None, replay: PIIReplay
+) -> MultimodalReport:
+    training = pd.DataFrame({"full_name": ["Ada Lovelace", "Alan Turing"], "age": [36, 41]})
+    datasets = EvaluationDatasets(training=training, synthetic=training.copy(), column_statistics=column_statistics)
+    return MultimodalReport(
+        evaluation_datasets=datasets, components=[replay], config=SafeSynthesizerParameters(replace_pii=None)
+    )
+
+
+def _render_pii_card(report: MultimodalReport) -> str:
+    """Render only the PII card, since the full report template needs every other component too."""
+    env = Environment(loader=FunctionLoader(_get_template), autoescape=select_autoescape(["html", "xml"]))
+    return env.get_template("jinja/components/pii_replacement.j2").render(ctx=report.jinja_context)
+
+
+def test_pii_card_lists_detected_columns_as_not_replaced_when_replacement_was_off() -> None:
+    statistics = {
+        "full_name": ColumnStatistics(
+            assigned_type="structured",
+            assigned_entity="full_name",
+            detected_entity_counts={"full_name": 2},
+        )
+    }
+    replay = PIIReplay(
+        pii_replay_data=[
+            PIIReplayData(
+                column_name="full_name",
+                column_assigned_type="structured",
+                pii_type="full_name",
+                total_training_data=2,
+                unique_training_data=2,
+                total_synthetic_data=1,
+                unique_synthetic_data=1,
+                unique_synthetic_data_percentage=50.0,
+            )
+        ]
+    )
+    report = _replacement_off_report(statistics, replay)
+
+    pii = report.jinja_context["pii_replacement"]
+    html = _render_pii_card(report)
+
+    assert pii["replacement_off"] is True
+    assert [group["replaced_with"] for group in pii["groups"]] == [None]
+    assert pii["headline"] == "PII in 1 column, not replaced"
+    assert report.jinja_context["with_transform"] is False
+    assert 'id="pii-replay-details" hidden' in html
+    assert "Not replaced" in html
+    assert "PII replacement was off, so the model was trained on the original values" in html
+
+
+def test_pii_card_says_why_replay_was_not_run() -> None:
+    report = _replacement_off_report(None, PIIReplay(skipped_reason="PII could not be detected (no GPU)"))
+
+    pii = report.jinja_context["pii_replacement"]
+    html = _render_pii_card(report)
+
+    assert pii["headline"] == "Replay not run"
+    assert "PII replay was not run: PII could not be detected (no GPU)." in html
+    assert "pii-replacement-table" not in html
+    assert "No PII was found" not in html
+
+
+def test_pii_card_says_no_pii_was_found_when_detection_found_none() -> None:
+    report = _replacement_off_report({}, PIIReplay())
+
+    html = _render_pii_card(report)
+
+    assert report.jinja_context["pii_replacement"]["headline"] == "No PII found"
+    assert "No PII was found in the training data." in html
+
+
+def test_no_pii_card_without_replacement_detection_or_a_skip_reason() -> None:
+    report = _replacement_off_report(None, PIIReplay())
+
+    assert report.jinja_context["pii_replacement"] is None

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import re
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
@@ -18,6 +17,7 @@ from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
 from ...sampler_catalog import PERSONA_SEX_VALUES
 from ..birth_dates import random_birth_date, shift_birth_date
+from ..national_ids import national_id_check
 from ._common import (
     NAME_ENTITY_TYPES,
     default_email_pattern,
@@ -96,11 +96,10 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER:
             return fake.phone_number()
         if entity_type is EntityType.STREET_ADDRESS:
-            return fake.street_address()
-        if entity_type is EntityType.SSN:
-            return fake.ssn()
+            # Some locales, such as en_GB, put a flat or unit on its own line.
+            return fake.street_address().replace("\n", ", ")
         if entity_type is EntityType.NATIONAL_ID:
-            return _national_id(request, fake, rng)
+            return _national_id(request.original_value, self._locale, fake, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
@@ -152,7 +151,7 @@ class FakerReplacementGenerator:
         return render_name_pattern(EntityType.EMAIL, pattern, values, rng)
 
     def _birth_date(self, request: ReplacementGenerationRequest, rng: Random) -> str:
-        shifted = shift_birth_date(request.original_value, request.pattern, rng)
+        shifted = shift_birth_date(request.original_value, request.pattern, rng, locale=self._locale)
         if shifted is not None:
             return shifted
         self._warn_generation_fallback("unparseable_birth_date")
@@ -202,24 +201,47 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
     return shaped if shaped != request.original_value else None
 
 
-_SSN_SHAPE = re.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
+_FAKER_NATIONAL_ID_LOCALES = frozenset(
+    {"en_CA", "en_US", "fr_FR", "it_IT", "ko_KR", "nl_NL", "pl_PL", "pt_BR", "sv_SE", "zh_CN"}
+)
+"""Locales whose personal national ID Faker's ``ssn()`` generates.
+
+Faker returns a US SSN for many other locales, such as ``de_DE`` and ``ja_JP``, so those are left out. Some
+``en_CA``, ``zh_CN``, and ``ko_KR`` values Faker generates fail python-stdnum's check.
+"""
 
 
-def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random) -> str:
-    """Return a national ID in the original's shape: an SSN for SSN-shaped values, else the same layout.
+def _national_id(original: str, locale: str, fake: Faker, rng: Random) -> str:
+    """Return a national ID for ``original``: the locale's own ID when ``original`` is one, else the same layout.
 
-    National IDs include driver's licences, tax IDs, and non-US identifiers, so only an SSN-shaped
-    original gets an SSN. Any other value keeps its layout, with every letter and digit replaced.
+    When ``original`` passes python-stdnum's check for the locale's national ID, Faker generates a new one,
+    written in the original's layout when both have as many letters and digits. Any other value keeps its
+    layout, with every letter and digit replaced, since national IDs include driver's licenses, tax IDs, and
+    other countries' IDs.
 
     Example:
-        ``"123-45-6789"`` becomes another SSN, ``"D1234567"`` becomes a value such as
-        ``"Q8051937"``, and ``"12-3456789"`` keeps its ``dd-ddddddd`` layout.
+        In ``en_US``, ``"123-45-6789"`` becomes another SSN and ``"123456789"`` another SSN without dashes.
+        ``"D1234567"`` becomes a value such as ``"Q8051937"`` in every locale.
     """
-    if _SSN_SHAPE.fullmatch(request.original_value) is None:
-        shaped = shape_preserving_value(request.original_value, rng)
-        if shaped != request.original_value:
-            return shaped
-    return fake.ssn()
+    is_national_id = national_id_check(locale, loose=True) if locale in _FAKER_NATIONAL_ID_LOCALES else None
+    if is_national_id is not None and is_national_id(original):
+        generated = _in_layout(fake.ssn(), original)
+        if generated.casefold() != original.casefold():
+            return generated
+    return shape_preserving_value(original, rng)
+
+
+def _in_layout(generated: str, original: str) -> str:
+    """Return ``generated``'s letters and digits in ``original``'s layout, or ``generated`` if their counts differ.
+
+    Example:
+        ``_in_layout("258 032 739", "317-280-675")`` is ``"258-032-739"``.
+    """
+    characters = [character for character in generated if character.isalnum()]
+    if len(characters) != sum(character.isalnum() for character in original):
+        return generated
+    fill = iter(characters)
+    return "".join(next(fill) if character.isalnum() else character for character in original)
 
 
 def _is_uuid(value: str) -> bool:

@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ALLOWED_DEPENDS_ON,
     AUTO_DISCOVERY,
     DEFAULT_GLINER2_MODEL_ID,
+    DEFAULT_GLINER2_MODEL_REVISION,
     ENTITIES,
     ENTITY_BY_TYPE,
     FREE_TEXT_DETECTION_ENTITY_TYPES,
@@ -63,7 +64,7 @@ class TestPiiColumnPlan:
 
     def test_pattern_rejected_when_entity_has_no_pattern_syntax(self) -> None:
         with pytest.raises(ValidationError, match="does not allow pattern"):
-            PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN, pattern="###-##-####")
+            PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID, pattern="###-##-####")
         with pytest.raises(ValidationError, match="does not allow pattern"):
             PiiColumnPlan(column_name="addr", entity_type=EntityType.STREET_ADDRESS, pattern="#### Main St")
         with pytest.raises(ValidationError, match="does not allow pattern"):
@@ -585,41 +586,75 @@ class TestReplacePiiConfig:
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
         expected_thresholds = {
-            EntityType.FULL_NAME: 0.95,
-            EntityType.FIRST_NAME: 0.9,
-            EntityType.MIDDLE_NAME: 0.9,
-            EntityType.LAST_NAME: 0.9,
-            EntityType.PHONE_NUMBER: 0.5,
-            EntityType.DATE_OF_BIRTH: 0.5,
-            EntityType.STREET_ADDRESS: 0.5,
-            EntityType.SSN: 0.5,
-            EntityType.NATIONAL_ID: 0.5,
-            EntityType.API_KEY: 0.5,
+            EntityType.FIRST_NAME: 0.944,
+            EntityType.MIDDLE_NAME: 0.7,
+            EntityType.LAST_NAME: 0.614,
+            EntityType.FULL_NAME: 0.963,
+            EntityType.PHONE_NUMBER: 0.992,
+            EntityType.DATE_OF_BIRTH: 0.9998,
+            EntityType.STREET_ADDRESS: 0.987,
+            EntityType.NATIONAL_ID: 0.979,
+            EntityType.API_KEY: 0.991,
+            EntityType.UNIQUE_IDENTIFIER: 0.946,
+        }
+        expected_exclusions = {
+            "body_part": 0.053,
+            "family_relationship": 0.229,
+            "gender": 0.485,
+            "medical_condition": 0.378,
+            "organism": 0.061,
         }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
             model_id=DEFAULT_GLINER2_MODEL_ID,
+            model_revision=DEFAULT_GLINER2_MODEL_REVISION,
             entity_thresholds=expected_thresholds,
+            checked_national_id_threshold=0.733,
+            name_exclusion_thresholds=expected_exclusions,
             batch_size=8,
             chunk_length=384,
             chunk_overlap=128,
         )
         assert config.model_dump(mode="json")["free_text_detection"] == {
             "model_id": DEFAULT_GLINER2_MODEL_ID,
+            "model_revision": DEFAULT_GLINER2_MODEL_REVISION,
             "entity_thresholds": {
                 entity_type.value: threshold for entity_type, threshold in expected_thresholds.items()
             },
+            "checked_national_id_threshold": 0.733,
+            "name_exclusion_thresholds": expected_exclusions,
+            "find_and_replace": True,
             "batch_size": 8,
             "chunk_length": 384,
             "chunk_overlap": 128,
         }
         assert tuple(config.free_text_detection.entity_thresholds) == GLINER_DETECTION_ENTITY_TYPES
+        assert FreeTextDetectionConfig.model_validate(config.model_dump(mode="json")["free_text_detection"]) == (
+            config.free_text_detection
+        )
         assert set(FREE_TEXT_DETECTION_ENTITY_TYPES) - set(GLINER_DETECTION_ENTITY_TYPES) == {
             EntityType.EMAIL,
             EntityType.CREDIT_DEBIT_CARD,
             EntityType.IPV4,
             EntityType.IPV6,
         }
+
+    @pytest.mark.parametrize(
+        ("values", "expected_revision"),
+        [
+            ({}, DEFAULT_GLINER2_MODEL_REVISION),
+            ({"model_revision": None}, None),
+            ({"model_id": "example/other-gliner2"}, None),
+            ({"model_id": "example/other-gliner2", "model_revision": "v1.0"}, "v1.0"),
+            ({"model_id": DEFAULT_GLINER2_MODEL_ID, "model_revision": "main"}, "main"),
+        ],
+    )
+    def test_model_revision_is_pinned_only_for_the_default_model(
+        self,
+        values: dict[str, str | None],
+        expected_revision: str | None,
+    ) -> None:
+        assert FreeTextDetectionConfig.model_validate(values).model_revision == expected_revision
 
     @pytest.mark.parametrize("threshold", [-0.01, 1.01])
     def test_free_text_detection_thresholds_must_be_in_closed_unit_interval(self, threshold: float) -> None:
@@ -646,6 +681,23 @@ class TestReplacePiiConfig:
 
         with pytest.raises(ValidationError, match=rf"unsupported: \['{entity_type.value}'\]"):
             FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
+
+    def test_free_text_detection_exclusion_mapping_replaces_the_defaults(self) -> None:
+        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"medical_condition": 0.2}})
+
+        assert config.name_exclusion_thresholds == {"medical_condition": 0.2}
+
+    @pytest.mark.parametrize(
+        ("labels", "match"),
+        [
+            ({" ": 0.1}, "must be nonempty"),
+            ({"gender": 0.1, "Gender": 0.2}, "must be distinct"),
+            ({"first-name": 0.1}, r"detected entity types: \['first_name'\]"),
+        ],
+    )
+    def test_free_text_detection_rejects_invalid_exclusion_labels(self, labels: dict[str, float], match: str) -> None:
+        with pytest.raises(ValidationError, match=match):
+            FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": labels})
 
     @pytest.mark.parametrize("field", ["batch_size", "chunk_length"])
     def test_free_text_detection_batch_and_chunk_values_must_be_positive(self, field: str) -> None:

@@ -33,6 +33,33 @@ results = SafeSynthesizer().with_data_source("my-data.csv").run()
 
 There is no required location for your files. Put them wherever suits you.
 
+## Working from Cursor or VS Code
+
+To attach your own editor, run `brev open <instance-name> cursor` (or `code`)
+on your machine. Safe Synthesizer is already installed in a Python 3.13
+environment at `~/.nss-venv`. Point the editor at it rather than creating a new
+one:
+
+1. Install the Python and Jupyter extensions in the remote window if the
+   editor offers them.
+2. Run **Python: Select Interpreter** from the Command Palette, choose
+   **Enter interpreter path...**, and enter `/home/<user>/.nss-venv/bin/python`.
+   Run `echo $HOME` in a terminal to find the path. The folder name starts
+   with a dot, so the editor does not list it on its own.
+3. In a notebook, click **Select Kernel**, then **Python Environments**, then
+   `.nss-venv`.
+
+The editor's terminal already uses this environment: `which python` prints a
+path ending in `.nss-venv/bin/python`, and `uv pip install <package>` installs
+into it. Do not select or install into `~/.venv`. That is the Python behind
+JupyterLab in the browser, and breaking it breaks those notebooks.
+
+If you set `HF_TOKEN` or `NSS_INFERENCE_KEY` when launching, they are saved in
+`~/.nss-env.sh`. The terminal loads them, but a notebook kernel the editor
+starts may not. If the kernel list under **Select Kernel > Jupyter Kernel...**
+shows **Safe Synthesizer**, pick it instead: it runs the same environment and
+includes those values.
+
 ## Good to know
 
 - Notebooks already run on the right Python. You should never need to change
