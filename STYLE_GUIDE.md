@@ -842,6 +842,10 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ## General conventions
 
+### Tutorial notebook install cells
+
+A tutorial installs NeMo Safe Synthesizer in one code cell tagged `install-safe-synthesizer` in its cell metadata, and installs nothing else there. Put any other package the tutorial needs, such as `kagglehub` for a dataset download, in a separate untagged cell after it. Environments that already have the package, such as the e2e notebook test and the Brev Launchable, remove the tagged cell and keep the rest.
+
 ### Package structure
 
 Every directory under `src/` that contains Python files must include an `__init__.py` file, even if empty. This ensures the directory is recognized as a Python package by the import machinery and by tooling (`pytest`, `ruff`, `ty`).

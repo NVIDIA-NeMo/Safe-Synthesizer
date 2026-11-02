@@ -58,6 +58,12 @@ __all__ = [
 # profiles or dependency targets) and this many bytes of compact JSON evidence.
 MAX_BATCH_ENTRIES = 32
 MAX_BATCH_BYTES = 48 * 1024
+# Classification batches are smaller: a reasoning model restates the entity
+# catalog before it reaches the columns, and a thinking budget such as the local
+# Nemotron profile's 2,000 tokens then covers only about 14 columns. Columns past
+# that point were classified without any reasoning, so person-name columns late
+# in a wide table were missed. Batches run concurrently up to max_workers.
+MAX_CLASSIFICATION_COLUMNS = 8
 MAX_REQUEST_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
 RETRY_MAX_DELAY_SECONDS = 30.0
@@ -155,11 +161,13 @@ def _bounded_batches(
     *,
     kind: str,
     name_key: str,
+    max_entries: int,
 ) -> list[list[dict[str, object]]]:
-    """Split request entries into batches within ``MAX_BATCH_ENTRIES`` and ``MAX_BATCH_BYTES``.
+    """Split request entries into batches within ``max_entries`` and ``MAX_BATCH_BYTES``.
 
     Args:
         payloads: JSON-ready entries, kept in order.
+        max_entries: Most entries in one batch.
         kind: Entry description used in the oversize error, such as ``"Column profile"``.
         name_key: Payload key naming the entry in the oversize error.
 
@@ -175,7 +183,7 @@ def _bounded_batches(
         if _json_bytes([payload]) > MAX_BATCH_BYTES:
             raise ParameterError(f"{kind} for {payload[name_key]!r} exceeds the 48 KiB LLM evidence limit")
         candidate = [*current, payload]
-        if current and (len(candidate) > MAX_BATCH_ENTRIES or _json_bytes(candidate) > MAX_BATCH_BYTES):
+        if current and (len(candidate) > max_entries or _json_bytes(candidate) > MAX_BATCH_BYTES):
             batches.append(current)
             current = [payload]
         else:
@@ -190,6 +198,7 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
         [_profile_payload(profile) for profile in profiles],
         kind="Column profile",
         name_key="column_name",
+        max_entries=MAX_CLASSIFICATION_COLUMNS,
     )
 
 
@@ -292,13 +301,15 @@ def _classification_messages(
         "only to say what kind of data each column holds. NSS decides on its own which columns to replace.\n"
         "\n"
         "Input\n"
-        "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
+        "- column_profiles: one entry per submitted column, with its name, dtype, counts, and a few sample values. "
+        "A wide table is split across several requests, so these may be only some of its columns.\n"
         "- entity_catalog: the entity types you may choose from, each with a short definition.\n"
-        "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
+        "- discovery_context.group_column: the column that groups rows (for example, one patient's events). It is "
+        "context for the whole table and may not be one of the submitted columns.\n"
         "\n"
         "For each column\n"
         "Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
-        "every column, including the group column.\n"
+        "every submitted column. Classify the group column only if it is one of the submitted columns.\n"
         "\n"
         "Output\n"
         "Return a JSON object with one key, classifications: a list with one object per submitted column, in the "
@@ -858,6 +869,7 @@ class LLMPlanEnhancer(PlanEnhancer):
             _dependency_target_payloads(plan, options),
             kind="Dependency options",
             name_key="target_column",
+            max_entries=MAX_BATCH_ENTRIES,
         )
         select = partial(self._select_batch_dependencies, plan, options, classifications)
         selected = [dependency for batch in self._map_batches(select, batches) for dependency in batch]

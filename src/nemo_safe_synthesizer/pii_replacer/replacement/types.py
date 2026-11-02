@@ -26,10 +26,12 @@ __all__ = [
     "DetectionCellId",
     "DetectionSource",
     "EffectiveDependencyTuple",
+    "FreeTextDetections",
     "FreeTextMappingKey",
     "GroupDependencyDrift",
     "GroupMappingKey",
     "GroupMappingProvenance",
+    "ProtectedSpan",
     "RecordMappingKey",
     "StructuredMappingKey",
     "detected_text",
@@ -37,7 +39,13 @@ __all__ = [
     "require_effective_dependency_tuple",
 ]
 
-DetectionSource: TypeAlias = Literal["gliner", "regex"]
+DetectionSource: TypeAlias = Literal["gliner", "regex", "structured_value", "detected_value"]
+"""Where an accepted free-text span came from.
+
+``gliner`` and ``regex`` are detectors. ``structured_value`` and ``detected_value`` are
+occurrences of a value already known in the same record or group, found by searching the
+text: a structured column's original value, or a value a detector found elsewhere.
+"""
 _DETECTION_SOURCES: frozenset[str] = frozenset(get_args(DetectionSource))
 
 
@@ -222,6 +230,60 @@ class DetectedSpan:
                 raise InternalError("detected span score must be a number or None")
             if not 0 <= self.score <= 1:
                 raise InternalError(f"detected span score must be between 0 and 1, got {self.score}")
+
+
+@dataclass(frozen=True, slots=True)
+class ProtectedSpan:
+    """One half-open span of an original cell that replacement must leave unchanged.
+
+    GLiNER2 produces these from its name-exclusion labels, such as
+    ``medical_condition``. Searching for known values skips any occurrence that
+    overlaps one, so a structured last name such as ``Parkinson`` does not
+    change ``Parkinson's disease``.
+
+    Example:
+        # "Parkinson's disease" in "Has Parkinson's disease", tagged as a medical condition
+        ProtectedSpan(DetectionCellId(3, "notes"), start=4, end=23)
+    """
+
+    cell_id: DetectionCellId
+    """Positional identity of the cell containing the span."""
+
+    start: int
+    """Inclusive start offset into the complete original cell text."""
+
+    end: int
+    """Exclusive end offset into the complete original cell text."""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.cell_id, DetectionCellId):
+            raise InternalError("cell_id must be a DetectionCellId")
+        if type(self.start) is not int or type(self.end) is not int:
+            raise InternalError("protected span offsets must be integers")
+        if self.start < 0 or self.end <= self.start:
+            raise InternalError(
+                f"protected span offsets must satisfy 0 <= start < end, got start={self.start}, end={self.end}"
+            )
+
+    def overlaps(self, span: DetectedSpan) -> bool:
+        """Return whether ``span`` lies in the same cell and shares at least one character with this span."""
+        return span.cell_id == self.cell_id and span.start < self.end and self.start < span.end
+
+
+@dataclass(frozen=True, slots=True)
+class FreeTextDetections:
+    """What a free-text detector found in a batch of cells.
+
+    Example:
+        # The email regex finds an address and protects nothing.
+        FreeTextDetections(spans=(DetectedSpan(DetectionCellId(0, "notes"), 6, 21, EntityType.EMAIL, "regex"),))
+    """
+
+    spans: tuple[DetectedSpan, ...]
+    """Accepted spans to replace."""
+
+    protected: tuple[ProtectedSpan, ...] = ()
+    """Spans that replacement must leave unchanged."""
 
 
 def detected_text(cell: DetectionCell, span: DetectedSpan) -> str:
