@@ -1138,6 +1138,9 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 In time-series mode, the HTML report also includes
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md).
 Set `evaluation.time_series.enabled: false` to skip it.
+The same setting also controls
+[Spectral Similarity](time-series-metrics/spectral-similarity.md),
+which follows it in the report.
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in
