@@ -25,11 +25,13 @@ extra_args:
   - --reasoning-parser=nemotron_v3
   - '--default-chat-template-kwargs={"enable_thinking": true}'
 # Model-card sampling. Uncapped, the model thinks about 18,000 tokens per
-# request; the budget keeps planning to about 1.5 minutes per table.
+# request, and it thinks until the cap when one is set. At 2,000 tokens it ran
+# out before it had judged every dependency target in a batch of 8 and linked
+# the rest to the first listed source; 4,000 is enough for a full batch.
 request_options:
   temperature: 1.0
   top_p: 0.95
-  thinking_token_budget: 2000
+  thinking_token_budget: 4000
 environment:
   # vLLM 0.27's V2 model runner ignores thinking_token_budget.
   VLLM_USE_V2_MODEL_RUNNER: "0"

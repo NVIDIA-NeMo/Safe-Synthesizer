@@ -859,7 +859,7 @@ holds the weights and the context cache:
 
 | Model ID | GPU memory reserved (80 GB GPU) | Request timeout | Notes |
 |----------|---------------------------------|-----------------|-------|
-| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 76 GB (95%); weights about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 76 GB (95%); weights about 66 GB | 300 s | Hybrid Mamba mixture of experts; 4,000-token thinking budget |
 | `openai/gpt-oss-120b` | about 76 GB (95%); weights about 65 GB | 120 s | Mixture of experts; default medium reasoning effort; fastest |
 | `Qwen/Qwen3.8-27B` | about 74 GB (92%); weights about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget; slowest |
 

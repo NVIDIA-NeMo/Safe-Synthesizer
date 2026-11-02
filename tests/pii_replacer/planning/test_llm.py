@@ -36,7 +36,6 @@ from nemo_safe_synthesizer.pii_replacer.planning import llm as llm_module
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_BATCH_BYTES,
     MAX_BATCH_ENTRIES,
-    MAX_CLASSIFICATION_COLUMNS,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
     _bounded_batches,
@@ -196,35 +195,36 @@ class TestClassificationBatching:
         batches = _profile_batches(captured[0].column_profiles)
 
         assert len(batches) > 1
-        assert len(batches[0]) == MAX_CLASSIFICATION_COLUMNS
-        assert all(len(batch) <= MAX_CLASSIFICATION_COLUMNS for batch in batches)
+        assert len(batches[0]) == MAX_BATCH_ENTRIES
+        assert all(len(batch) <= MAX_BATCH_ENTRIES for batch in batches)
         assert all(_json_bytes(batch) <= MAX_BATCH_BYTES for batch in batches)
 
 
 @pytest.mark.unit
 class TestDependencyBatching:
     def test_dependency_targets_are_batched_and_merged(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(llm_module, "MAX_BATCH_ENTRIES", 1)
+        # Classification and dependency selection share the batch size, so both are split here.
+        monkeypatch.setattr(llm_module, "MAX_BATCH_ENTRIES", 2)
         dataframe = pd.DataFrame(
             {
                 "first_name": ["Ada"],
                 "gender": ["F"],
                 "spouse_first_name": ["William"],
                 "spouse_gender": ["M"],
+                "child_first_name": ["Byron"],
+                "child_gender": ["M"],
             }
         )
-        classifications = {
-            "first_name": "first_name",
-            "gender": "gender",
-            "spouse_first_name": "first_name",
-            "spouse_gender": "gender",
-        }
         # One worker keeps batch order deterministic for the scripted responses.
         enhancer, transport = _enhancer(
             [
-                _classifications(classifications),
-                _dependency_selection({"first_name": {"gender": "gender"}}),
-                _dependency_selection({"spouse_first_name": {"gender": "spouse_gender"}}),
+                _classifications({"first_name": "first_name", "gender": "gender"}),
+                _classifications({"spouse_first_name": "first_name", "spouse_gender": "gender"}),
+                _classifications({"child_first_name": "first_name", "child_gender": "gender"}),
+                _dependency_selection(
+                    {"first_name": {"gender": "gender"}, "spouse_first_name": {"gender": "spouse_gender"}}
+                ),
+                _dependency_selection({"child_first_name": {"gender": "child_gender"}}),
             ],
             max_workers=1,
         )
@@ -234,12 +234,16 @@ class TestDependencyBatching:
         depends_on = {
             spec.column_name: [item.column_name for item in spec.depends_on] for spec in plan.columns_to_replace
         }
-        assert depends_on == {"first_name": ["gender"], "spouse_first_name": ["spouse_gender"]}
+        assert depends_on == {
+            "first_name": ["gender"],
+            "spouse_first_name": ["spouse_gender"],
+            "child_first_name": ["child_gender"],
+        }
         dependency_targets = [
             [target["target_column"] for target in json.loads(messages[1]["content"])["dependency_targets"]]
-            for messages, _ in transport.calls[1:]
+            for messages, _ in transport.calls[3:]
         ]
-        assert dependency_targets == [["first_name"], ["spouse_first_name"]]
+        assert dependency_targets == [["first_name", "spouse_first_name"], ["child_first_name"]]
 
     def test_oversized_dependency_target_is_rejected(self) -> None:
         with pytest.raises(ParameterError, match="Dependency options for 'email' exceeds the 48 KiB"):
@@ -395,18 +399,20 @@ class TestLLMPlanEnhancer:
                     "target_pattern": None,
                     "target_pattern_syntax": None,
                     "source_options": {"organization": {"columns": ["company"]}},
+                    # Each sample row puts the target beside its sources, read from one row of the table.
+                    "aligned_samples": [
+                        {"email": "ada@example.com", "company": "Analytical Engines"},
+                        {"email": "grace@example.com", "company": "US Navy"},
+                    ],
                 }
-            ],
-            "exclusive_dependency_groups": [
-                [["first_name", "last_name", "middle_name"], ["full_name"]],
-                [["full_name"], ["ethnic_background", "gender"]],
             ],
             "pattern_grammars": {},
         }
         assert (
-            "the source entity types chosen for one target may come from at most one inner group"
-            in dependency_messages[0]["content"]
+            "first_name, last_name or middle_name together with full_name, and full_name together with "
+            "ethnic_background or gender" in dependency_messages[0]["content"]
         )
+        assert "Null is a normal answer" in dependency_messages[0]["content"]
         assert "describes the same person or record as the target" in dependency_messages[0]["content"]
         assert "Return a JSON object with one key per target column" in dependency_messages[0]["content"]
         dependency_schema = dependency_model.model_json_schema()
@@ -590,6 +596,7 @@ class TestLLMPlanEnhancer:
                 "target_pattern": None,
                 "target_pattern_syntax": None,
                 "source_options": {"gender": {"columns": ["sex"]}},
+                "aligned_samples": [{"first_name": "Ada", "sex": "F"}, {"first_name": "Grace", "sex": "F"}],
             }
         ]
 
