@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import time
@@ -56,19 +57,23 @@ __all__ = [
 
 # Every request is split into batches of at most this many entries (column
 # profiles or dependency targets) and this many bytes of compact JSON evidence.
-MAX_BATCH_ENTRIES = 32
+# Batches are small because a reasoning model restates its instructions before it
+# reaches the entries, so a capped thinking budget, such as the local Nemotron
+# profile's, covers only the first few. Entries past that point were answered
+# without reasoning: person-name columns late in a wide table were missed, and
+# dependency targets were linked to the first listed source column. Batches run
+# concurrently up to max_workers.
+MAX_BATCH_ENTRIES = 8
 MAX_BATCH_BYTES = 48 * 1024
-# Classification batches are smaller: a reasoning model restates the entity
-# catalog before it reaches the columns, and a thinking budget such as the local
-# Nemotron profile's 2,000 tokens then covers only about 14 columns. Columns past
-# that point were classified without any reasoning, so person-name columns late
-# in a wide table were missed. Batches run concurrently up to max_workers.
-MAX_CLASSIFICATION_COLUMNS = 8
 MAX_REQUEST_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
 RETRY_MAX_DELAY_SECONDS = 30.0
 MAX_MAPPING_SOURCE_VALUES = 256
 MAX_MAPPING_REQUEST_BYTES = 48 * 1024
+# Rows shown with each dependency target. Profile samples are drawn per column, so they cannot show whether a
+# source column describes the same person as the target; a few aligned rows can.
+MAX_ALIGNED_SAMPLES = 3
+MAX_ALIGNED_SAMPLE_LENGTH = 64
 
 logger = get_logger(__name__)
 
@@ -206,7 +211,7 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
         [_profile_payload(profile) for profile in profiles],
         kind="Column profile",
         name_key="column_name",
-        max_entries=MAX_CLASSIFICATION_COLUMNS,
+        max_entries=MAX_BATCH_ENTRIES,
     )
 
 
@@ -221,11 +226,29 @@ def _pattern_syntax(entity_type: EntityType | None) -> str | None:
     return syntax.name.lower()
 
 
-def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
-    return [
-        [sorted(entity_type.value for entity_type in group) for group in family]
-        for family in EXCLUSIVE_DEPENDS_ON_GROUPS
-    ]
+def _exclusive_dependency_rule() -> str:
+    """State the source entity types one target must not combine, in sentences.
+
+    Nested lists of groups were read as puzzles: a reasoning model spent much of its thinking budget checking
+    whether a type listed in two families conflicts with itself. The sentences also say when the rule cannot
+    apply, so a target with a single source entity type skips the check.
+
+    Example:
+        With the groups [[first_name, last_name, middle_name], [full_name]], the sentence reads "first_name,
+        last_name or middle_name together with full_name".
+    """
+
+    def either(group: Set[EntityType]) -> str:
+        names = sorted(entity_type.value for entity_type in group)
+        return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
+
+    combinations = [" together with ".join(either(group) for group in family) for family in EXCLUSIVE_DEPENDS_ON_GROUPS]
+    return (
+        "3. Some source entity types must not be combined for one target: "
+        + ", and ".join(combinations)
+        + ". This only matters when a target's source_options offer more than one source entity type; a target "
+        "whose source_options offer a single source entity type cannot break it, so skip this check for it.\n"
+    )
 
 
 def _validation_feedback(exc: Exception) -> str:
@@ -447,11 +470,36 @@ def _selected_dependencies(response: _StructuredResponse, options: DependencyOpt
     return selected
 
 
+def _aligned_samples(dataframe: pd.DataFrame, columns: Sequence[str]) -> list[dict[str, str | None]]:
+    """Return a few rows of ``columns``, with distinct values in the first column, read across one row each.
+
+    Rows are chosen by a content hash of the first column's value, as profile samples are, so the choice does not
+    depend on row order. They are returned in dataframe order.
+    """
+    columns = list(dict.fromkeys(columns))
+    frame = dataframe[columns]
+    missing = frame.isna().to_numpy()
+    first_position: dict[str, int] = {}
+    for position, value in enumerate(frame[columns[0]].tolist()):
+        if not missing[position][0]:
+            first_position.setdefault(str(value)[:MAX_ALIGNED_SAMPLE_LENGTH], position)
+    ranked = sorted(first_position, key=lambda value: hashlib.sha256(value.encode()).digest())
+    positions = sorted(first_position[value] for value in ranked[:MAX_ALIGNED_SAMPLES])
+    return [
+        {
+            column: None if missing[position][index] else str(value)[:MAX_ALIGNED_SAMPLE_LENGTH]
+            for index, (column, value) in enumerate(zip(columns, frame.iloc[position].tolist(), strict=True))
+        }
+        for position in positions
+    ]
+
+
 def _dependency_target_payloads(
     plan: PiiReplacementPlan,
     options: DependencyOptions,
+    dataframe: pd.DataFrame,
 ) -> list[dict[str, object]]:
-    """Describe each dependency target and its permitted sources, in ``options`` order."""
+    """Describe each dependency target, its permitted sources, and a few rows showing them side by side."""
     specs = {spec.column_name: spec for spec in plan.columns_to_replace}
     targets: list[dict[str, object]] = []
     for target_column, sources_by_type in options.items():
@@ -467,6 +515,9 @@ def _dependency_target_payloads(
                     entity_type.value: {"columns": source_columns}
                     for entity_type, source_columns in sources_by_type.items()
                 },
+                "aligned_samples": _aligned_samples(
+                    dataframe, [target_column, *(c for columns in sources_by_type.values() for c in columns)]
+                ),
             }
         )
     return targets
@@ -484,24 +535,23 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "- dependency_targets: one entry per target column, with its entity type and target_pattern, the format "
         "proposed for its fake values (or null; target_pattern_syntax names its grammar in pattern_grammars). "
         "source_options lists, for each source entity type the target may depend on, the columns of that type. "
+        "aligned_samples shows a few rows of the table, each giving the target's value and every source column's "
+        "value from that same row. "
         "When the pattern uses a name part such as {first} or {last}, a "
         "source column holding that name part lets the fake value match the fake name in the same row.\n"
-        "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 3).\n"
         "\n"
         "Rules\n"
         "1. For each target and each source entity type, choose at most one column: the one that describes the "
         "same person or record as the target. Tables can describe several people per row, such as a customer and "
         "a spouse or several children; match each target to its own "
-        "person by column name, for example a spouse's first name to the spouse's gender, never to another person's.\n"
+        "person by column name, for example a spouse's first name to the spouse's gender, never to another person's. "
+        "Use aligned_samples as evidence too: values of one person agree across a row, for example a first name "
+        "that also appears in the full name of the same row, while values of different people do not.\n"
         "2. When a listed column describes the same person or record as the target, choose it, so the fake value "
         "stays consistent with that column. Choose null only when no column of that type describes the same person "
-        "or record.\n"
-        "3. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
-        "family of inner groups. Within a family, the source entity types chosen for one target may come from at "
-        "most one inner group; several types from the same inner group are fine. For example, with the family "
-        "[[first_name, last_name, middle_name], [full_name]], a target may depend on first_name and last_name, or on "
-        "full_name, but not on both first_name and full_name.\n"
-        "\n"
+        "or record. Null is a normal answer: many targets have no matching source. Choose a column only when the "
+        "samples or column names show it describes the same record as the target; if the samples show values that "
+        "do not belong together, choose null.\n" + _exclusive_dependency_rule() + "\n"
         "Output\n"
         "Return a JSON object with one key per target column in dependency_targets. Each value is an object with one "
         "key per source entity type listed in that target's source_options, set to one of the listed columns or null. "
@@ -512,7 +562,6 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
     user = _compact_json(
         {
             "dependency_targets": list(targets),
-            "exclusive_dependency_groups": _exclusive_dependency_groups_payload(),
             # Only document the grammars that the targets' patterns actually use.
             "pattern_grammars": {
                 name: grammar for name, grammar in pattern_grammar_catalog().items() if name in used_syntaxes
@@ -716,7 +765,7 @@ class LLMPlanEnhancer(PlanEnhancer):
             protected_columns=discovery_input.protected_columns,
         )
         if candidates:
-            plan = self._select_dependencies(plan, candidates, classifications)
+            plan = self._select_dependencies(plan, candidates, classifications, discovery_input.dataframe)
         return plan
 
     def discover_data_to_sampler_value_mapping(
@@ -871,6 +920,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
         classifications: Sequence[ColumnClassification],
+        dataframe: pd.DataFrame,
     ) -> PiiReplacementPlan:
         entity_types = {
             classification.column_name: classification.entity_type
@@ -879,7 +929,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         }
         options = _dependency_options(candidates, entity_types)
         batches = _bounded_batches(
-            _dependency_target_payloads(plan, options),
+            _dependency_target_payloads(plan, options, dataframe),
             kind="Dependency options",
             name_key="target_column",
             max_entries=MAX_BATCH_ENTRIES,
