@@ -165,6 +165,7 @@ class TestCommentedYaml:
         assert text.startswith(
             "# PII replacement plan for this dataset, written for the nemotron-personas sampler in locale fr_FR.\n"
         )
+        assert "/product-overview/pii_replacement/#patterns\n" in text
         assert _comment_above(text, "columns_to_replace:").startswith("Columns whose values are replaced. pattern")
         assert _comment_above(text, "data_to_sampler_value_mapping:").startswith(
             "THE NEXT SECTION IS SAFE TO IGNORE unless a run reports an error about it."

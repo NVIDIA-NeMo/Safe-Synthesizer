@@ -10,6 +10,7 @@ from typing import Self, TypeAlias
 
 import pandas as pd
 
+from ..cli.datasets import DatasetInfo, file_extension
 from ..config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -26,9 +27,12 @@ from ..config.unknown_fields import (
     UnknownFieldBehavior,
     validate_unknown_fields,
 )
+from ..data_processing.csv_source import CsvSource
 from ..telemetry import _telemetry_enabled
 
-DataSource = pd.DataFrame | str
+DataSource = pd.DataFrame | str | CsvSource
+# File formats read with their own pandas reader instead of as CSV.
+_TYPED_FILE_EXTENSIONS = frozenset({"parquet", "json", "jsonl"})
 RawConfig: TypeAlias = Mapping[str, object]
 
 
@@ -84,6 +88,7 @@ class ConfigBuilder:
             self._emit_telemetry_config = _telemetry_enabled()
 
         self._data_source: DataSource | None = None
+        self._data_source_csv: CsvSource | None = None
         self._hf_token_secret: str | None = None
 
     @property
@@ -98,12 +103,15 @@ class ConfigBuilder:
         """Set the data source for synthetic data generation.
 
         Args:
-            df_source: Training dataset as a pandas DataFrame or a fetchable URL.
+            df_source: Training dataset as a pandas DataFrame, a path or URL
+                to a CSV, Parquet, JSON, or JSONL file, or a ``CsvSource``
+                already read from a CSV file.
 
         Returns:
             This builder instance with the data source configured.
         """
         self._data_source = df_source
+        self._data_source_csv = None
         return self
 
     def with_data(self, config: DataParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -295,20 +303,29 @@ class ConfigBuilder:
     def _resolve_datasource(self, **kwargs) -> None:
         """Convert the data source into a ``pandas.DataFrame``.
 
-        If ``_data_source`` is already a DataFrame it is kept as-is.
-        A string is treated as a CSV URL and fetched via
-        ``pd.read_csv``.
+        If ``_data_source`` is already a DataFrame it is kept as-is. A string
+        ending in ``.parquet``, ``.json``, or ``.jsonl`` is read with the
+        matching pandas reader, as the CLI does. Any other string is treated as
+        a CSV path or URL and read once into a ``CsvSource``, which is kept so
+        the standalone PII replacement output can write unchanged cells exactly
+        as they appear in the same bytes.
 
         Args:
-            **kwargs: Forwarded to ``pd.read_csv`` when loading from URL.
+            **kwargs: Forwarded to the pandas reader when loading from a path or URL.
 
         Raises:
-            ValueError: If ``_data_source`` is not a DataFrame or string.
+            ValueError: If ``_data_source`` is not a DataFrame, string, or ``CsvSource``.
         """
         match self._data_source:
             case pd.DataFrame():
                 pass
+            case str(url) if file_extension(url) in _TYPED_FILE_EXTENSIONS:
+                self._data_source: pd.DataFrame = DatasetInfo(name=url, url=url, load_args=kwargs or None).fetch()
             case str(url):
-                self._data_source: pd.DataFrame = pd.read_csv(url, **kwargs)
+                self._data_source_csv = CsvSource.load(url, kwargs)
+                self._data_source = self._data_source_csv.read()
+            case CsvSource() as source:
+                self._data_source_csv = source
+                self._data_source = source.read()
             case _:
                 raise ValueError("Data source must be a pandas DataFrame or a URL")

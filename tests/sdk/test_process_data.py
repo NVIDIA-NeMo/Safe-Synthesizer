@@ -22,6 +22,15 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
@@ -75,12 +84,14 @@ def _create_process_data_setup(
     train_split = original_df.head(100).copy()
     test_split = original_df.tail(100).copy()
 
-    config = SafeSynthesizerParameters()
+    # Disable PII in the config the builder is built from: process_data rebuilds _nss_config from
+    # the builder's settings, so clearing _nss_config.replace_pii afterwards would not stick.
+    config = SafeSynthesizerParameters(replace_pii=None)
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
     assert builder._nss_config is not None
-    builder._nss_config.replace_pii = None
+    assert builder._nss_config.replace_pii is None
 
     # Retained in the fixture tuple for tests that inspect transformed state.
     mock_replacer_instance = MagicMock()
@@ -234,6 +245,110 @@ class TestProcessDataPiiSeparation:
         transformed_csv = fixture_workdir.dataset.transformed_training
         assert not transformed_csv.exists()
 
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_resolves_full_input_and_replaces_only_training_split(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+        fixture_workdir: Workdir,
+    ) -> None:
+        original_df = fixture_sample_patient_dataframe.copy()
+        # "F" appears only in the test split, so its built-in gender mapping
+        # reaches the plan only when planning reads the full input.
+        original_df["sex"] = ["female"] * (len(original_df) - 1) + ["F"]
+        train_split = original_df.head(100).copy()
+        test_split = original_df.tail(100).copy()
+        resolved_pii = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="patient_name",
+                        entity_type=EntityType.FULL_NAME,
+                        depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                        pattern="{First} {Last}",
+                    )
+                ],
+            ),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=resolved_pii),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._original_training_df is not None
+        assert builder._training_df is not None
+        assert builder._test_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+        pd.testing.assert_frame_equal(builder._test_df, test_split)
+        assert builder._training_df["patient_name"].tolist() != train_split["patient_name"].tolist()
+        assert builder._training_df.drop(columns="patient_name").equals(train_split.drop(columns="patient_name"))
+        assert builder._column_statistics is not None
+        assert builder._column_statistics["patient_name"].detected_entity_counts == {"full_name": len(train_split)}
+        assert builder._pii_replacer_time is not None
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.training), train_split)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.transformed_training), builder._training_df)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.test), test_split.reset_index(drop=True))
+        persisted = SafeSynthesizerParameters.from_yaml(
+            fixture_workdir.run_dir / "safe-synthesizer-config.yaml"
+        ).replace_pii
+        assert persisted is not None
+        assert persisted.inline_plan is not None
+        assert resolved_pii.inline_plan is not None
+        assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
+        assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
+        # A full pipeline run also leaves the reviewable plan file, naming the sampler it was written for.
+        plan_file = (fixture_workdir.run_dir / "pii_replacement_plan.yaml").read_text()
+        assert plan_file.startswith("# PII replacement plan for this dataset, written for the faker sampler")
+
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_keeps_the_full_input_pattern_coverage_decision(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_workdir: Workdir,
+    ) -> None:
+        # 990 of 1,000 phones match (99.0%); the 950-row training split keeps all 10 exceptions (98.9%).
+        phones = [f"555-{row:04d}" for row in range(990)] + [f"(555) {row:03d}-0000" for row in range(10)]
+        original_df = pd.DataFrame({"phone": phones})
+        train_split = original_df.iloc[50:].copy()
+        config = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                ],
+            ),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=config),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, original_df.head(50).copy())
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._training_df is not None
+        assert len(builder._training_df) == 950
+
 
 # ---------------------------------------------------------------------------
 # Tests: metadata lifecycle in validate mode
@@ -295,12 +410,14 @@ class TestProcessDataMetadataLifecycle:
 class TestEvaluateUsesOriginalTrainingDf:
     """``evaluate()`` passes the original training data to ``Evaluator``."""
 
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.results.make_nss_results")
     @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
+        mock_replacer_cls,
         fixture_process_data_setup_without_pii,
     ):
         builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
@@ -358,6 +475,83 @@ class TestEvaluateUsesOriginalTrainingDf:
         assert builder.results.evaluation_report_html is None
         assert builder.results.summary.timing.evaluation_time_sec is None
         pd.testing.assert_frame_equal(builder.results.synthetic_data, synthetic_df)
+
+
+class TestEvaluateDetectsPiiForReplay:
+    """With replacement off, ``evaluate()`` detects PII in the original training split for PII replay."""
+
+    @staticmethod
+    def _ready_for_evaluation(builder: SafeSynthesizer, train_split: pd.DataFrame, test_split: pd.DataFrame) -> None:
+        builder._training_df = train_split
+        builder._original_training_df = train_split
+        builder._test_df = test_split
+        builder._total_start = 0.0
+        builder.generator = MagicMock()
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_statistics_reach_the_evaluator(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        statistics = {"patient_name": MagicMock()}
+        mock_replacer_cls.return_value.detect.return_value.column_statistics = statistics
+
+        builder.evaluate()
+
+        detected_df = mock_replacer_cls.return_value.detect.call_args.args[0]
+        pd.testing.assert_frame_equal(detected_df, train_split)
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is statistics
+        assert call_kwargs["pii_replay_skipped_reason"] is None
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_failure_skips_replay_with_a_reason(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        mock_replacer_cls.return_value.detect.side_effect = ParameterError("no planning LLM is reachable")
+
+        builder.evaluate()
+
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is None
+        assert "no planning LLM is reachable" in call_kwargs["pii_replay_skipped_reason"]
+        assert "Skipping PII replay" in caplog.text
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_replay_turned_off_detects_nothing(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        assert builder._nss_config is not None
+        builder._nss_config.evaluation.pii_replay_enabled = False
+        self._ready_for_evaluation(builder, train_split, test_split)
+
+        builder.evaluate()
+
+        mock_replacer_cls.assert_not_called()
+        assert mock_evaluator_cls.call_args.kwargs["column_statistics"] is None
 
 
 # ---------------------------------------------------------------------------

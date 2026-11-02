@@ -29,10 +29,12 @@ _PLAN_SECTION_COMMENTS = {
     ),
     "data_to_sampler_value_mapping": (
         "THE NEXT SECTION IS SAFE TO IGNORE unless a run reports an error about it. It translates values in "
-        "depends_on columns, such as Latino in a race column, to values the sampler understands. NSS fills it "
-        "in, and it can get long."
+        "depends_on columns, such as Latino in a race column, to values the sampler understands. "
+        "Safe Synthesizer fills it in, and it can get long."
     ),
 }
+# The published PII replacement guide, linked from the plan file header.
+_PLAN_DOCS_URL = "https://nvidia-nemo.github.io/Safe-Synthesizer/latest/product-overview/pii_replacement/"
 _COMMENT_WIDTH = 100
 _YAML_KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?: |$)")
 
@@ -58,7 +60,9 @@ def save_plan(plan: PiiReplacementPlan, path: str | Path, *, sampler: PiiSampler
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     header = (
         f"# PII replacement plan for this dataset, written for the {sampler.backend.value} sampler in locale "
-        f"{locale}.\n# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n\n"
+        f"{locale}.\n# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n"
+        f"# Plan format: {_PLAN_DOCS_URL}#discovery\n"
+        f"# Patterns: {_PLAN_DOCS_URL}#patterns\n\n"
     )
     text = yaml.safe_dump(_plan_document(plan), sort_keys=False)
     plan_path.write_text(header + _with_key_comments(text, _plan_section_comments(())))

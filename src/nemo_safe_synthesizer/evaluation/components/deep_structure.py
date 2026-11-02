@@ -192,7 +192,9 @@ class DeepStructure(Component):
             for name, field_type in zip(synthetic_df.columns, synthetic_field_types)
             if field_type == FieldType.NUMERIC
         ]
-        numeric_columns = list(set(numeric_columns_training).intersection(set(numeric_columns_synthetic)))
+        # Keep the training column order; set order changes between processes.
+        numeric_synthetic = set(numeric_columns_synthetic)
+        numeric_columns = [name for name in numeric_columns_training if name in numeric_synthetic]
         # TODO: use embeddings to represent text columns
         # TODO: try to include more "OTHER" columns and handle column type mismatch
 
