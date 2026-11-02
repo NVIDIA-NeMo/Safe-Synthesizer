@@ -31,6 +31,7 @@ GRAPH_BACKGROUND_COLOR = "#EBEAF0"
 
 REPORT_MIN_TRAINING_COUNT = 5
 """Fewest training records a distribution chart bin or category may describe."""
+_MIN_CHARTED_TRAINING_VALUES = 3 * REPORT_MIN_TRAINING_COUNT
 _MAX_DISPLAY_BINS = 100
 
 INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
@@ -203,19 +204,21 @@ def safe_bin_edges(training: pd.Series | np.ndarray, synthetic: pd.Series | np.n
         synthetic: Synthetic values; they shape the bin count but not the range.
 
     Returns:
-        Increasing bin edges, at least two.
+        Increasing bin edges, at least two. With fewer than three times
+        ``REPORT_MIN_TRAINING_COUNT`` finite training values, a placeholder bin
+        ``[0, 1]`` that does not depend on the data.
     """
     training_values = np.sort(_finite_values(training))
     synthetic_values = _finite_values(synthetic)
-    if training_values.size == 0:
+    if training_values.size < _MIN_CHARTED_TRAINING_VALUES:
+        # Any bin built from so few values would sit on one of them.
         return np.array([0.0, 1.0])
     integer = bool(np.all(training_values == np.round(training_values)))
-    if training_values.size < 2 * REPORT_MIN_TRAINING_COUNT:
-        low, high = float(np.median(training_values)), float(np.median(training_values))
-    else:
-        low = float(training_values[REPORT_MIN_TRAINING_COUNT - 1])
-        high = float(training_values[-REPORT_MIN_TRAINING_COUNT])
+    low = float(training_values[REPORT_MIN_TRAINING_COUNT - 1])
+    high = float(training_values[-REPORT_MIN_TRAINING_COUNT])
     if high <= low:
+        # Every value between the two order statistics equals ``low``, and with
+        # at least three times the minimum count, that is more than the minimum.
         if integer:
             return np.array([np.round(low) - 0.5, np.round(low) + 0.5])
         step = _nice_step(abs(low)) if low != 0 else 1.0
@@ -228,13 +231,12 @@ def safe_bin_edges(training: pd.Series | np.ndarray, synthetic: pd.Series | np.n
     bins = int(min(max(bins, 1), _MAX_DISPLAY_BINS))
     step = _nice_step((high - low) / bins, integer=integer)
     if integer and step == 1:
-        start = np.floor(low) - 0.5
         count = int(np.floor(high) - np.floor(low)) + 1
-    else:
-        start = np.floor(low / step) * step
-        # The top value gets a bin of its own even when it sits on an edge.
-        count = int(np.floor((high - start) / step + 1e-9)) + 1
-    return np.round(start + step * np.arange(count + 1), 12)
+        return np.floor(low) - 0.5 + np.arange(count + 1)
+    first = np.floor(low / step)
+    # The top value gets a bin of its own even when it sits on an edge.
+    count = int(np.floor(high / step + 1e-9) - first) + 1
+    return (first + np.arange(count + 1)) * step
 
 
 def _bin_labels(edges: np.ndarray) -> list[str]:
@@ -769,7 +771,7 @@ def bar_chart(training_distribution: dict, synthetic_distribution: dict, trainin
     return fig
 
 
-def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure | None:
+def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure:
     """Generate overlaid percentage bars for a numeric distribution.
 
     Values are binned here, with ``safe_bin_edges`` and ``binned_percent_bars``,
@@ -780,8 +782,10 @@ def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure | N
         synthetic: Numeric synthetic series.
 
     Returns:
-        A Plotly ``Figure`` with overlaid training/synthetic bars, or an empty
-        figure when either series has no finite values.
+        A Plotly ``Figure`` with overlaid training/synthetic bars. With too few
+        finite training values to bin safely, the figure holds only a note.
+        When the synthetic values are not numeric, the training bars are shown
+        with a note.
     """
     fig = go.Figure()
     fig.update_layout(
@@ -794,12 +798,23 @@ def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure | N
 
     training_values = _finite_values(training)
     synthetic_values = _finite_values(synthetic)
-    if training_values.size == 0 or synthetic_values.size == 0:
-        return fig
+    if training_values.size < _MIN_CHARTED_TRAINING_VALUES:
+        return fig.add_trace(_chart_note("Too few training values to chart", x=0.0))
 
     edges = safe_bin_edges(training_values, synthetic_values)
     fig.add_traces(binned_percent_bars(training_values, synthetic_values, edges))
+    if synthetic_values.size == 0:
+        fig.add_trace(_chart_note("Synthetic values aren't numeric", x=float(edges[0] + edges[-1]) / 2))
     return fig
+
+
+def _chart_note(text: str, x: float) -> go.Scatter:
+    """Return a text-only trace that labels a chart from inside its plot area.
+
+    A trace, unlike a layout annotation, survives ``combine_subplots`` and the
+    report script's chart redraw.
+    """
+    return go.Scatter(x=[x], y=[50], mode="text", text=[text], name="Note", showlegend=False, hoverinfo="skip")
 
 
 class _TextStatsLike(Protocol):
