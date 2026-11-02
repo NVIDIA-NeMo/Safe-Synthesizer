@@ -281,6 +281,34 @@ def test_apply_cuda_fragment_to_pyproject_is_idempotent(tmp_path: Path, generato
     assert generator.apply_cuda_fragment_to_pyproject(updated, generated) == updated
 
 
+def test_dependency_metadata_corrections_follow_cuda_config(generator: ModuleType) -> None:
+    data = _cuda_deps_dict()
+    corrections = [
+        {
+            "name": "cache-shim",
+            "version": "1.0+cu130",
+            "requires_dist": ["cache-arm==1.0; platform_machine == 'aarch64'"],
+        },
+        {"name": "other-shim", "version": "2.0", "requires_dist": []},
+    ]
+    data["dependency_metadata"] = corrections
+    generated = generator.build_cuda_pyproject_fragment(generator.CudaDepsConfig.model_validate(data))
+    updated = generator.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
+
+    assert tomllib.loads(updated)["tool"]["uv"]["dependency-metadata"] == [
+        {"name": spec["name"], "version": spec["version"], "requires-dist": spec["requires_dist"]}
+        for spec in corrections
+    ]
+    assert "# >>> BEGIN GENERATED CUDA UV DEPENDENCY METADATA" in updated
+    assert generator.apply_cuda_fragment_to_pyproject(updated, generated) == updated
+
+    data["dependency_metadata"] = []
+    generated = generator.build_cuda_pyproject_fragment(generator.CudaDepsConfig.model_validate(data))
+    cleared = generator.apply_cuda_fragment_to_pyproject(updated, generated)
+    assert "dependency-metadata" not in tomllib.loads(cleared)["tool"]["uv"]
+    assert "GENERATED CUDA UV DEPENDENCY METADATA" not in cleared
+
+
 def test_apply_cuda_fragment_to_pyproject_replaces_stale_marker_text(tmp_path: Path, generator: ModuleType) -> None:
     """Regenerating over a header written by an older script version must replace it, not leave a stray copy."""
     config_path = tmp_path / "cuda_deps.toml"
@@ -365,16 +393,16 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
     parsed = tomllib.loads(generated.text)
 
-    assert "vllm==0.30.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
-    assert "vllm==0.30.0; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert "vllm==0.32.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
+    assert "vllm==0.32.0; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
     assert "nvidia-cublas; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
     assert all(
         not dependency.startswith("nvidia-cublas-cu13")
         for dependency in parsed["project"]["optional-dependencies"]["cu130"]
     )
     assert parsed["tool"]["uv"]["sources"]["vllm"] == [
-        {"index": "vllm-v0-30-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
-        {"index": "vllm-v0-30-0-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
+        {"index": "vllm-v0-32-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "vllm-v0-32-0-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
     assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [
         {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
@@ -391,7 +419,7 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     assert indexes["flashinfer-cubin"] == "https://flashinfer.ai/whl/"
     assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
     assert indexes["flashinfer-jit-cache-cu130"] == "https://flashinfer.ai/whl/cu130"
-    assert indexes["vllm-v0-30-0-cu130"] == "https://wheels.vllm.ai/0.30.0/cu130"
+    assert indexes["vllm-v0-32-0-cu130"] == "https://wheels.vllm.ai/0.32.0/cu130"
 
 
 def test_build_cuda_installer_fragment_renders_runtime_find_links_arrays(
@@ -421,12 +449,18 @@ def test_build_cuda_installer_fragment_renders_runtime_find_links_arrays(
         ),
         "CUDA_FIND_LINKS_CU129": (
             "https://flashinfer.ai/whl/flashinfer-cubin/",
-            "https://wheels.vllm.ai/0.30.0/cu129/vllm/",
+            "https://wheels.vllm.ai/0.32.0/cu129/vllm/",
             "https://download.pytorch.org/whl/cu129/torch/",
             "https://download.pytorch.org/whl/cu129/torchaudio/",
             "https://download.pytorch.org/whl/cu129/torchvision/",
             "https://download.pytorch.org/whl/cu129/torchcodec/",
             "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm100a/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm103a/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm120f/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm80/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm89/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache-sm90a/",
             "https://download.pytorch.org/whl/cu129/triton/",
             "https://download.pytorch.org/whl/cu129/torchao/",
             "https://download.pytorch.org/whl/cu129/nvidia-cublas-cu12/",
@@ -443,14 +477,22 @@ def test_build_cuda_installer_fragment_renders_runtime_find_links_arrays(
         ),
         "CUDA_FIND_LINKS_CU130": (
             "https://flashinfer.ai/whl/flashinfer-cubin/",
-            "https://wheels.vllm.ai/0.30.0/cu130/vllm/",
+            "https://wheels.vllm.ai/0.32.0/cu130/vllm/",
             "https://download.pytorch.org/whl/cu130/torch/",
             "https://download.pytorch.org/whl/cu130/torchaudio/",
             "https://download.pytorch.org/whl/cu130/torchvision/",
             "https://download.pytorch.org/whl/cu130/torchcodec/",
             "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm100a/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm103a/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm120f/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm80/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm89/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm90a/",
             "https://download.pytorch.org/whl/cu130/triton/",
             "https://download.pytorch.org/whl/cu130/torchao/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm110a/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache-sm121a/",
             "https://pypi.nvidia.com/nvidia-cublas/",
             "https://pypi.nvidia.com/nvidia-cuda-cupti/",
             "https://pypi.nvidia.com/nvidia-cuda-nvrtc/",
