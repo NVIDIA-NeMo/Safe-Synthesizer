@@ -6,7 +6,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
+from nemo_safe_synthesizer.config.evaluate import (
+    EvaluationParameters,
+    SpectralSimilarityParameters,
+    TimeSeriesEvaluationParameters,
+)
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 
@@ -72,3 +76,18 @@ def test_global_evaluation_disable_overrides_invalid_time_series_gate_combinatio
 
     assert config.evaluation.enabled is False
     assert config.evaluation.time_series.enabled is True
+
+
+def test_spectral_parameters_default_to_all_numeric_columns_and_cycles_up_to_128_points() -> None:
+    spectral = EvaluationParameters().time_series.spectral
+
+    assert spectral.value_columns is None
+    assert spectral.max_cycle_length == 128
+    assert spectral.min_points == 16
+    assert spectral.max_groups == 128
+
+
+@pytest.mark.parametrize("overrides", [{"max_cycle_length": 3}, {"min_points": 7}])
+def test_spectral_parameters_reject_settings_too_small_for_a_spectrum(overrides: dict[str, int]) -> None:
+    with pytest.raises(ValidationError):
+        SpectralSimilarityParameters.model_validate(overrides)
