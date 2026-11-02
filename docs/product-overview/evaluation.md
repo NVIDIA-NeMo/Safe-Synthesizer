@@ -64,6 +64,8 @@ We compare the distributional distance between principal components from the tra
 
 This score measures how closely each synthetic column's value distribution matches the corresponding training column using Jensen-Shannon Distance. Lower average JS Distance across columns yields a higher score.
 
+Columns that PII replacement lists as structured PII, such as names and account IDs, are compared without their values, because their original values are replaced and should not reappear. Their value shares are compared by rank instead: a column whose most common value covers 60% of rows and whose next covers 30% matches another with the same shares, whatever the values are. For the same reason, Deep Structure Stability encodes each such column by how many rows share a row's value in its own dataset, so a synthetic person with 94 transactions lands where a training person with 94 transactions does. Whether original PII values reappear is reported by PII Replay instead.
+
 ### Text Structure Similarity
 
 This score measures how well synthetic free-text structure matches the training data by comparing average sentence, word, and character counts. Higher similarity indicates a better match.
