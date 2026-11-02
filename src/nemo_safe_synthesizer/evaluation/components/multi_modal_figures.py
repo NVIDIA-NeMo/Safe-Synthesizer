@@ -29,6 +29,10 @@ _GRAPH_BARGROUPGAP = 0.1  # gap between bars of the same location coordinates
 
 GRAPH_BACKGROUND_COLOR = "#EBEAF0"
 
+REPORT_MIN_TRAINING_COUNT = 5
+"""Fewest training records a distribution chart bin or category may describe."""
+_MAX_DISPLAY_BINS = 100
+
 INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
     "Poor": "#ef4444",
     "Moderate": "#f97316",
@@ -159,6 +163,148 @@ def pie(
             )
         ]
     )
+
+
+def _finite_values(values: pd.Series | np.ndarray) -> np.ndarray:
+    """Return the finite values of a series as floats."""
+    array = pd.to_numeric(pd.Series(values), errors="coerce").to_numpy(dtype=float)
+    return array[np.isfinite(array)]
+
+
+def _nice_step(raw_step: float, integer: bool = False) -> float:
+    """Round a bin width to the nearest 1, 2, 2.5, or 5 times a power of 10.
+
+    With ``integer``, the step is a whole number and 2.5 is not used.
+    """
+    if not np.isfinite(raw_step) or raw_step <= 0:
+        return 1.0
+    if integer and raw_step < 1:
+        return 1.0
+    magnitude = 10 ** np.floor(np.log10(raw_step))
+    multiples = [1.0, 2.0, 5.0, 10.0] if integer else [1.0, 2.0, 2.5, 5.0, 10.0]
+    candidates = np.array(multiples) * magnitude
+    return float(candidates[np.argmin(np.abs(np.log(candidates / raw_step)))])
+
+
+def safe_bin_edges(training: pd.Series | np.ndarray, synthetic: pd.Series | np.ndarray) -> np.ndarray:
+    """Return display bin edges that keep individual training values out of the report.
+
+    The range runs from the ``REPORT_MIN_TRAINING_COUNT``-th smallest to the
+    ``REPORT_MIN_TRAINING_COUNT``-th largest training value, so each end bin,
+    which also collects everything beyond the range, holds at least that many
+    training records. The bin count matches the distribution score's bins for
+    the clipped data, the width is rounded to a round step, and the edges are
+    multiples of it, so no edge is an exact data value. Whole-number training
+    data with a step of 1 gets one bin per value, with edges halfway between
+    values.
+
+    Args:
+        training: Training values; non-finite values are ignored.
+        synthetic: Synthetic values; they shape the bin count but not the range.
+
+    Returns:
+        Increasing bin edges, at least two.
+    """
+    training_values = np.sort(_finite_values(training))
+    synthetic_values = _finite_values(synthetic)
+    if training_values.size == 0:
+        return np.array([0.0, 1.0])
+    integer = bool(np.all(training_values == np.round(training_values)))
+    if training_values.size < 2 * REPORT_MIN_TRAINING_COUNT:
+        low, high = float(np.median(training_values)), float(np.median(training_values))
+    else:
+        low = float(training_values[REPORT_MIN_TRAINING_COUNT - 1])
+        high = float(training_values[-REPORT_MIN_TRAINING_COUNT])
+    if high <= low:
+        if integer:
+            return np.array([np.round(low) - 0.5, np.round(low) + 0.5])
+        step = _nice_step(abs(low)) if low != 0 else 1.0
+        start = np.floor(low / step) * step
+        return np.array([start, start + step])
+
+    clipped_training = pd.Series(np.clip(training_values, low, high))
+    clipped_synthetic = pd.Series(np.clip(synthetic_values, low, high))
+    bins = len(get_numeric_distribution_bins(clipped_training, clipped_synthetic)) - 1
+    bins = int(min(max(bins, 1), _MAX_DISPLAY_BINS))
+    step = _nice_step((high - low) / bins, integer=integer)
+    if integer and step == 1:
+        start = np.floor(low) - 0.5
+        count = int(np.floor(high) - np.floor(low)) + 1
+    else:
+        start = np.floor(low / step) * step
+        # The top value gets a bin of its own even when it sits on an edge.
+        count = int(np.floor((high - start) / step + 1e-9)) + 1
+    return np.round(start + step * np.arange(count + 1), 12)
+
+
+def _bin_labels(edges: np.ndarray) -> list[str]:
+    """Describe each bin's range, with the end bins open toward the tails."""
+    if len(edges) == 2:
+        return ["all values"]
+    if np.allclose(np.diff(edges), 1.0) and np.isclose(edges[0] % 1, 0.5):
+        values = [f"{edge + 0.5:.0f}" for edge in edges[:-1]]
+        return [f"{values[0]} or less", *values[1:-1], f"{values[-1]} or more"]
+    formatted = [f"{edge:.6g}" for edge in edges]
+    labels = [f"[{formatted[i]}, {formatted[i + 1]})" for i in range(len(edges) - 1)]
+    labels[0] = f"below {formatted[1]}"
+    labels[-1] = f"{formatted[-2]} and above"
+    return labels
+
+
+def binned_percent_bars(
+    training: pd.Series | np.ndarray,
+    synthetic: pd.Series | np.ndarray,
+    edges: np.ndarray,
+) -> list[go.Bar]:
+    """Return training and synthetic percentage bars over shared bins.
+
+    Values beyond the edges are counted in the end bins. Training bins holding
+    fewer than ``REPORT_MIN_TRAINING_COUNT`` records are drawn empty and say so
+    on hover. Synthetic bins are shown as they are. Both traces carry
+    ``meta="binned"`` so the report script overlays them like a histogram.
+
+    Args:
+        training: Training values; non-finite values are ignored.
+        synthetic: Synthetic values; non-finite values are ignored.
+        edges: Bin edges from ``safe_bin_edges``.
+
+    Returns:
+        The training bar trace, then the synthetic one.
+    """
+    centers = (edges[:-1] + edges[1:]) / 2
+    # Explicit widths override Plotly's bargap, so leave the same gap here.
+    widths = np.diff(edges) * (1 - _GRAPH_BARGAP)
+    labels = _bin_labels(edges)
+    traces = []
+    for values, name, color in (
+        (_finite_values(training), "Training", _REPORT_PALETTE[0]),
+        (_finite_values(synthetic), "Synthetic", _REPORT_PALETTE[1]),
+    ):
+        counts, _ = np.histogram(np.clip(values, edges[0], edges[-1]), bins=edges)
+        percent = counts / values.size * 100 if values.size else np.zeros(len(counts))
+        hover = labels
+        if name == "Training":
+            hidden = (counts > 0) & (counts < REPORT_MIN_TRAINING_COUNT)
+            percent = np.where(hidden, 0.0, percent)
+            hover = [
+                f"{label} (fewer than {REPORT_MIN_TRAINING_COUNT} records, hidden)" if flag else label
+                for label, flag in zip(labels, hidden)
+            ]
+        traces.append(
+            go.Bar(
+                x=centers,
+                y=np.round(percent, 4),
+                width=widths,
+                name=name,
+                meta="binned",
+                marker=dict(color=color, line=dict(width=0.5, color=color)),
+                opacity=0.7,
+                showlegend=False,
+                customdata=hover,
+                hovertemplate=f"%{{customdata}}: %{{y:.2f}}%<extra>{name}</extra>",
+            )
+        )
+    return traces
 
 
 def scatter(
@@ -561,23 +707,33 @@ def combine_subplots(
     return fig
 
 
-def bar_chart(training_distribution: dict, synthetic_distribution: dict) -> go.Figure:
+def bar_chart(training_distribution: dict, synthetic_distribution: dict, training_count: int) -> go.Figure:
     """Generate a grouped bar chart comparing two categorical distributions.
+
+    Categories held by fewer than ``REPORT_MIN_TRAINING_COUNT`` training records
+    are folded, on both sides, into one "Other" bar, so rare training values
+    are not named.
 
     Args:
         training_distribution: Mapping of ``{category: percentage}`` from the training data.
         synthetic_distribution: Mapping of ``{category: percentage}`` from the synthetic data.
+        training_count: Number of training records the percentages are taken over.
 
     Returns:
         A Plotly ``Figure`` with grouped bars for training and synthetic.
     """
-    columns = sorted(set(training_distribution.keys()).union(synthetic_distribution.keys()))
-    training_values = []
-    synthetic_values = []
-
-    for column in columns:
-        training_values.append(training_distribution.get(column, 0.0))
-        synthetic_values.append(synthetic_distribution.get(column, 0.0))
+    rare = {
+        category
+        for category, percent in training_distribution.items()
+        if round(percent * training_count / 100) < REPORT_MIN_TRAINING_COUNT
+    }
+    columns = sorted((set(training_distribution) | set(synthetic_distribution)) - rare)
+    training_values = [training_distribution.get(column, 0.0) for column in columns]
+    synthetic_values = [synthetic_distribution.get(column, 0.0) for column in columns]
+    if rare:
+        columns.append(f"Other ({len(rare)} categories)")
+        training_values.append(sum(training_distribution[category] for category in rare))
+        synthetic_values.append(sum(synthetic_distribution.get(category, 0.0) for category in rare))
 
     fig = go.Figure()
     fig.add_trace(
@@ -614,62 +770,35 @@ def bar_chart(training_distribution: dict, synthetic_distribution: dict) -> go.F
 
 
 def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure | None:
-    """Generate overlaid histograms for a numeric distribution.
+    """Generate overlaid percentage bars for a numeric distribution.
+
+    Values are binned here, with ``safe_bin_edges`` and ``binned_percent_bars``,
+    so the report carries bin percentages rather than the values themselves.
 
     Args:
         training: Numeric training series.
         synthetic: Numeric synthetic series.
 
     Returns:
-        A Plotly ``Figure`` with overlaid training/synthetic histograms.
+        A Plotly ``Figure`` with overlaid training/synthetic bars, or an empty
+        figure when either series has no finite values.
     """
     fig = go.Figure()
     fig.update_layout(
         yaxis_title_text="Percentage",
         bargap=_GRAPH_BARGAP,
         bargroupgap=_GRAPH_BARGROUPGAP,
+        barmode="overlay",
         showlegend=False,
     )
 
-    training_copy = pd.Series(training)
-    training_copy.dropna(inplace=True)
-    synthetic_copy = pd.Series(synthetic)
-    synthetic_copy.dropna(inplace=True)
-
-    # Quantile, min and max will fail on empty Series. Fail fast and return empty fig.
-    if len(training_copy) == 0 or len(synthetic_copy) == 0:
+    training_values = _finite_values(training)
+    synthetic_values = _finite_values(synthetic)
+    if training_values.size == 0 or synthetic_values.size == 0:
         return fig
 
-    max_range = max(max(training_copy), max(synthetic_copy)) + 1
-    min_range = min(min(training_copy), min(synthetic_copy))
-
-    # Calculate bin size for the plot, handling edge case of no variance as needed.
-    binsize = 1
-    if min_range == max_range:
-        max_range = min_range + binsize
-    else:
-        # number of bins/bin size match the ones in JS divenrgence calculation.
-        bins = get_numeric_distribution_bins(training, synthetic)
-        binsize = float(bins[1] - bins[0])
-
-    xbins = dict(start=min_range, end=max_range, size=binsize)
-    fig.add_trace(
-        histogram(
-            x=training_copy,
-            histnorm="percent",
-            xbins=xbins,
-            hovertemplate="(%{x}, %{y:.2f})",
-        )
-    ).add_trace(
-        histogram(
-            x=synthetic_copy,
-            color=_REPORT_PALETTE[1],
-            name="Synthetic",
-            histnorm="percent",
-            xbins=xbins,
-            hovertemplate="(%{x}, %{y:.2f})",
-        )
-    )
+    edges = safe_bin_edges(training_values, synthetic_values)
+    fig.add_traces(binned_percent_bars(training_values, synthetic_values, edges))
     return fig
 
 
