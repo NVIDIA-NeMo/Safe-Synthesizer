@@ -287,23 +287,6 @@ override-dependencies = [
     "setuptools>=83.0.0",
 ]
 
-# FlashInfer's CUDA 13 cache shim has different requirements in its ARM64
-# and x86_64 wheels. uv uses one wheel's metadata for universal resolution;
-# mark the ARM64-only providers explicitly so both platforms remain installable.
-[[tool.uv.dependency-metadata]]
-name = "flashinfer-jit-cache"
-version = "0.7.0.post1+cu130"
-requires-dist = [
-    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu130",
-    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu130",
-    "flashinfer-jit-cache-sm110a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
-    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu130",
-    "flashinfer-jit-cache-sm121a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
-    "flashinfer-jit-cache-sm80==0.7.0.post1+cu130",
-    "flashinfer-jit-cache-sm89==0.7.0.post1+cu130",
-    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu130",
-]
-
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
 # Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh
@@ -504,7 +487,27 @@ explicit = true
 name = "vllm-v0-32-0-cu130"
 url = "https://wheels.vllm.ai/0.32.0/cu130"
 explicit = true
+
 # <<< END GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT >>>
+# >>> BEGIN GENERATED CUDA UV DEPENDENCY METADATA - DO NOT EDIT <<<
+# Source of truth: cuda_deps.toml.
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh
+# Manual edits inside this block will be overwritten.
+# Generated uv section: tool.uv.dependency-metadata.
+[[tool.uv.dependency-metadata]]
+name = "flashinfer-jit-cache"
+version = "0.7.0.post1+cu130"
+requires-dist = [
+    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm110a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm121a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm80==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm89==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu130",
+]
+# <<< END GENERATED CUDA UV DEPENDENCY METADATA - DO NOT EDIT >>>
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"

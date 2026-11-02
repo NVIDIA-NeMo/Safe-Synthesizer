@@ -281,6 +281,34 @@ def test_apply_cuda_fragment_to_pyproject_is_idempotent(tmp_path: Path, generato
     assert generator.apply_cuda_fragment_to_pyproject(updated, generated) == updated
 
 
+def test_dependency_metadata_corrections_follow_cuda_config(generator: ModuleType) -> None:
+    data = _cuda_deps_dict()
+    corrections = [
+        {
+            "name": "cache-shim",
+            "version": "1.0+cu130",
+            "requires_dist": ["cache-arm==1.0; platform_machine == 'aarch64'"],
+        },
+        {"name": "other-shim", "version": "2.0", "requires_dist": []},
+    ]
+    data["dependency_metadata"] = corrections
+    generated = generator.build_cuda_pyproject_fragment(generator.CudaDepsConfig.model_validate(data))
+    updated = generator.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
+
+    assert tomllib.loads(updated)["tool"]["uv"]["dependency-metadata"] == [
+        {"name": spec["name"], "version": spec["version"], "requires-dist": spec["requires_dist"]}
+        for spec in corrections
+    ]
+    assert "# >>> BEGIN GENERATED CUDA UV DEPENDENCY METADATA" in updated
+    assert generator.apply_cuda_fragment_to_pyproject(updated, generated) == updated
+
+    data["dependency_metadata"] = []
+    generated = generator.build_cuda_pyproject_fragment(generator.CudaDepsConfig.model_validate(data))
+    cleared = generator.apply_cuda_fragment_to_pyproject(updated, generated)
+    assert "dependency-metadata" not in tomllib.loads(cleared)["tool"]["uv"]
+    assert "GENERATED CUDA UV DEPENDENCY METADATA" not in cleared
+
+
 def test_apply_cuda_fragment_to_pyproject_replaces_stale_marker_text(tmp_path: Path, generator: ModuleType) -> None:
     """Regenerating over a header written by an older script version must replace it, not leave a stray copy."""
     config_path = tmp_path / "cuda_deps.toml"

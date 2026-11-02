@@ -89,6 +89,23 @@ class GeneratedBlocks:
             end=self._last_generated_index_line(),
             detail="# Generated uv sections: tool.uv.sources and tool.uv.index.",
         )
+        metadata_header = "[[tool.uv.dependency-metadata]]"
+        if metadata_header in self.lines:
+            metadata_start = self._find_section(metadata_header)
+            metadata_end = next(
+                (
+                    index - 1
+                    for index in range(metadata_start + 1, len(self.lines))
+                    if self.lines[index].startswith("[") and self.lines[index] != metadata_header
+                ),
+                len(self.lines) - 1,
+            )
+            yield GeneratedBlock(
+                label="UV DEPENDENCY METADATA",
+                start=metadata_start,
+                end=metadata_end,
+                detail="# Generated uv section: tool.uv.dependency-metadata.",
+            )
 
     def reversed(self) -> list[GeneratedBlock]:
         return sorted(self, key=lambda block: block.start, reverse=True)
@@ -325,6 +342,22 @@ class CudaVariant(StrictModel):
     )
 
 
+class DependencyMetadataSpec(StrictModel):
+    """Wheel metadata correction used by uv's universal dependency resolver."""
+
+    name: str = Field(description="Package whose dependency metadata is replaced.")
+    version: str = Field(description="Exact package version to which the correction applies.")
+    requires_dist: list[str] = Field(description="Replacement PEP 508 dependency requirements.")
+
+    @model_validator(mode="after")
+    def _validate_requirements(self) -> Self:
+        canonicalize_name(self.name, validate=True)
+        Version(self.version)
+        for requirement in self.requires_dist:
+            Requirement(requirement)
+        return self
+
+
 class CudaDepsConfig(StrictModel):
     """Source-of-truth CUDA dependency matrix."""
 
@@ -347,6 +380,9 @@ class CudaDepsConfig(StrictModel):
     conflict_extras: list[str] = Field(default_factory=lambda: ["cpu"], description="Non-CUDA conflicting extras.")
     cpu: CpuExtra = Field(description="CPU dependency extra.")
     indexes: list[IndexSpec] = Field(default_factory=list, description="Shared package indexes.")
+    dependency_metadata: list[DependencyMetadataSpec] = Field(
+        default_factory=list, description="Package metadata corrections owned by the CUDA dependency matrix."
+    )
     cuda_indexes: CudaIndexTemplates = Field(description="CUDA index templates.")
     sources: dict[str, dict[str, list[SourceSpec]]] = Field(
         default_factory=dict,
@@ -770,6 +806,15 @@ def _build_tool_table(
     uv.add("conflicts", _conflicts_array([*config.conflict_extras, *config.variants]))
     uv.add("sources", _sources_table(sources))
     uv.add("index", _index_aot(indexes))
+    if config.dependency_metadata:
+        metadata = tomlkit.aot()
+        for spec in config.dependency_metadata:
+            entry = tomlkit.table()
+            entry.add("name", spec.name)
+            entry.add("version", spec.version)
+            entry.add("requires-dist", _string_array(spec.requires_dist))
+            metadata.append(entry)
+        uv.add("dependency-metadata", metadata)
     tool.add("uv", uv)
     return tool
 
@@ -798,6 +843,10 @@ def _update_uv_sections(pyproject: TOMLDocument, generated: TOMLDocument) -> Non
     generated_uv = _required_table(_required_table(generated, "tool"), "uv")
     for key in ("conflicts", "sources", "index"):
         uv[key] = generated_uv[key]
+    if "dependency-metadata" in generated_uv:
+        uv["dependency-metadata"] = generated_uv["dependency-metadata"]
+    elif "dependency-metadata" in uv:
+        del uv["dependency-metadata"]
 
 
 def _mark_generated_sections(pyproject_text: str, extras: list[str]) -> str:
@@ -808,13 +857,19 @@ def _mark_generated_sections(pyproject_text: str, extras: list[str]) -> str:
 
 
 def _insert_generated_marker(lines: list[str], block: GeneratedBlock) -> None:
+    # tomlkit can add another separator when appending an array of tables.
+    # Keep generated block boundaries stable on the first and subsequent runs.
+    block_end = block.end
+    while block_end > block.start and lines[block_end] == lines[block_end - 1] == "":
+        del lines[block_end]
+        block_end -= 1
     start_marker = [
         f"{GENERATED_BEGIN_PREFIX}{block.label}{GENERATED_MARKER_SUFFIX} <<<",
         *GENERATED_MARKER_BODY,
         block.detail,
     ]
     lines[block.start : block.start] = start_marker
-    end = block.end + len(start_marker)
+    end = block_end + len(start_marker)
     lines[end + 1 : end + 1] = [f"{GENERATED_END_PREFIX}{block.label}{GENERATED_MARKER_SUFFIX} >>>"]
 
 

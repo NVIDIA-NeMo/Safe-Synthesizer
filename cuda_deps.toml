@@ -163,3 +163,20 @@ dependencies = [
 [installer_unpublished]
 pytorch-cu129 = ["nvidia-cuda-nvml-cu12", "nvidia-cuda-nvprof-cu12"]
 nvidia-pypi-public = ["nvidia-cuda-nvml", "nvidia-cuda-nvprof", "nvidia-cusparselt", "nvidia-nvshmem"]
+
+# FlashInfer's CUDA 13 cache shim has different requirements in its ARM64
+# and x86_64 wheels. uv uses one wheel's metadata for universal resolution;
+# mark the ARM64-only providers explicitly so both platforms remain installable.
+[[dependency_metadata]]
+name = "flashinfer-jit-cache"
+version = "0.7.0.post1+cu130"
+requires_dist = [
+    "flashinfer-jit-cache-sm100a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm103a==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm110a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm120f==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm121a==0.7.0.post1+cu130; platform_machine == 'aarch64'",
+    "flashinfer-jit-cache-sm80==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm89==0.7.0.post1+cu130",
+    "flashinfer-jit-cache-sm90a==0.7.0.post1+cu130",
+]
