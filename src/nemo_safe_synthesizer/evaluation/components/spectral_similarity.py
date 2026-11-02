@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -29,8 +29,17 @@ from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
-from .component import Component
+from .spectral_similarity_figures import (
+    SPECTRAL_PAIR_SCORE_MAX_COLUMNS,
+    SPECTRAL_SUMMARY_TRACES_PER_COLUMN,
+    generate_spectral_band_difference_figure,
+    generate_spectral_band_figure,
+    generate_spectral_pair_score_figure,
+    order_spectral_columns,
+)
 from .time_series_common import (
+    FigureSpec,
+    TimeSeriesComponent,
     excluded_columns_note,
     group_frame,
     resolve_group_column,
@@ -61,7 +70,7 @@ class _BandProfile:
     noise: NDArray[np.float64]
 
 
-class SpectralSimilarity(Component):
+class SpectralSimilarity(TimeSeriesComponent):
     """Measure fidelity of variation across cycle lengths in numeric time-series data.
 
     The component compares the share of variation that training and synthetic
@@ -76,6 +85,13 @@ class SpectralSimilarity(Component):
         details: Per-group/column band profiles, skipped comparisons, and summaries.
     """
 
+    card_id: ClassVar[str] = "spectral-similarity"
+    description: ClassVar[str] = (
+        "Measures whether numeric columns repeat in cycles of the same lengths as the training data"
+    )
+    tooltip_key: ClassVar[str] = "spectral_similarity_info"
+    template: ClassVar[str] = "jinja/components/spectral_similarity.j2"
+
     name: str = Field(
         default="Spectral Similarity",
         description="Display name used in serialized evaluation results.",
@@ -87,9 +103,43 @@ class SpectralSimilarity(Component):
 
     @cached_property
     def jinja_context(self) -> dict[str, Any]:
-        """Return score and diagnostic details for report rendering."""
+        """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().jinja_context
-        context["details"] = self.details
+        profiles = self.details.get("profiles", [])
+        figures: list[FigureSpec] = []
+        summary_columns: list[str] = []
+        if profiles:
+            figures = [
+                (
+                    "Cycle lengths",
+                    generate_spectral_band_figure(profiles),
+                    True,
+                    "spectral_bands_info",
+                ),
+                (
+                    "Difference by cycle length",
+                    generate_spectral_band_difference_figure(profiles),
+                    False,
+                    "spectral_difference_info",
+                ),
+                (
+                    "Pair scores",
+                    generate_spectral_pair_score_figure(profiles, self.score.score),
+                    False,
+                    "spectral_pair_scores_info",
+                ),
+            ]
+            summary_columns = order_spectral_columns(profiles)
+        context["figures"] = self.figure_rows(figures)
+        context["summary_columns"] = summary_columns
+        context["summary_traces_per_column"] = SPECTRAL_SUMMARY_TRACES_PER_COLUMN
+        context["pair_score_column_count"] = min(len(summary_columns), SPECTRAL_PAIR_SCORE_MAX_COLUMNS)
+        context["evaluated_profile_count"] = len(profiles)
+        context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
+        context["evaluated_column_count"] = len({item["column"] for item in profiles})
+        context["constant_synthetic_profile_count"] = sum(
+            1 for item in profiles if all(value is None for value in item["synthetic_bands"])
+        )
         return context
 
     @staticmethod
