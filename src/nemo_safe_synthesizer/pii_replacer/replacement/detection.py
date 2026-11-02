@@ -462,21 +462,37 @@ def _collect_chunk_candidates(
     rejected_birth_dates = invalid_spans = 0
     for raw_span in _result_spans(result):
         try:
-            if raw_span is None:
-                raise _InvalidSpanError
-            start, end, label, score = raw_span
-            exclusion_threshold = exclusion_thresholds.get(_normalize_label(label))
-            if exclusion_threshold is not None:
-                _add_exclusion(chunk, raw_span, exclusion_threshold, candidates)
-                continue
-            normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config, is_national_id)
+            rejected_birth_dates += _add_chunk_span(
+                chunk, raw_span, candidates, config, is_national_id, exclusion_thresholds
+            )
         except _InvalidSpanError:
             invalid_spans += 1
-            continue
-        rejected_birth_dates += int(rejected_birth_date)
-        if normalized is not None:
-            candidates.spans.append(normalized)
     return _RejectedCounts(rejected_birth_dates, invalid_spans)
+
+
+def _add_chunk_span(
+    chunk: _Chunk,
+    raw_span: tuple[int, int, str, float] | None,
+    candidates: _TextCandidates,
+    config: FreeTextDetectionConfig,
+    is_national_id: Callable[[str], bool] | None,
+    exclusion_thresholds: Mapping[str, float],
+) -> bool:
+    """Add one span to ``candidates`` as an entity or name exclusion; return whether it was a rejected birth date.
+
+    Raises:
+        _InvalidSpanError: If the span's metadata, score, or offsets are invalid.
+    """
+    if raw_span is None:
+        raise _InvalidSpanError
+    exclusion_threshold = exclusion_thresholds.get(_normalize_label(raw_span[2]))
+    if exclusion_threshold is not None:
+        _add_exclusion(chunk, raw_span, exclusion_threshold, candidates)
+        return False
+    normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config, is_national_id)
+    if normalized is not None:
+        candidates.spans.append(normalized)
+    return rejected_birth_date
 
 
 def _add_exclusion(
