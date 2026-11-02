@@ -33,14 +33,13 @@ class ColumnDistributionPlotRow(BaseModel):
     def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
         if f is None:
             return None
-        if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
-            if f.training_distribution is not None and f.synthetic_distribution is not None:
-                figure = figures.bar_chart(f.training_distribution, f.synthetic_distribution)
-            else:
-                figure = None
-        else:
-            figure = figures.histogram_figure(training, synthetic)
-        return figure
+        # A numeric training column always gets binned bars: a bar per distinct
+        # numeric value would name individual training values.
+        if f.training_field_features.type == FieldType.NUMERIC:
+            return figures.histogram_figure(training, synthetic)
+        if f.training_distribution is not None and f.synthetic_distribution is not None:
+            return figures.bar_chart(f.training_distribution, f.synthetic_distribution, len(training))
+        return None
 
     @staticmethod
     def _from_fields(
