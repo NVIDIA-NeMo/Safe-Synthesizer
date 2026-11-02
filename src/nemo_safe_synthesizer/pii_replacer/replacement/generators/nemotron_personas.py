@@ -74,7 +74,7 @@ class NemotronPersonasReplacementGenerator:
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Generate a Nemotron-Personas replacement for ``request``."""
-        if request.entity_type not in _PERSONA_ENTITY_TYPES:
+        if request.entity_type not in PERSONA_ENTITY_TYPES:
             return self._fallback_generator.generate(request)
 
         persona_values = self._persona_values(request)
@@ -163,7 +163,7 @@ class NemotronPersonasReplacementGenerator:
 
 
 # Nemotron-Personas datasets have no email or phone column, so those entity types always use Faker.
-_PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.STREET_ADDRESS}
+PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.STREET_ADDRESS}
 # Value keys and the persona columns they come from. Every locale names these columns the same way; only
 # en_US has street columns, so other locales fall back to Faker for street addresses.
 _PERSONA_VALUE_COLUMNS: Mapping[str, str] = {

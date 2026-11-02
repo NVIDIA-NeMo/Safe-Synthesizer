@@ -355,6 +355,22 @@ class TestResolvePlanWithLocalServer:
         assert fixture_fake_local_servers == []
 
 
+def test_discovered_plan_below_pattern_coverage_fails() -> None:
+    dataframe = pd.DataFrame({"phone": [f"555-{row:04d}" for row in range(90)] + ["(555) 000-0000"] * 10})
+    plan = PiiReplacementPlan(
+        columns_to_replace=[PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")]
+    )
+
+    with pytest.raises(ParameterError, match="covers 90.0%"):
+        resolve_plan(
+            dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=RecordingDiscoverer(),
+            enhancer=RecordingEnhancer(plan),
+        )
+
+
 class _RecordingLlm(PlanEnhancer):
     """Stands in for LLMPlanEnhancer; records whether the managed server was running for each LLM step."""
 
@@ -526,26 +542,38 @@ class TestSamplerFallback:
 
         assert resolved.sampler == sampler
 
-    def test_a_plan_mapping_ethnicity_does_not_switch_to_faker(
+    def test_a_discovered_plan_mapping_ethnicity_does_not_switch_to_faker(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
-        config = ReplacePiiConfig(replacement_plan=_name_plan({"race": {"Latino": ["hispanic"]}}))
+        enhancer = RecordingEnhancer(_name_plan({"race": {"Latino": ["hispanic"]}}))
 
         with pytest.raises(ParameterError, match="maps ethnicity values for 'race', which need Nemotron-Personas"):
-            resolve_replacement_config(_PEOPLE, config, DataParameters())
+            resolve_replacement_config(_PEOPLE, ReplacePiiConfig(), DataParameters(), enhancer=enhancer)
+
+    def test_a_written_plan_mapping_ethnicity_switches_to_faker_and_drops_those_entries(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+        config = ReplacePiiConfig(replacement_plan=_name_plan({"race": {"Latino": ["hispanic"]}}))
+
+        resolved = resolve_replacement_config(_PEOPLE, config, DataParameters())
+
+        assert resolved.sampler.backend is PiiSamplerBackend.FAKER
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
+        assert "column 'race' maps ethnic_background values, which this sampler does not have" in caplog.text
 
 
 @pytest.mark.unit
 class TestMappingMatchesTheSampler:
-    def test_every_mismatch_is_reported_with_the_sampler(self) -> None:
-        config = ReplacePiiConfig(
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-            replacement_plan=_name_plan({"sex": {"Female": ["femme"]}, "race": {"Latino": ["hispanic"]}}),
-        )
+    def test_every_mismatch_in_a_discovered_plan_is_reported_with_the_sampler(self) -> None:
+        config = ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER))
+        enhancer = RecordingEnhancer(_name_plan({"sex": {"Female": ["femme"]}, "race": {"Latino": ["hispanic"]}}))
 
         with pytest.raises(ParameterError) as excinfo:
-            resolve_replacement_config(_PEOPLE, config, DataParameters())
+            resolve_replacement_config(_PEOPLE, config, DataParameters(), enhancer=enhancer)
 
         message = str(excinfo.value)
         assert "does not match the faker (locale en_US) sampler" in message
@@ -556,7 +584,7 @@ class TestMappingMatchesTheSampler:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
-        config = ReplacePiiConfig(replacement_plan=_name_plan({"sex": {"Female": ["femme"]}}, with_race=False))
+        enhancer = RecordingEnhancer(_name_plan({"sex": {"Female": ["femme"]}}, with_race=False))
 
         with pytest.raises(ParameterError, match="used because no Nemotron-Personas data was found"):
-            resolve_replacement_config(_PEOPLE, config, DataParameters())
+            resolve_replacement_config(_PEOPLE, ReplacePiiConfig(), DataParameters(), enhancer=enhancer)

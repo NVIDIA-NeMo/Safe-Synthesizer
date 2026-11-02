@@ -178,6 +178,7 @@ nav:
       - Differential Privacy: tutorials/differential-privacy.ipynb
       - Time-Series Financial Transactions: tutorials/time-series-financial-transactions.ipynb
       - Healthcare Hospital Readmissions: tutorials/healthcare-hospital-readmissions.ipynb
+      - Review the PII Replacement Plan: tutorials/pii-replacement-review.ipynb
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md

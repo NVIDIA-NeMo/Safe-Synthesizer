@@ -2063,6 +2063,34 @@ wheels = [
 ]
 
 [[package]]
+name = "gliner2"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "tqdm" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/ab/cebcf92279c85f988bf3853530ec3aa16bfb9f21cc15bde1fba9d2c6db2e/gliner2-2.1.0.tar.gz", hash = "sha256:cfded5eeaa5e95a4ea325ed205889beda3e00b486c69c9d369a1c4cf616fe4f1", size = 399121, upload-time = "2026-10-09T17:49:14.471Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/b1/cae13092a6ca796dd17493c8129d48e38fc370f23b9cce6f616020ed3654/gliner2-2.1.0-py3-none-any.whl", hash = "sha256:0c242c5de53f37020df835788fc4eb820e1673b5212c202cd90e9234a7e786bc", size = 355814, upload-time = "2026-10-09T17:49:12.815Z" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "numpy" },
+    { name = "peft" },
+    { name = "safetensors" },
+    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+    { name = "torch", version = "2.13.0+cu129", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+    { name = "torch", version = "2.13.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+    { name = "transformers", version = "5.17.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+    { name = "transformers", version = "5.19.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
+]
+
+[[package]]
 name = "googleapis-common-protos"
 version = "1.73.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3676,7 +3704,6 @@ name = "nemo-safe-synthesizer"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
-    { name = "faker" },
     { name = "httpx" },
     { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
@@ -3698,6 +3725,7 @@ cpu = [
     { name = "bitsandbytes" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cpu' or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "kernels" },
     { name = "opacus" },
     { name = "openai" },
@@ -3731,6 +3759,7 @@ cu129 = [
     { name = "flashinfer-jit-cache-sm89", version = "0.7.0.post1+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-jit-cache-sm90a", version = "0.7.0.post1+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cu129' or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "kernels" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux'" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux'" },
@@ -3765,6 +3794,7 @@ cu130 = [
     { name = "flashinfer-jit-cache-sm89", version = "0.7.0.post1+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-jit-cache-sm90a", version = "0.7.0.post1+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cu130' or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129')" },
     { name = "kernels" },
     { name = "nvidia-cublas", marker = "sys_platform == 'linux'" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux'" },
@@ -3792,6 +3822,7 @@ engine = [
     { name = "datasets", version = "5.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "dateparser" },
     { name = "dython" },
+    { name = "faker" },
     { name = "json-repair" },
     { name = "nameparser", extra = ["ja"] },
     { name = "outlines-core" },
@@ -3799,6 +3830,7 @@ engine = [
     { name = "prv-accountant" },
     { name = "python-stdnum" },
     { name = "range-regex" },
+    { name = "regex" },
     { name = "scikit-learn" },
     { name = "tenacity" },
     { name = "wandb" },
@@ -3871,7 +3903,7 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'engine'", specifier = ">=5.0.1" },
     { name = "dateparser", marker = "extra == 'engine'" },
     { name = "dython", marker = "extra == 'engine'", specifier = ">=0.7.12" },
-    { name = "faker", specifier = ">=20.0" },
+    { name = "faker", marker = "extra == 'engine'", specifier = ">=20.0" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cpu" } },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
@@ -3894,6 +3926,9 @@ requires-dist = [
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.7.0.post1" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.7.0.post1" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.7.0.post1" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cpu'", specifier = ">=2.1.0" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cu129'", specifier = ">=2.1.0" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cu130'", specifier = ">=2.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "huggingface-hub", specifier = ">=1.3.0,<2" },
     { name = "json-repair", marker = "extra == 'engine'", specifier = ">=0.60.1" },
@@ -3924,6 +3959,7 @@ requires-dist = [
     { name = "python-stdnum", marker = "extra == 'engine'" },
     { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "range-regex", marker = "extra == 'engine'", specifier = ">=0.1.0" },
+    { name = "regex", marker = "extra == 'engine'", specifier = ">=2024.11.6" },
     { name = "rich", specifier = ">=14.1.0" },
     { name = "scikit-learn", marker = "extra == 'engine'" },
     { name = "sentence-transformers", marker = "extra == 'cpu'", specifier = ">=5.6.0" },

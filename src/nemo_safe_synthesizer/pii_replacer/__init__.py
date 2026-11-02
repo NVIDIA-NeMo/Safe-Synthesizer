@@ -6,6 +6,7 @@ from __future__ import annotations
 from .replacer import TabularPiiReplacer
 from .transform_result import (
     ColumnStatistics,
+    DetectionResult,
     FreeTextReplacementRecord,
     ReplacementGenerationStatistics,
     ReplacementMap,
@@ -15,6 +16,7 @@ from .transform_result import (
 
 __all__ = [
     "ColumnStatistics",
+    "DetectionResult",
     "FreeTextReplacementRecord",
     "ReplacementGenerationStatistics",
     "ReplacementMap",
