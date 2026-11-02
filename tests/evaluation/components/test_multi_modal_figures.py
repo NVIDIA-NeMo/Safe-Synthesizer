@@ -628,9 +628,8 @@ class TestHistogramFigure:
 
         fig = histogram_figure(training, synthetic)
 
-        # Should return empty figure when one series is all NaN
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 0
+        assert [trace.type for trace in fig.data] == ["scatter"]
 
     def test_histogram_figure_same_values(self):
         training = pd.Series([5.0, 5.0, 5.0, 5.0])
@@ -639,6 +638,41 @@ class TestHistogramFigure:
         fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
+
+    @pytest.mark.parametrize(
+        "training",
+        [[41.0, 42.0, 43.0], [1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 7.0, 8.0, 9.0, 10.0]],
+    )
+    def test_too_few_training_values_show_only_a_note(self, training):
+        fig = histogram_figure(pd.Series(training), pd.Series(np.arange(20.0)))
+
+        assert [(trace.type, tuple(trace.text)) for trace in fig.data] == [
+            ("scatter", ("Too few training values to chart",))
+        ]
+        assert list(fig.data[0].x) == [0.0]
+
+    def test_non_numeric_synthetic_values_keep_the_training_bars_with_a_note(self):
+        training = pd.Series(np.random.default_rng(0).normal(size=200))
+        synthetic = pd.Series(["a", "b"] * 100)
+
+        fig = histogram_figure(training, synthetic)
+
+        assert [(trace.type, trace.name) for trace in fig.data] == [
+            ("bar", "Training"),
+            ("bar", "Synthetic"),
+            ("scatter", "Note"),
+        ]
+        assert sum(fig.data[0].y) > 90
+        assert sum(fig.data[1].y) == 0
+        assert fig.data[2].text == ("Synthetic values aren't numeric",)
+
+    def test_tiny_value_ranges_keep_distinct_bins(self):
+        values = np.linspace(1e-15, 9e-15, 100)
+
+        edges = safe_bin_edges(values, values)
+
+        assert len(edges) > 2
+        assert np.all(np.diff(edges) > 0)
 
 
 class TestGenerateTextStructureSimilarityFigures:
