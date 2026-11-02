@@ -521,7 +521,9 @@ def _normalize_chunk_span(
     original_start, original_end = offsets
     value = chunk.original_text[original_start:original_end]
     entity_type = _GLINER_LABELS.get(_normalize_label(label))
-    if entity_type is None:
+    # A span with no letters or digits, such as a blank signature line, identifies no one and has
+    # nothing for a replacement to change.
+    if entity_type is None or not any(character.isalnum() for character in value):
         return None, False
     threshold = config.entity_thresholds[entity_type]
     if entity_type is EntityType.NATIONAL_ID and is_national_id is not None and is_national_id(value):
