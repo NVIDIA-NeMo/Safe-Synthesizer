@@ -16,7 +16,6 @@ memorization.
 from __future__ import annotations
 
 import random
-from collections import deque
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, ClassVar, Literal
@@ -479,19 +478,21 @@ class WindowGroupMIA(TimeSeriesComponent):
         repeated runs sample the same windows.
         """
         rng = np.random.default_rng(_SAMPLING_SEED)
-        queues = []
+        queues: list[tuple[int, NDArray[np.int64]]] = []
         total = 0
         for index, sequence in enumerate(sequences):
             starts = WindowGroupMIA._window_starts(sequence.values, window, stride)
             total += len(starts)
             if len(starts):
-                queues.append(deque((index, int(starts[i])) for i in rng.permutation(len(starts))))
+                queues.append((index, starts[rng.permutation(len(starts))]))
         selected: list[tuple[int, int]] = []
+        depth = 0
         while queues and len(selected) < limit:
-            for queue in queues:
+            for index, starts in queues:
                 if len(selected) < limit:
-                    selected.append(queue.popleft())
-            queues = [queue for queue in queues if queue]
+                    selected.append((index, int(starts[depth])))
+            depth += 1
+            queues = [(index, starts) for index, starts in queues if len(starts) > depth]
         return WindowGroupMIA._build(sequences, selected, total, window)
 
     @staticmethod
@@ -499,13 +500,17 @@ class WindowGroupMIA(TimeSeriesComponent):
         sequences: list[_Sequence], window: int, limit: int = WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS
     ) -> _Windows:
         """Build the windows starting at every step, or a reproducible sample of ``limit`` of them."""
-        selected: list[tuple[int, int]] = []
-        for index, sequence in enumerate(sequences):
-            selected.extend((index, int(start)) for start in WindowGroupMIA._window_starts(sequence.values, window, 1))
-        total = len(selected)
+        per_sequence = [WindowGroupMIA._window_starts(sequence.values, window, 1) for sequence in sequences]
+        offsets = np.cumsum([0, *(len(starts) for starts in per_sequence)])
+        total = int(offsets[-1])
+        chosen = np.arange(total)
         if total > limit:
             chosen = np.random.default_rng(_SAMPLING_SEED).choice(total, limit, replace=False)
-            selected = [selected[i] for i in chosen]
+        indices = np.searchsorted(offsets, chosen, side="right") - 1
+        selected = [
+            (int(index), int(per_sequence[index][position - offsets[index]]))
+            for index, position in zip(indices, chosen, strict=True)
+        ]
         return WindowGroupMIA._build(sequences, selected, total, window)
 
     @staticmethod
