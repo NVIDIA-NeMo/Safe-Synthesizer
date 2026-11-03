@@ -481,9 +481,9 @@ See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the 
 
 Located in `src/nemo_safe_synthesizer/evaluation/components/window_group_mia.py`.
 
-Purpose: Measures privacy rather than quality, checking whether the synthetic data sits closer to stretches of the training sequences than to stretches of holdout sequences it never saw.
+Purpose: Measures privacy by checking whether the synthetic data sits closer to stretches of the training sequences than to stretches of holdout sequences it never saw.
 It compares short windows of consecutive values, across the numeric columns, from training and holdout groups with their nearest synthetic window, and scores the log ratio of their flag rates after discounting chance on a 0--10 scale.
-The score needs grouped data and a holdout of at least two whole groups; without them, only copy diagnostics are reported (see the guide's [When the score is available](../../docs/user-guide/time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)).
+The score needs grouped data and a holdout of at least two whole groups. Without them, only copy diagnostics are reported (see the guide's [When the score is available](../../docs/user-guide/time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)).
 It is reported on its own and is not part of the Data Privacy Score.
 See `docs/user-guide/time-series-metrics/window-membership-inference-protection.md` for the full calculation.
 
