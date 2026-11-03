@@ -154,7 +154,7 @@ cp nemotron-personas-dataset-*/*.parquet \
   "${HOME}/.data-designer/managed-assets/datasets/"
 ```
 
-See [PII Replacement -- Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas)
+See [Customizing PII Replacement -- Nemotron-Personas](customize-pii-replacement.md#nemotron-personas)
 for other locales and storage locations.
 
 ### Optional Agent Skill
@@ -244,11 +244,10 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 
 ### 2. PII Replacement
 
-PII replacement v3 resolves a dataset-specific plan against the full input,
-then replaces structured and free-text PII only in the post-holdout training
-split. See
-[Configuration -- Replacing PII](configuration.md#replacing-pii) and
-[PII Replacement](../product-overview/pii_replacement.md).
+Before training, Safe Synthesizer replaces names, contact details, IDs, and
+other PII in the training data with realistic fake values. See
+[PII Replacement](../product-overview/pii_replacement.md) for how it works and
+[Customizing PII Replacement](customize-pii-replacement.md) to review or change the plan.
 
 ### 3. Training
 

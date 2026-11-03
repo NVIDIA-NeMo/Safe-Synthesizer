@@ -291,18 +291,31 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement accepts automatic discovery, a plan written inline in the main Safe Synthesizer
-configuration, or a path to a separate plan YAML. Data-to-sampler value
-mappings default to automatic discovery or can be supplied inline. See
-[PII Replacement](../product-overview/pii_replacement.md) for the plan-source
-definitions, examples, Nemotron-Personas download instructions, the LLM
-configuration for plan enhancement and dependency mapping discovery, and the GLiNER2
-settings for free-text detection.
+PII replacement runs before training and changes only the training split. It
+is on by default; set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` to turn it off. For what it does, see
+[PII Replacement](../product-overview/pii_replacement.md); for editing plans and
+setting up samplers, see [Customizing PII Replacement](customize-pii-replacement.md).
 
-Structured-column and free-text replacements run before training. Free-text
-targets combine GLiNER2 detection with built-in validated regex detectors.
-Regex exclusively owns email addresses, payment cards, IPv4 addresses, and
-IPv6 addresses; GLiNER2 handles the remaining supported free-text entities.
+| Field | Default | Description | Guidance |
+|-------|---------|-------------|----------|
+| `replace_pii.replacement_plan` | `"auto_discovery"` | `"auto_discovery"`, an inline plan, or the path of a plan YAML file (relative to the configuration file) | Run `--plan-only` first, review the plan, then point this at the plan file |
+| `replace_pii.locale` | `"en_US"` | Locale of generated values and of the Nemotron-Personas dataset | Must match the downloaded `datasets/<locale>.parquet` |
+| `replace_pii.seed` | `null` | Seed for generated values; falls back to `PERSON_RANDOM_SEED` or `42` | Leave unset; runs are already reproducible |
+| `replace_pii.sampler.backend` | unset | `nemotron-personas` or `faker`; unset uses Nemotron-Personas when downloaded, else Faker | Set `faker` for locales without a Nemotron-Personas dataset |
+| `replace_pii.sampler.nemotron_personas_path` | `NSS_NEMOTRON_PERSONAS_PATH` or `~/.data-designer/managed-assets` | Directory containing `datasets/` | Leave at default |
+| `replace_pii.llm.model_id` | `null` | Planning model; without an endpoint, selects a bundled local model (default Nemotron 3.5 Lightning) | Required when `NSS_INFERENCE_ENDPOINT` is set |
+| `replace_pii.llm.max_workers` | `8` | Concurrent planning requests | Leave at default |
+| `replace_pii.free_text_detection.entity_thresholds` | tuned per type | Minimum GLiNER2 confidence per entity type | Lower one type to catch more of it |
+| `replace_pii.free_text_detection.name_exclusion_thresholds` | tuned labels | Terms often mistaken for names; overlapping names are kept | `{}` turns exclusion off |
+| `replace_pii.free_text_detection.find_and_replace` | `true` | Also replace known values the detector missed (`en_US` only) | Leave on |
+| `replace_pii.free_text_detection.batch_size` | `8` | GLiNER2 batch size | Reduce on GPU out-of-memory |
+
+The planning endpoint, model, and API key are set at runtime, never in YAML;
+see [Environment Variables -- PII Replacement](environment.md#pii-replacement).
+See [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig]
+for the full field list, including the free-text model, revision, and chunking
+settings.
 
 ---
 
@@ -480,7 +493,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii(enable=False)` | Placeholder for PII replacement v3 |
+| `replace_pii` (`null` to disable) | `with_replace_pii()` | [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig] |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 

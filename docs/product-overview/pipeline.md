@@ -35,13 +35,12 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-PII replacement v3 resolves its plan against the complete input dataset, then
-replaces PII only in the post-holdout training split. The original training and
-test splits remain available for evaluation. Disable replacement with
-`--no-replace-pii` (CLI), `replace_pii: null` (configuration), or
-`.with_replace_pii(enable=False)` (SDK).
+Names, contact details, IDs, and other PII in the training data are replaced
+with realistic fake values, so the model never learns the real ones. Only the
+training data is changed; evaluation still uses the originals. PII replacement
+is on by default and can be turned off.
 
-See [PII Replacement](pii_replacement.md) for detailed PII Replacement documentation.
+See [PII Replacement](pii_replacement.md) for how it works.
 
 ### 3. Example Assembly
 

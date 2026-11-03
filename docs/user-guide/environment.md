@@ -25,7 +25,7 @@ For output quality and evaluation metrics, see
 | Run offline or air-gapped | [HF cache and offline](#hugging-face-cache-and-offline) · [Running in Offline Environments](running.md#running-in-offline-environments) |
 | Docker / container mounts | [Containers](#containers) · [Docker](docker.md) |
 | Logging and WandB | [Running -- Logging and Experiment Tracking](running.md#logging-and-experiment-tracking) |
-| Inference endpoint and API key | [PII Replacement](#pii-replacement) · [PII Replacement](../product-overview/pii_replacement.md) |
+| Inference endpoint and API key | [PII Replacement](#pii-replacement) · [Customizing PII Replacement](customize-pii-replacement.md) |
 | Disable telemetry | [Telemetry](#telemetry) |
 | Resolve CLI vs env vs defaults | [Precedence](#precedence) |
 
@@ -45,7 +45,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint. A non-loopback URL sends planning data to that service; see [where planning requests go](../product-overview/pii_replacement.md#where-planning-requests-go) | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint. A non-loopback URL sends planning data to that service; see [where planning requests go](#where-planning-requests-go) | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential for an explicit endpoint, such as the hosted NVIDIA endpoint; ignored by the local vLLM server | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
@@ -170,13 +170,29 @@ for the full pre-cache checklist.
 
 ## PII Replacement
 
-Automatic PII plan discovery uses an LLM. By default, Safe Synthesizer runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
-on the GPU for the duration of plan discovery, so no endpoint or key is needed
-and the data stays on this machine. Planning data leaves the machine only when
-`NSS_INFERENCE_ENDPOINT` points to a non-loopback host; see
-[Where planning requests go](../product-overview/pii_replacement.md#where-planning-requests-go).
-To use another service, set its endpoint and credential through environment
-variables or CLI options, not YAML:
+Automatic PII plan discovery uses an LLM. By default, Safe Synthesizer runs
+`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a temporary local vLLM
+server on the GPU, so no endpoint or key is needed. To choose a different
+bundled model or your own serving profile, see
+[Customizing PII Replacement -- Planning LLM](customize-pii-replacement.md#planning-llm).
+
+### Where planning requests go
+
+Plan discovery sends column statistics and up to eight cell samples per column
+to the LLM. Where they go depends only on `NSS_INFERENCE_ENDPOINT` (or
+`--inference-endpoint-url`):
+
+- Unset: Safe Synthesizer starts its own vLLM server on this machine, and the
+  data stays here. This is the default.
+- A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on this
+  machine. Safe Synthesizer calls the server you run at that address, or, with
+  `NSS_INFERENCE_LOCAL_PROFILE`, starts its own server there.
+- Any other URL: Safe Synthesizer sends the data to that service over HTTPS,
+  for example `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA
+  service. Only use a service that is approved to receive the input data,
+  including rows that may later be held out for evaluation.
+
+The run log states which case applies when planning starts.
 
 ```bash title="PII inference environment" hl_lines="1 2 3"
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
@@ -184,34 +200,18 @@ export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 export NSS_INFERENCE_KEY=<your key>
 ```
 
-The endpoint must use HTTPS unless it is a loopback address (`localhost`,
-`127.0.0.0/8`, or `::1`), because plan enhancement sends raw cell samples and
-the API key. Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The
-hosted NVIDIA endpoint always requires it; local OpenAI-compatible endpoints
-may be keyless. The endpoint and key are intentionally rejected in YAML. The
-model ID may instead be persisted as `replace_pii.llm.model_id`.
+- The endpoint must use HTTPS unless it is a loopback address.
+- With an endpoint, a model ID is required. It resolves from
+  `--inference-model-id`, then `replace_pii.llm.model_id`, then
+  `NSS_INFERENCE_MODEL`.
+- `NSS_INFERENCE_KEY` (or `--inference-api-key`) is required by the hosted
+  NVIDIA service; local OpenAI-compatible servers may be keyless. It is ignored,
+  with a warning, while Safe Synthesizer runs its own local server.
+- The endpoint and key are never stored in configuration or plan files, and
+  are rejected in YAML.
 
-The equivalent CLI options are `--inference-endpoint-url`,
-`--inference-model-id`, and `--inference-api-key`, which take precedence over
-environment or persisted model settings. For the model ID, the complete order
-is CLI option, persisted `replace_pii.llm.model_id`, then environment variable.
-With an explicit endpoint, the model ID is required. Without an endpoint, it
-selects a bundled local profile, defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`, and a model
-without a bundled profile is an error.
-
-To run a model that has no bundled profile locally, set a custom serving profile:
-
-```bash title="Managed local PII inference"
-export NSS_INFERENCE_LOCAL_PROFILE=/path/to/profile.yaml
-```
-
-With a local profile, `NSS_INFERENCE_ENDPOINT` is optional and, when set, must
-be a loopback URL that selects the listening address. If vLLM or a CUDA GPU is
-unavailable, planning fails instead of falling back to a remote service. See
-[Local inference server](../product-overview/pii_replacement.md#local-inference-server).
-
-Plan enhancement sends bounded raw cell samples to the configured endpoint.
-Only enable it when that endpoint is approved to receive the input data.
+If vLLM or a suitable GPU is unavailable and no endpoint is set, planning fails
+with an error instead of falling back to a remote service.
 
 ---
 
