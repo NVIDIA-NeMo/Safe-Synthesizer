@@ -325,9 +325,9 @@ class ReplacementExecutor:
             if allocator is None:
                 continue
             if spec.column_name == self._group_column:
-                allocator = _widen_for_one_to_one(
-                    spec.column_name, allocator, len({text.casefold() for text in originals})
-                )
+                # Groups are told apart by their exact value, so "a" and "A" are two groups that need two
+                # replacements that differ ignoring case.
+                allocator = _widen_for_one_to_one(spec.column_name, allocator, len(set(originals)))
             self._identifier_allocators[spec.column_name] = allocator
             longest = max((len(text.split(".", 1)[0]) for text in originals), default=0)
             if isinstance(allocator.space, NumberSpace) and allocator.space.digits > longest:
