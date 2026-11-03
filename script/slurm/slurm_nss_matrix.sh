@@ -152,7 +152,8 @@ fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
-# unused on this branch (reserved for PII replacement v3)
+# PII planning sends column samples to this hosted endpoint, which needs NSS_INFERENCE_KEY.
+# Unset both to plan with a local vLLM server on the job's GPU instead.
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 
