@@ -22,6 +22,7 @@ import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
 from pydantic import Field
+from scipy.signal import lfilter
 
 from ...config.evaluate import RollingStatsSimilarityParameters
 from ...config.parameters import SafeSynthesizerParameters
@@ -59,6 +60,10 @@ _NOISE_FLOOR = 1e-12
 _MAX_LAG_ONE_CORRELATION = 0.99
 _MIN_LAG_ONE_CORRELATION = -0.95
 _MIN_VARIANCE_CORRECTION = 0.5
+# Gaps can leave few adjacent pairs, so the lag-one correlation may come from a
+# lag up to this one with pairs for at least this share of the finite values.
+_MAX_CORRELATION_LAG = 4
+_MIN_PAIR_SHARE = 0.25
 _CONSTANT_REASON = "The synthetic sequence is constant or indistinguishable from constant at its numeric scale."
 _MOSTLY_MISSING_REASON = "The synthetic sequence is mostly missing, so its local average and spread cannot be measured."
 
@@ -420,8 +425,7 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         squares = RollingStatsSimilarity._local_squares(values, window)
         level = RollingStatsSimilarity._rolling_mean(values, window)
         spread = np.sqrt(RollingStatsSimilarity._rolling_mean(squares, window))
-        span = len(level) / segments
-        level_noise, spread_noise = RollingStatsSimilarity._segment_noise(values, squares, window, span)
+        level_noise, spread_noise = RollingStatsSimilarity._segment_noise(values, squares, window, segments)
         return _SegmentProfile(
             level=RollingStatsSimilarity._segment_means(level, segments),
             spread=RollingStatsSimilarity._segment_means(spread, segments),
@@ -437,8 +441,13 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         finite = np.isfinite(windows)
         count = np.sum(finite, axis=1)
         total = np.sum(np.where(finite, windows, 0.0), axis=1)
-        enough = count >= max(2, (window + 1) // 2)
+        enough = count >= RollingStatsSimilarity._min_window_count(window)
         return np.where(enough, total / np.maximum(count, 1), np.nan)
+
+    @staticmethod
+    def _min_window_count(window: int) -> int:
+        """Return the number of finite values a rolling window needs to count."""
+        return max(2, (window + 1) // 2)
 
     @staticmethod
     def _local_squares(values: NDArray[np.float64], window: int) -> NDArray[np.float64]:
@@ -471,52 +480,82 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         values: NDArray[np.float64],
         squares: NDArray[np.float64],
         window: int,
-        span: float,
+        segments: int,
     ) -> tuple[float, float]:
         """Return the chance variance of one segment's average level and average spread.
 
-        Each segment average is a weighted average of ``span`` consecutive
-        rolling windows, so its variance follows from the autocovariance of
-        the underlying series. The values are linearly detrended, so a steady
-        trend counts as structure rather than chance, and fitted with a
-        bias-corrected first-order autoregressive model, which gives smooth
-        autocovariances at every lag even for short sequences. The spread uses
-        the same algebra on the squared deviations, converted with
-        ``Var(s) = Var(s^2) / (4 E[s^2])``.
+        Each segment average is a weighted average of the finite values in the
+        segment's rolling windows, so its variance follows from those weights
+        and the autocovariance of the underlying series. The values are
+        linearly detrended, so a steady trend counts as structure and not as
+        chance, and fitted with a bias-corrected first-order autoregressive
+        model, which gives smooth autocovariances at every lag even for short
+        sequences. The spread uses the same algebra on the squared deviations,
+        converted with ``Var(s) = Var(s^2) / (4 E[s^2])``. The variances are
+        averaged over segments.
 
         Args:
             values: Standardized values in temporal order, with gaps as ``NaN``.
             squares: Squared deviations from the local rolling average.
             window: Rolling window length.
-            span: Number of rolling windows averaged in each segment.
+            segments: Number of aligned segments.
 
         Returns:
             Chance variances of the segment level and segment spread.
         """
-        span_windows = max(int(round(span)), 1)
-        weights = np.convolve(np.ones(window), np.ones(span_windows)) / (window * span_windows)
-        overlap = np.asarray(np.correlate(weights, weights, mode="full")[len(weights) - 1 :], dtype=np.float64)
-        count = max(int(np.sum(np.isfinite(values))), 1)
+        finite = np.isfinite(values)
+        weights = RollingStatsSimilarity._segment_weights(finite, window, segments)
+        count = max(int(np.sum(finite)), 1)
         level_variance, level_correlation = RollingStatsSimilarity._ar1_fit(RollingStatsSimilarity._detrend(values))
         mean_square = float(np.nanmean(squares))
         square_variance, square_correlation = RollingStatsSimilarity._ar1_fit(squares - mean_square)
-        level_noise = RollingStatsSimilarity._average_variance(level_variance, level_correlation, overlap, count)
-        square_noise = RollingStatsSimilarity._average_variance(square_variance, square_correlation, overlap, count)
+        level_noise = RollingStatsSimilarity._average_variance(level_variance, level_correlation, weights, count)
+        square_noise = RollingStatsSimilarity._average_variance(square_variance, square_correlation, weights, count)
         spread_noise = square_noise / (4 * mean_square) if mean_square > 0 else 0.0
         return level_noise, spread_noise
 
     @staticmethod
-    def _average_variance(variance: float, correlation: float, overlap: NDArray[np.float64], count: int) -> float:
-        """Variance of a weighted average under AR(1) autocovariances ``variance * correlation^k``.
+    def _segment_weights(finite: NDArray[np.bool_], window: int, segments: int) -> list[NDArray[np.float64]]:
+        """Return the weight of each value in each segment average, for segments with a usable window.
 
-        ``overlap[k]`` is the sum of products of averaging weights ``k`` steps
-        apart. The result is floored at the independent-values variance divided
-        by the sequence length, so strongly negative correlations cannot drive
-        it to zero.
+        A segment average is the mean of its usable rolling windows, and each
+        window is the mean of its finite values. A value's weight is therefore
+        the sum, over the usable windows that contain it, of one over the
+        window's finite count, divided by the number of usable windows. Gaps
+        raise the weight of the values that remain. Each array covers the
+        values from the segment's first window to the end of its last window.
         """
-        lags = np.arange(len(overlap))
-        total = variance * float(np.sum(overlap * correlation**lags * np.where(lags > 0, 2.0, 1.0)))
-        return max(total, variance * float(overlap[0]) / count)
+        count = np.sum(sliding_window_view(finite, window), axis=1)
+        usable = count >= RollingStatsSimilarity._min_window_count(window)
+        edges = np.linspace(0, len(count), segments + 1).round().astype(int)
+        weights: list[NDArray[np.float64]] = []
+        for start, stop in zip(edges[:-1], edges[1:]):
+            used = usable[start:stop]
+            if not np.any(used):
+                continue
+            share = np.where(used, 1.0 / np.maximum(count[start:stop], 1), 0.0) / np.sum(used)
+            weights.append(np.convolve(share, np.ones(window)) * finite[start : stop + window - 1])
+        return weights
+
+    @staticmethod
+    def _average_variance(variance: float, correlation: float, weights: list[NDArray[np.float64]], count: int) -> float:
+        """Mean variance of weighted sums under AR(1) autocovariances ``variance * correlation^k``.
+
+        For weights ``w``, the variance is ``variance * (sum w_i^2 + 2 sum_i w_i
+        sum_{k<i} correlation^(i-k) w_k)``, and the inner sum follows the AR(1)
+        recursion, so the cost is linear in the sequence length. Each variance
+        is floored at the independent-values variance divided by the sequence
+        length, so strongly negative correlations cannot drive it to zero.
+        """
+        if not weights:
+            return 0.0
+        totals = []
+        for weight in weights:
+            earlier = lfilter([0.0, correlation], [1.0, -correlation], weight)
+            square = float(np.dot(weight, weight))
+            total = variance * (square + 2.0 * float(np.dot(weight, earlier)))
+            totals.append(max(total, variance * square / count))
+        return float(np.mean(totals))
 
     @staticmethod
     def _detrend(values: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -541,13 +580,34 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         variance = float(np.dot(filled, filled)) / n
         if variance <= 0:
             return 0.0, 0.0
-        pairs = max(int(np.sum(finite[:-1] & finite[1:])), 1)
-        correlation = float(np.dot(filled[:-1], filled[1:])) / pairs / variance
+        correlation = RollingStatsSimilarity._lag_one_correlation(filled, finite, variance)
         correlation = float(
             np.clip(correlation + (1 + 3 * correlation) / n, _MIN_LAG_ONE_CORRELATION, _MAX_LAG_ONE_CORRELATION)
         )
         persistence = (1 + correlation) / (1 - correlation)
         return variance / max(1 - persistence / n, _MIN_VARIANCE_CORRECTION), correlation
+
+    @staticmethod
+    def _lag_one_correlation(filled: NDArray[np.float64], finite: NDArray[np.bool_], variance: float) -> float:
+        """Estimate the lag-one correlation of a centered series from pairs of finite values.
+
+        Gaps can leave few adjacent pairs, so the estimate uses the smallest
+        lag up to ``_MAX_CORRELATION_LAG`` with pairs for at least
+        ``_MIN_PAIR_SHARE`` of the finite values, or the lag with the most
+        pairs when none has that many. An AR(1) series has lag-``k``
+        correlation ``rho^k``, so the ``k``-th root with its sign kept
+        estimates ``rho``. Without gaps this is the lag-one correlation.
+        """
+        n = int(np.sum(finite))
+        lags = range(1, _MAX_CORRELATION_LAG + 1)
+        pairs = [int(np.sum(finite[:-lag] & finite[lag:])) for lag in lags]
+        enough = [index for index, count in enumerate(pairs) if count >= _MIN_PAIR_SHARE * n]
+        index = enough[0] if enough else int(np.argmax(pairs))
+        if pairs[index] == 0:
+            return 0.0
+        lag = lags[index]
+        correlation = float(np.dot(filled[:-lag], filled[lag:])) / pairs[index] / variance
+        return float(np.sign(correlation) * abs(correlation) ** (1 / lag))
 
     @staticmethod
     def _noise_aware_error(training: _SegmentProfile, synthetic: _SegmentProfile) -> float:

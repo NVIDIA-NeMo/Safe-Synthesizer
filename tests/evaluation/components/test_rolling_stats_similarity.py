@@ -62,6 +62,21 @@ def _rising(rng: np.random.Generator, points: int) -> np.ndarray:
     return 3 * position + (1 + position) * _noise(rng, points)
 
 
+def _smaller_spread(rng: np.random.Generator, points: int) -> np.ndarray:
+    """The rising level of ``_rising`` with half its spread."""
+    position = np.linspace(0.0, 1.0, points)
+    return 3 * position + 0.5 * (1 + position) * _noise(rng, points)
+
+
+def _with_gaps(rng: np.random.Generator, values: np.ndarray, gaps: float | str) -> np.ndarray:
+    """Blank a random share of values, or every other value."""
+    if gaps == "every_other":
+        keep = np.arange(len(values)) % 2 == 0
+    else:
+        keep = rng.random(len(values)) >= gaps
+    return np.where(keep, values, np.nan)
+
+
 def _single_series_score(training: np.ndarray, synthetic: np.ndarray) -> float | None:
     datasets = _datasets(
         pd.DataFrame({"time": np.arange(len(training)), "value": training}),
@@ -156,9 +171,33 @@ def test_rolling_stats_similarity_scores_lost_or_reversed_structure_in_lost_tier
 
 
 def test_rolling_stats_similarity_penalizes_a_smaller_spread():
+    assert _mean_score(lambda rng, n: (_rising(rng, n), _smaller_spread(rng, n)), 1000, trials=10) < 5.0
+
+
+@pytest.mark.parametrize(
+    "gaps",
+    [
+        pytest.param(0.2, id="random_20_percent"),
+        pytest.param(0.5, id="random_50_percent"),
+        pytest.param("every_other", id="every_other_value"),
+    ],
+)
+def test_rolling_stats_similarity_missing_values_do_not_lower_same_process_scores(gaps: float | str):
+    """Gaps shrink the windows the segments average, so the chance estimate must grow with them."""
+
     def make_pair(rng: np.random.Generator, points: int) -> tuple[np.ndarray, np.ndarray]:
-        position = np.linspace(0.0, 1.0, points)
-        return _rising(rng, points), 3 * position + 0.5 * (1 + position) * _noise(rng, points)
+        return _with_gaps(rng, _rising(rng, points), gaps), _with_gaps(rng, _rising(rng, points), gaps)
+
+    seeds = (7, 8, 9)
+    complete = np.mean([_mean_score(lambda rng, n: (_rising(rng, n), _rising(rng, n)), 200, seed=s) for s in seeds])
+    gapped = np.mean([_mean_score(make_pair, 200, seed=s) for s in seeds])
+
+    assert gapped >= complete - 0.3
+
+
+def test_rolling_stats_similarity_penalizes_a_smaller_spread_with_missing_values():
+    def make_pair(rng: np.random.Generator, points: int) -> tuple[np.ndarray, np.ndarray]:
+        return _with_gaps(rng, _rising(rng, points), 0.2), _with_gaps(rng, _smaller_spread(rng, points), 0.2)
 
     assert _mean_score(make_pair, 1000, trials=10) < 5.0
 
