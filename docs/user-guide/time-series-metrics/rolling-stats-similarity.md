@@ -252,7 +252,8 @@ Values are ordered by `time_series.timestamp_column` and split into sequences by
   changes in level you want compared. The ten fixed segments set how finely
   the score locates a change in time. When either sequence has fewer than
   twice `window_size` finite values, the window is half the smaller finite
-  count, with a minimum of 3.
+  count, with a minimum of 3. A synthetic series with fewer than `min_points`
+  finite values scores 0 and does not shorten the window.
 - Raise `min_points` to require more finite values per series. Training series
   with fewer are skipped, and synthetic series with fewer score 0.
 - Lower `max_groups` to evaluate fewer groups. When more groups are shared, the

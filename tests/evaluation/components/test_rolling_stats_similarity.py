@@ -200,13 +200,13 @@ def test_rolling_stats_similarity_scores_synthetic_constant_collapse_as_failure(
 
 
 @pytest.mark.parametrize(
-    "min_points",
+    ("min_points", "window"),
     [
-        pytest.param(4, id="no_window_has_enough_values"),
-        pytest.param(20, id="below_min_points"),
+        pytest.param(4, 5, id="no_window_has_enough_values"),
+        pytest.param(20, 20, id="below_min_points"),
     ],
 )
-def test_rolling_stats_similarity_scores_mostly_missing_synthetic_sequence_as_failure(min_points: int):
+def test_rolling_stats_similarity_scores_mostly_missing_synthetic_sequence_as_failure(min_points: int, window: int):
     rng = np.random.default_rng(11)
     training_df = pd.concat(
         [pd.DataFrame({"group": group, "time": range(200), "value": _rising(rng, 200)}) for group in ("A", "B")],
@@ -225,6 +225,7 @@ def test_rolling_stats_similarity_scores_mostly_missing_synthetic_sequence_as_fa
     missing = next(item for item in component.details["profiles"] if item["group"] == "B")
     assert missing["similarity"] == 0
     assert "mostly missing" in missing["reason"]
+    assert missing["window"] == window
     assert missing["synthetic_level"] == [None] * missing["segments"]
     assert all(value is not None for value in missing["training_level"])
 

@@ -133,7 +133,7 @@ evaluation:
       max_groups: 128      # reproducible sample of shared groups above this count
     rolling_stats:
       value_columns: null  # null evaluates every numeric training column
-      window_size: 20      # values in each rolling window; at most half the smaller finite count, at least 3
+      window_size: 20      # values in each rolling window; smaller for short sequences, at least 3
       min_points: 4        # minimum finite training observations; sparser synthetic sequences score 0
       max_groups: 128      # reproducible sample of shared groups above this count
 ```
