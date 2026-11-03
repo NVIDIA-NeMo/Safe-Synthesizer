@@ -270,6 +270,16 @@ class TestGroupingColumnIsOneToOne:
                 dataframe, PiiColumnPlan(column_name="owner", entity_type=EntityType.FIRST_NAME), generator
             )
 
+    def test_groups_that_differ_only_in_letter_case_each_get_a_value(self) -> None:
+        # 40 groups, but "*" has 36 values ignoring case, so the mask must widen.
+        letters = [chr(code) for code in range(ord("a"), ord("t") + 1)]
+        dataframe = pd.DataFrame({"gid": [*letters, *(letter.upper() for letter in letters)]})
+        spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="*")
+
+        result = self._execute_grouped(dataframe, spec, _ScriptedGenerator())
+
+        assert result["gid"].str.casefold().nunique() == 40
+
     def test_a_mask_too_small_for_every_group_is_widened(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
         dataframe = pd.DataFrame({"gid": [f"ID-{group}" for group in range(10) for _ in range(3)]})
