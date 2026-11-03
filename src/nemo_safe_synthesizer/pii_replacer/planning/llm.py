@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import random
 import time
@@ -473,18 +474,24 @@ def _selected_dependencies(response: _StructuredResponse, options: DependencyOpt
 def _aligned_samples(dataframe: pd.DataFrame, columns: Sequence[str]) -> list[dict[str, str | None]]:
     """Return a few rows of ``columns``, with distinct values in the first column, read across one row each.
 
-    Rows are chosen by a content hash of the first column's value, as profile samples are, so the choice does not
-    depend on row order. They are returned in dataframe order.
+    The values are chosen by a content hash, as profile samples are, so which values are shown does not depend on
+    row order. Each value is read from its row with the most other columns filled in, the first such row on a tie.
+    Rows are returned in dataframe order.
     """
     columns = list(dict.fromkeys(columns))
     frame = dataframe[columns]
     missing = frame.isna().to_numpy()
-    first_position: dict[str, int] = {}
+    missing_counts = missing.sum(axis=1)
+    best_position: dict[str, int] = {}
     for position, value in enumerate(frame[columns[0]].tolist()):
-        if not missing[position][0]:
-            first_position.setdefault(str(value)[:MAX_ALIGNED_SAMPLE_LENGTH], position)
-    ranked = sorted(first_position, key=lambda value: hashlib.sha256(value.encode()).digest())
-    positions = sorted(first_position[value] for value in ranked[:MAX_ALIGNED_SAMPLES])
+        if missing[position][0]:
+            continue
+        key = str(value)[:MAX_ALIGNED_SAMPLE_LENGTH]
+        # A repeated value, such as one person's many events, may have its sources filled in only on later rows.
+        if key not in best_position or missing_counts[position] < missing_counts[best_position[key]]:
+            best_position[key] = position
+    ranked = sorted(best_position, key=lambda value: hashlib.sha256(value.encode()).digest())
+    positions = sorted(best_position[value] for value in ranked[:MAX_ALIGNED_SAMPLES])
     return [
         {
             column: None if missing[position][index] else str(value)[:MAX_ALIGNED_SAMPLE_LENGTH]
@@ -516,7 +523,7 @@ def _dependency_target_payloads(
                     for entity_type, source_columns in sources_by_type.items()
                 },
                 "aligned_samples": _aligned_samples(
-                    dataframe, [target_column, *(c for columns in sources_by_type.values() for c in columns)]
+                    dataframe, [target_column, *itertools.chain.from_iterable(sources_by_type.values())]
                 ),
             }
         )

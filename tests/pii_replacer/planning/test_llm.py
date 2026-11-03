@@ -38,6 +38,7 @@ from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_BATCH_ENTRIES,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
+    _aligned_samples,
     _bounded_batches,
     _json_bytes,
     _profile_batches,
@@ -253,6 +254,32 @@ class TestDependencyBatching:
                 name_key="target_column",
                 max_entries=MAX_BATCH_ENTRIES,
             )
+
+
+class TestAlignedSamples:
+    def test_repeated_value_is_read_from_a_row_with_its_sources(self) -> None:
+        # One patient's first event has no provider yet; a later event does.
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Ada", "Grace"],
+                "provider_name": [None, "Dr. Rosa Fernandez", "Dr. Ken Ito"],
+            }
+        )
+
+        samples = _aligned_samples(dataframe, ["first_name", "provider_name"])
+
+        assert samples == [
+            {"first_name": "Ada", "provider_name": "Dr. Rosa Fernandez"},
+            {"first_name": "Grace", "provider_name": "Dr. Ken Ito"},
+        ]
+
+    def test_shown_values_do_not_depend_on_row_order(self) -> None:
+        dataframe = pd.DataFrame({"first_name": [f"name{i}" for i in range(10)], "gender": ["F", "M"] * 5})
+
+        forward = _aligned_samples(dataframe, ["first_name", "gender"])
+        backward = _aligned_samples(dataframe.iloc[::-1].reset_index(drop=True), ["first_name", "gender"])
+
+        assert sorted(forward, key=str) == sorted(backward, key=str)
 
 
 @pytest.mark.unit
