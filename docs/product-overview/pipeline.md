@@ -38,7 +38,8 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 Names, contact details, IDs, and other PII in the training data are replaced
 with realistic fake values, so the model never learns the real ones. Only the
 training data is changed; evaluation still uses the originals. PII replacement
-is on by default and can be turned off.
+is on by default and can be
+[turned off](../user-guide/customize-pii-replacement.md#turn-replacement-off).
 
 See [PII Replacement](pii_replacement.md) for how it works.
 

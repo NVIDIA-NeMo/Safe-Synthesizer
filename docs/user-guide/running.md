@@ -176,7 +176,8 @@ synthesizer.run()
 ```
 
 `with_*` keyword arguments take precedence over whatever is in the YAML file.
-Sections not mentioned in the builder call retain their values from `config`.
+Fields you don't pass keep their values from `config`, and so do sections not
+mentioned in the builder call.
 
 See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
 for the full override precedence rules.
@@ -216,7 +217,7 @@ optional.
 | `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
 | `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
-| `--output-file` | -- | -- | Path to output CSV file |
+| `--output-file` | -- | -- | Path to output file; `run replace-pii` writes Parquet when it ends in `.parquet`, and CSV otherwise |
 | `--log-format` | `NSS_LOG_FORMAT` | `plain` (TTY) / `json` (non-TTY) | Console log format -- auto-detected from TTY; accepts `plain` or `json` |
 | `--log-file` | `NSS_LOG_FILE` | -- | Log file path (defaults to run directory) |
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
@@ -224,11 +225,12 @@ optional.
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
-| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | -- (local vLLM server) | OpenAI-compatible endpoint for PII plan enhancement; a non-loopback URL sends planning data to that service ([details](environment.md#where-planning-requests-go)) |
+| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | -- (local vLLM server) | OpenAI-compatible endpoint for PII plan discovery; a non-loopback URL sends planning data to that service ([details](environment.md#where-planning-requests-go)) |
 | `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the PII inference endpoint |
 | `--inference-timeout-seconds` | `NSS_INFERENCE_TIMEOUT` | local profile's timeout, else `60` | Per-request PII inference timeout, including model reasoning |
 | `--inference-request-options` | `NSS_INFERENCE_REQUEST_OPTIONS` | local profile's options, else none (server defaults) | JSON object of fields for each PII inference request; overrides a profile's options field by field |
 | `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile |
+| `--inference-local-profile` | `NSS_INFERENCE_LOCAL_PROFILE` | -- | Custom profile YAML, or bundled profile name, for the local vLLM server used for PII planning ([details](customize-pii-replacement.md#local-inference-server)) |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides

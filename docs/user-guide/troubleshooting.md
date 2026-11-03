@@ -71,17 +71,9 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.30.0.
-Keep vLLM's constraints intact so the resolver selects the configured
-Transformers/vLLM pairing.
-
-```toml
-[project]
-dependencies = [
-  "transformers>=5.12,<5.12.1",
-  "vllm==0.30.0",
-]
-```
+Safe Synthesizer pins one vLLM release and the `transformers` range that
+works with it; see the `engine` extra in `pyproject.toml` for the current
+pair. Keep vLLM's constraints intact so the resolver selects that pairing.
 
 If you've vendored or copied parts of `pyproject.toml` into another project,
 avoid adding a broad `transformers>=5.0,<6` override for vLLM. That can erase
@@ -560,8 +552,9 @@ instead of silently continuing with regex detection only.
 
 Safe Synthesizer loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
 columns stops with `GLiNER2 free-text PII detection needs a CUDA GPU` instead of
-falling back to CPU, which is too slow for real datasets; full street-address
-values are then replaced whole, with a warning.
+falling back to CPU, which is too slow for real datasets. Street-address
+columns do not stop the run: without GLiNER2, each full street address is
+replaced whole, with a warning, instead of keeping its city and postal code.
 Agent sandboxes and containers often hide a GPU the machine has; run Safe Synthesizer where
 `nvidia-smi` lists it. Model loading and inference emit completion records and a progress
 heartbeat every 30 seconds; the records include the selected device, chunk
@@ -582,9 +575,10 @@ so change them in small steps. Email, payment-card, IPv4, and IPv6 detection is
 owned by structurally validated regex and has no confidence threshold. If
 medical terms, product names, or common nouns are replaced as people, raise the
 relevant name entries or add a matching label to
-`free_text_detection.name_exclusion_thresholds`. If real names are missed, try
-`name_exclusion_thresholds: {}`: the default exclusion labels also drop names
-the model scores as, for example, a `gender` term. Check both false positives
+`free_text_detection.name_exclusion_thresholds`; it is merged into the
+default labels. If real names are missed, drop the label that removes them by
+setting it to `null`, such as `gender: null`: the default exclusion labels also
+drop names the model scores as, for example, a `gender` term. Check both false positives
 and missed real names on a representative development sample before and after
 any change.
 

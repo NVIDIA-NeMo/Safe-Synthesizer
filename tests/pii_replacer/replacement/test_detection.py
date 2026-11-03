@@ -510,11 +510,12 @@ class TestGliner2Detector:
 
         assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.PHONE_NUMBER]
 
-    def test_empty_exclusion_mapping_requests_no_exclusion_labels(self) -> None:
+    def test_dropping_every_exclusion_label_requests_no_exclusion_labels(self) -> None:
         text = "Mother"
         model = _FakeModel([{"entities": {"first_name": [{"start": 0, "end": len(text), "confidence": 0.99}]}}])
+        all_dropped = dict.fromkeys(FreeTextDetectionConfig().name_exclusion_thresholds)
         detector = Gliner2Detector(
-            FreeTextDetectionConfig(name_exclusion_thresholds={}),
+            FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": all_dropped}),
             model_loader=lambda *_: model,
         )
 

@@ -61,7 +61,7 @@ def save_plan(plan: PiiReplacementPlan, path: str | Path, *, sampler: PiiSampler
     header = (
         f"# PII replacement plan for this dataset, written for the {sampler.backend.value} sampler in locale "
         f"{locale}.\n# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n"
-        f"# Plan format: {_PLAN_DOCS_URL}#plan-sources\n"
+        f"# Plan format: {_PLAN_DOCS_URL}\n"
         f"# Patterns: {_PLAN_DOCS_URL}#patterns\n\n"
     )
     text = yaml.safe_dump(_plan_document(plan), sort_keys=False)

@@ -131,7 +131,7 @@ class LocalVllmProfile(BaseModel):
     environment: dict[str, str] = Field(
         default_factory=dict,
         description="Extra environment variables for the vLLM server process, such as "
-        "VLLM_USE_V2_MODEL_RUNNER=0, which thinking_token_budget needs in vLLM 0.27.",
+        "VLLM_USE_V2_MODEL_RUNNER=0, which the bundled profiles set so thinking_token_budget takes effect.",
     )
     request_timeout_seconds: float = Field(
         default=DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS,

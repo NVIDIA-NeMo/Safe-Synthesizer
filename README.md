@@ -290,7 +290,10 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 
 ## NIM Integration
 
-PII replacement v3 NIM integration will be documented in a later update.
+PII plan discovery runs a local vLLM server by default. To use a hosted NVIDIA
+NIM or another OpenAI-compatible endpoint instead, set
+`NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY`; see
+[Where planning requests go](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/#where-planning-requests-go).
 
 ## Artifacts and Workdirs
 

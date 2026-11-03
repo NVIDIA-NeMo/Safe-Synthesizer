@@ -31,7 +31,7 @@ request_options:
   top_p: 0.95
   thinking_token_budget: 2000
 environment:
-  # vLLM 0.27's V2 model runner ignores thinking_token_budget.
+  # vLLM's V2 model runner ignored thinking_token_budget when this profile was tested.
   VLLM_USE_V2_MODEL_RUNNER: "0"
 # Column classification takes about 1 minute on an A100 for a small table.
 request_timeout_seconds: 300

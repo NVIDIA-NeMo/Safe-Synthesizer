@@ -51,10 +51,13 @@ resolved_pii = (
 )
 ```
 
-After editing the plan, reuse it with
-`.with_replace_pii(replacement_plan="pii_replacement_plan.yaml")`, or run the
-complete configuration again. The
-[Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb)
+To reuse the reviewed plan, run the saved `safe-synthesizer-config.yaml`
+again, since it already names the plan file. To point a different
+configuration at the plan, set `replace_pii.replacement_plan` in its YAML, or
+in the SDK call `.with_replace_pii(replacement_plan="pii_replacement_plan.yaml")`;
+its other `replace_pii` settings, such as `locale`, are kept.
+
+The [Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb)
 tutorial walks through this end to end.
 
 ## Plan Sources
@@ -65,7 +68,8 @@ tutorial walks through this end to end.
 
 `auto_discovery`, the default, builds the plan with an LLM (see
 [Planning LLM](#planning-llm)). Row counters, such as a saved `Unnamed: 0`
-index column, and the ordering and timestamp columns are never replaced. The
+index column, are skipped, and so are the columns named in
+`data.order_training_examples_by` and `time_series.timestamp_column`. The
 grouping column can be replaced, so identifiers such as patient IDs are
 anonymized.
 
@@ -116,15 +120,19 @@ directory. A path given on the command line
 working directory.
 
 !!! note "Plans you write are checked less strictly"
-    Safe Synthesizer validates every plan against the data. A problem that
-    stops a discovered plan with an error, such as a pattern that fits too few
-    values or a value the sampler cannot use, only logs a warning in a plan you
-    write, and the affected pattern, mapping, or dependency is dropped.
+    Safe Synthesizer validates every plan against the data, but a plan you
+    write is allowed to run where a discovered plan would not. For example, a
+    pattern that fits fewer than 99% of a column's values is dropped from a
+    discovered plan but kept, with a warning, in a plan you write. A dependency
+    value the sampler cannot use stops a discovered plan with an error, but in
+    a plan you write it logs a warning and that value or entry is ignored.
 
 ## Entity Types
 
-Each column in the plan has an `entity_type`. Types marked "kept" can appear in
-`depends_on` or be recognized by discovery, but are never replaced.
+Each column in the plan has an `entity_type`. Types marked "kept" are never
+replaced, so they cannot appear in `columns_to_replace`. Of those, `gender`,
+`ethnic_background`, and `organization` can appear in `depends_on`; the rest
+are only recognized by discovery so it does not mistake them for PII.
 
 | Entity type | Replaced | Pattern syntax |
 |-------------|----------|----------------|
@@ -132,7 +140,7 @@ Each column in the plan has an `entity_type`. Types marked "kept" can appear in
 | `email` | Yes | Name template |
 | `phone_number` | Yes | Character mask |
 | `credit_debit_card`, `api_key`, `unique_identifier` | Yes | Character mask |
-| `date_of_birth` | Yes, shifted by a few days | Date format |
+| `date_of_birth` | Yes, shifted by days or weeks | Date format |
 | `street_address`, `national_id`, `ipv4`, `ipv6` | Yes | None |
 | `free_text` | PII inside the text | None |
 | `gender`, `ethnic_background`, `organization` | Kept | None |
@@ -241,7 +249,8 @@ either, rerun automatic discovery or edit the entries.
 The sampler generates replacement values. Set it with
 `replace_pii.sampler.backend`. When you leave it unset, Safe Synthesizer uses
 Nemotron-Personas if the dataset for your locale is downloaded, and Faker
-otherwise, with a warning.
+otherwise, with a warning. The exception is a discovered plan that matches on
+ethnic background, which only Nemotron-Personas supports: it fails instead.
 
 ### Nemotron-Personas
 
@@ -305,8 +314,10 @@ confident it is PII. The settings you are most likely to change are:
   not PII.
 - `name_exclusion_thresholds`: labels for terms often mistaken for names, such
   as medical conditions and family relationships. A name overlapping one of
-  these is not replaced. Set `{}` to turn this off where missed names matter
-  more than false ones.
+  these is not replaced. Labels you set are added to the defaults or change
+  their thresholds; set a label to `null` to drop it. Dropping every default
+  label turns exclusion off, for text where missed names matter more than
+  false ones.
 - `find_and_replace`: when `true` (the default, `en_US` only), a value already
   known in the record, such as the original first name, is also replaced
   wherever it appears in free text, even if the model missed it. Short values
@@ -322,7 +333,7 @@ replace_pii:
     batch_size: 8
 ```
 
-Entity types you leave out keep their defaults. See
+Entity types you leave out of `entity_thresholds` keep their defaults. See
 [`FreeTextDetectionConfig`][nemo_safe_synthesizer.config.replace_pii.FreeTextDetectionConfig]
 for every field and default.
 
@@ -377,16 +388,17 @@ budget, with `NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options`,
 for example `{"thinking_token_budget": 500}`.
 
 To run a model without a bundled profile, point `NSS_INFERENCE_LOCAL_PROFILE` or
-`--inference-local-profile` at your own profile YAML. A profile has
+`--inference-local-profile` at your own profile YAML. If you also set
+`replace_pii.llm.model_id` or `NSS_INFERENCE_MODEL`, it must match the
+profile's served model name, which defaults to its `model_id`. A profile has
 `model_id` and `revision`, plus optional vLLM settings such as
 `gpu_memory_utilization`, `max_model_len`, `tensor_parallel_size`,
 `min_gpu_memory_gib`, `extra_args`, `request_options`, `environment`, and the
 request, startup, and shutdown timeouts. The bundled profiles in
 `src/nemo_safe_synthesizer/pii_replacer/local_inference/profiles/` are good
-starting points. In vLLM 0.27, `thinking_token_budget` needs
-`VLLM_USE_V2_MODEL_RUNNER: "0"` under `environment`. Avoid `extra_args` that
-make vLLM compile kernels at startup, such as `--mamba-backend=flashinfer`: a
-Safe Synthesizer install has no CUDA compiler.
+starting points; if you set `thinking_token_budget`, copy their `environment`
+settings too. Avoid `extra_args` that make vLLM compile kernels at startup, such as
+`--mamba-backend=flashinfer`: a Safe Synthesizer install has no CUDA compiler.
 
 Each run loads the model again. To reuse one server across many runs, start
 `vllm serve` yourself and set `NSS_INFERENCE_ENDPOINT` and
@@ -408,9 +420,10 @@ safe-synthesizer run replace-pii \
 ```
 
 The output is Parquet when its path ends in `.parquet`, and CSV otherwise.
-Without `--output-file`, the command writes `<input name>_pii_replaced` to the
-run directory. The plan and configuration files are always written, as in
-[Review and Reuse the Plan](#review-and-reuse-the-plan).
+Without `--output-file`, the command writes `<input name>_pii_replaced.csv` to
+the run directory, or `.parquet` for Parquet input, such as
+`data_pii_replaced.csv` for `data.csv`. The plan and configuration files are
+always written, as in [Review and Reuse the Plan](#review-and-reuse-the-plan).
 
 The SDK equivalent returns a `TransformResult` and writes only the files you
 name:

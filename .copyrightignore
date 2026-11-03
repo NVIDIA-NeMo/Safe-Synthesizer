@@ -12,6 +12,9 @@ THIRD_PARTY.md
 design.md
 tests/stub_datasets/LICENSES.md
 
+# Generated and signed by the NVSkills publication service; editing breaks the signature
+skills/*/BENCHMARK.md
+
 # AI / IDE / CI configuration directories
 .agents/
 .claude/

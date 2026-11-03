@@ -168,6 +168,46 @@ def test_with_generate_rejects_duplicate_alias_keyword_path():
         )
 
 
+@pytest.mark.parametrize(
+    ("source", "kwargs"),
+    [
+        (None, {"temperature": 0.8}),
+        ({"temperature": 0.8}, {}),
+        (GenerateParameters(temperature=0.8), {}),
+    ],
+    ids=["keywords", "mapping", "typed"],
+)
+def test_with_generate_keeps_the_rest_of_the_loaded_section(
+    source: GenerateParameters | dict[str, object] | None, kwargs: dict[str, object]
+):
+    config = SafeSynthesizerParameters.from_config_source({"generation": {"num_records": 5000, "patience": 7}})
+
+    builder = ConfigBuilder(config).with_generate(source, **kwargs)
+
+    assert builder._generation_config.num_records == 5000
+    assert builder._generation_config.patience == 7
+    assert builder._generation_config.temperature == 0.8
+    assert builder._generation_config.model_fields_set == {"num_records", "patience", "temperature"}
+
+
+def test_with_replace_pii_keywords_keep_the_rest_of_the_loaded_section():
+    config = SafeSynthesizerParameters.from_config_source({"replace_pii": {"locale": "fr_FR"}})
+
+    builder = ConfigBuilder(config).with_replace_pii(seed=7)
+
+    assert builder._replace_pii_config is not None
+    assert builder._replace_pii_config.locale == "fr_FR"
+    assert builder._replace_pii_config.seed == 7
+
+
+def test_with_replace_pii_keywords_after_disabling_start_from_the_defaults():
+    builder = ConfigBuilder().with_replace_pii(enable=False).with_replace_pii(seed=7)
+
+    assert builder._replace_pii_config is not None
+    assert builder._replace_pii_config.seed == 7
+    assert builder._replace_pii_config.locale == "en_US"
+
+
 def test_with_replace_pii_can_be_disabled():
     builder = ConfigBuilder().with_replace_pii(enable=False)
     assert builder._replace_pii_config is None

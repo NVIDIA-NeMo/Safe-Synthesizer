@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Self, TypeAlias
+from typing import Self, TypeAlias, TypeVar
 
 import pandas as pd
 
@@ -27,12 +27,14 @@ from ..config.unknown_fields import (
     UnknownFieldBehavior,
     validate_unknown_fields,
 )
+from ..configurator.parameters import Parameters
 from ..data_processing.csv_source import CsvSource
 from ..telemetry import _telemetry_enabled
 
 DataSource = pd.DataFrame | str | CsvSource
 # File formats read with their own pandas reader instead of as CSV.
 _TYPED_FILE_EXTENSIONS = frozenset({"parquet", "json", "jsonl"})
+_SectionT = TypeVar("_SectionT", bound=Parameters)
 RawConfig: TypeAlias = Mapping[str, object]
 
 
@@ -99,6 +101,28 @@ class ConfigBuilder:
             return self._nss_config.unknown_fields
         return DEFAULT_UNKNOWN_FIELDS
 
+    def _overlay_section(
+        self,
+        model_type: type[_SectionT],
+        current: _SectionT | None,
+        config: _SectionT | RawConfig | None,
+        kwargs: Mapping[str, object],
+    ) -> _SectionT:
+        """Overlay a section source and keyword overrides on the section's current values.
+
+        Only fields that ``config`` or ``kwargs`` set change, so a base configuration passed to the builder keeps
+        its other values, and the result stays sparse. ``current`` is ``None`` for a disabled optional section,
+        which then starts from the defaults.
+        """
+        update = model_type.from_config_source(
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
+        )
+        if current is None:
+            return update
+        return update.explicit_patch().apply(current)
+
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
 
@@ -118,68 +142,56 @@ class ConfigBuilder:
         """Configure data processing settings.
 
         Args:
-            config: Data configuration object or raw mapping.
+            config: Data configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``holdout_size``).
 
         Returns:
             This builder instance with data processing settings applied.
         """
-        self._data_config = DataParameters.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
-        )
+        self._data_config = self._overlay_section(DataParameters, self._data_config, config, kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure training hyperparameters.
 
         Args:
-            config: Training configuration object or raw mapping.
+            config: Training configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``learning_rate``).
 
         Returns:
             This builder instance with training hyperparameters applied.
         """
-        self._training_config = TrainingHyperparams.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
-        )
+        self._training_config = self._overlay_section(TrainingHyperparams, self._training_config, config, kwargs)
         return self
 
     def with_generate(self, config: GenerateParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure generation settings.
 
         Args:
-            config: Generation configuration object or raw mapping.
+            config: Generation configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``num_records``).
 
         Returns:
             This builder instance with generation settings applied.
         """
-        self._generation_config = GenerateParameters.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
-        )
+        self._generation_config = self._overlay_section(GenerateParameters, self._generation_config, config, kwargs)
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure time-series synthesis settings.
 
         Args:
-            config: Time-series configuration object or raw mapping.
+            config: Time-series configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``time_column``).
 
         Returns:
             This builder instance with time-series synthesis settings applied.
         """
-        self._time_series_config = TimeSeriesParameters.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
-        )
+        self._time_series_config = self._overlay_section(TimeSeriesParameters, self._time_series_config, config, kwargs)
         return self
 
     def with_differential_privacy(
@@ -188,16 +200,15 @@ class ConfigBuilder:
         """Configure differential privacy settings.
 
         Args:
-            config: DP configuration object or raw mapping.
+            config: DP configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``epsilon``).
 
         Returns:
             This builder instance with differential privacy settings applied.
         """
-        self._privacy_config = DifferentialPrivacyHyperparams.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
+        self._privacy_config = self._overlay_section(
+            DifferentialPrivacyHyperparams, self._privacy_config, config, kwargs
         )
         return self
 
@@ -211,7 +222,9 @@ class ConfigBuilder:
         pipeline without replacement.
 
         Args:
-            config: PII replacement configuration object or raw mapping.
+            config: PII replacement configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values, or their defaults when replacement was
+                disabled.
             enable: When ``False``, disables PII replacement entirely
                 and clears any previously set config.
             **kwargs: Field-level replacement configuration overrides.
@@ -231,40 +244,23 @@ class ConfigBuilder:
             self._replace_pii_config = None
             return self
 
-        match config:
-            case ReplacePiiConfig() | Mapping() as values:
-                cfg = ReplacePiiConfig.from_config_source(
-                    values,
-                    unknown_field_behavior=self._effective_unknown_fields,
-                    **kwargs,
-                )
-            case None:
-                cfg = ReplacePiiConfig.from_config_source(
-                    ReplacePiiConfig(),
-                    unknown_field_behavior=self._effective_unknown_fields,
-                    **kwargs,
-                )
-            case _:
-                raise ValueError(f"Config must be a ReplacePiiConfig, raw mapping, or None, got {config!r}")
-
-        self._replace_pii_config = cfg
+        if config is not None and not isinstance(config, ReplacePiiConfig | Mapping):
+            raise ValueError(f"Config must be a ReplacePiiConfig, raw mapping, or None, got {config!r}")
+        self._replace_pii_config = self._overlay_section(ReplacePiiConfig, self._replace_pii_config, config, kwargs)
         return self
 
     def with_evaluate(self, config: EvaluationParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure evaluation settings.
 
         Args:
-            config: Evaluation configuration object or raw mapping.
+            config: Evaluation configuration object or raw mapping. Fields that neither it
+                nor ``kwargs`` set keep their current values.
             **kwargs: Field-level overrides (e.g. ``enabled``).
 
         Returns:
             This builder instance with evaluation settings applied.
         """
-        self._evaluation_config = EvaluationParameters.from_config_source(
-            config,
-            unknown_field_behavior=self._effective_unknown_fields,
-            **kwargs,
-        )
+        self._evaluation_config = self._overlay_section(EvaluationParameters, self._evaluation_config, config, kwargs)
         return self
 
     def resolve(self) -> Self:
