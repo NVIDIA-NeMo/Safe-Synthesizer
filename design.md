@@ -351,8 +351,9 @@ Automatic discovery sends four kinds of LLM request, in this order:
 
 1. Columns and entity types. Each column's profile -- deterministic statistics
    and up to eight distinct cell samples truncated to 128 characters -- is sent
-   with the entity catalog. The grouping column is sent as context; protected
-   ordering and timestamp columns are not sent.
+   with the entity catalog. Every column is sent, including the grouping column
+   and the protected ordering and timestamp columns, which are context only:
+   they are never planned for replacement.
 2. Patterns. For unprotected columns whose entity type has a pattern syntax,
    the model proposes a pattern from the profile, entity type, and grammar.
    Skipped when no column qualifies. Keeping pattern rules out of the type
@@ -437,15 +438,21 @@ Consistency is enforced by the executor, not by the LLM or the sampler.
   the columns share a format (`email` and `backup_email`); differently formatted
   columns (`(###) ###-####` vs `###.###.####`) are replaced separately.
 - Differs from original: every replacement differs from its original ignoring
-  case. A replaced full name also avoids the original's first and last name;
-  when none is found, one sharing a part is kept and the count is logged.
+  case. A replaced full name also avoids the original's first, middle, and last
+  name, compared part by part after nameparser reads both names, so titles,
+  suffixes, and `Last, First` order do not hide a kept part. When none is found,
+  one sharing a part is kept and the count is logged; so is a name part read
+  from such a full name. A birth date that can only print unchanged, as with a
+  `%Y` pattern or a placeholder such as `0001-01-01`, is kept.
 - Distinctness: replacements may repeat across rows and may equal another
-  row's original, except in identifier-like columns (email, phone, national ID,
-  card, API key, IP address, unique identifier) whose originals are all
-  distinct. Those stay distinct ignoring case; when no unused value is found, a
-  value repeats and the count is logged. Without a pattern, digit-only
-  identifiers are drawn up to the column's longest length, and the range gains
-  a digit when too small for a distinct column.
+  row's original. In identifier-like columns (email, phone, national ID, card,
+  API key, IP address, unique identifier), two different originals never share
+  a replacement, ignoring case, even when values repeat across rows, as an ID
+  repeats on a patient's visit rows; the same original may get a value again.
+  When no such value is left, a value repeats and the count is logged. Without
+  a pattern, digit-only identifiers are drawn up to the column's longest
+  length, and the range gains a digit when too small for a column whose
+  originals are all distinct.
 - Grouping column: replacement is one-to-one so series never merge. A mask
   such as `ID-#` gains a position when it has too few values, and the run fails
   rather than merge two groups.
@@ -516,7 +523,8 @@ Locales without a check, such as `en_GB`, use only the `national_id` threshold.
 
 Two rules reduce false names, and the name thresholds were tuned with both in
 place: a detected name overlapping a `name_exclusion_thresholds` span (such as
-`medical_condition` or `family_relationship`) is dropped, and a middle name is
+`medical_condition` or `family_relationship`) is dropped, as is a name followed
+by `'t`, such as the `don` of `don't`; and a middle name is
 kept only inside a detected full name or directly between a detected first and
 last name, which rejects words like "medium" in product reviews.
 
@@ -536,8 +544,11 @@ replacement values, including the words of a plain full name, and values
 detected anywhere in the record's or group's free text. Matching is whole-word
 and case-insensitive (`Kenneth` matches `Kenneth's`, not `Kenneths`). Values
 shorter than three characters, one-word common English words, and missing-value
-placeholders such as `Unknown` are skipped, as is any match overlapping a name
-exclusion span (so `Parkinson` does not change `Parkinson's disease`). A
+placeholders such as `Unknown` are skipped, as is any match inside a longer
+name exclusion span (so `Parkinson` does not change `Parkinson's disease`). An
+exclusion covering exactly a known value does not protect it: the record's own
+column says the text is that person's name. A match followed by `'t` is
+skipped, so a known `Don` does not change `don't`. A
 detected span wins over a match of equal length. Traces mark matches with the
 source `structured_value` or `detected_value`. Undetected aliases such as
 nicknames are not replaced.
@@ -562,8 +573,10 @@ street of a structured address whose locality was kept.
 ### Local inference server
 
 Started only when automatic discovery runs without an inference endpoint, and
-stopped before planning returns, including on failure, so validation,
-replacement, and training never run while it holds the GPU. Bundled profiles
+stopped before planning returns, including on failure, so replacement and
+training never run while it holds the GPU. Plan validation and loading the
+sampler's value catalog run between the LLM requests, while it is still up;
+both use only the CPU. Bundled profiles
 pin a revision, enable reasoning before the schema-constrained answer, and fit
 one 80 GB GPU (`min_gpu_memory_gib` 75, since an 80 GB GPU reports about
 79 GiB). vLLM reserves `gpu_memory_utilization` of the GPU regardless of model
@@ -577,9 +590,13 @@ Isolation:
 - Loopback only: the server listens on a free `127.0.0.1` port, or on the
   loopback address in `NSS_INFERENCE_ENDPOINT` with a local profile. Any other
   address, or a port in use, is rejected before launch.
-- Private to the run: each launch generates a random API key and passes it
+- Keyed to the run: each launch generates a random API key and passes it
   only to the server (through its environment, not its command line) and to
   Safe Synthesizer's client. `NSS_INFERENCE_KEY` is ignored with a warning.
+  vLLM checks the key only on its `/v1`-style API routes; a few others, such
+  as `/invocations`, answer without it, so another process on the same machine
+  can send the server requests while it runs. vLLM's dev-mode endpoints stay
+  off (`VLLM_SERVER_DEV_MODE=0`).
 - No proxies or request logs: loopback requests ignore `HTTP_PROXY`-style
   variables, and vLLM request logging stays off because prompts contain raw
   cell samples. Server output goes to the debug log.

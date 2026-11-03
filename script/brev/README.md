@@ -49,7 +49,7 @@ All optional. Per Brev's guidance, do not put credential values in parameter def
 
 | Name | Type | Purpose |
 | ---- | ---- | ------- |
-| `NSS_INFERENCE_KEY` | Text | Unused on this branch (reserved for PII replacement v3). |
+| `NSS_INFERENCE_KEY` | Text | API key for a hosted PII planning service; also set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` in the notebook. Without them, planning runs a local vLLM server. |
 | `HF_TOKEN` | Text | Only needed for gated Hugging Face models. |
 
 Brev passes these to `setup.sh` as environment variables.
