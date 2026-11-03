@@ -552,7 +552,7 @@ class SpectralSimilarity(TimeSeriesComponent):
     @staticmethod
     def _prepare_values(values: pd.Series) -> NDArray[np.float64]:
         """Convert a series to floats while preserving non-finite positions as gaps."""
-        numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
+        numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
         return np.where(np.isfinite(numeric_values), numeric_values, np.nan)
 
     @staticmethod

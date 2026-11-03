@@ -354,6 +354,22 @@ def test_spectral_similarity_keeps_missing_values_in_place():
     assert spliced < in_place - 2
 
 
+@pytest.mark.parametrize("dtype", [pd.Int64Dtype(), pd.Float64Dtype()], ids=["Int64", "Float64"])
+def test_spectral_similarity_treats_nullable_missing_values_as_gaps(dtype: pd.Int64Dtype | pd.Float64Dtype):
+    values = np.round(10 * np.sin(2 * np.pi * np.arange(200) / 24))
+    missing = [5, 60, 61, 150]
+    float_values = values.copy()
+    float_values[missing] = np.nan
+    nullable_values = pd.Series(values).astype(dtype)
+    nullable_values.iloc[missing] = pd.NA
+    nullable_frame = _frame(values).assign(value=nullable_values)
+
+    nullable = SpectralSimilarity.from_evaluation_datasets(_datasets(_frame(values), nullable_frame), _config())
+
+    np.testing.assert_array_equal(SpectralSimilarity._prepare_values(nullable_values), float_values)
+    assert nullable.score.score == _component(values, float_values).score.score
+
+
 @pytest.mark.parametrize(
     "values",
     [
