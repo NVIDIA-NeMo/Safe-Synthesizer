@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import secrets
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -130,7 +131,9 @@ def _stable_samples(series: pd.Series) -> tuple[str, ...]:
     priority, so reordering dataframe rows does not change which values are
     selected. The selected values are returned in dataframe order.
     """
-    values = list(dict.fromkeys(str(value)[:MAX_PROFILE_SAMPLE_LENGTH] for value in series.dropna().tolist()))
+    # astype(str) writes values as pattern validation reads them: a datetime column of midnights as
+    # "1980-01-02", not str(Timestamp)'s "1980-01-02 00:00:00".
+    values = list(dict.fromkeys(value[:MAX_PROFILE_SAMPLE_LENGTH] for value in series.dropna().astype(str).tolist()))
     # Rank distinct values by content to choose a row-order-independent subset,
     # then present that subset in first-occurrence dataframe order. The hashes
     # select values deterministically; they do not anonymize the returned text.
@@ -278,8 +281,9 @@ def resolve_replacement_config(
 
     Returns:
         A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
-        including its complete ``data_to_sampler_value_mapping``, and whose
-        ``sampler`` is the one used.
+        including its complete ``data_to_sampler_value_mapping``, whose
+        ``sampler`` is the one used, and whose ``seed`` is set, drawn at random
+        when ``config`` left it unset.
 
     When both plan enhancement and mapping discovery use the default LLM, they share one inference
     session, so a managed local vLLM server starts once and stops before this returns. Plan
@@ -390,7 +394,12 @@ def _resolve_replacement_config(
             f"{sampler_name} sampler, counted by depends_on column: {columns}. Add an entry listing the sampler "
             "values each one may match, or list every sampler value to allow any match"
         )
-    return config.with_plan(resolved_plan)
+    resolved = config.with_plan(resolved_plan)
+    if resolved.seed is None:
+        # A fixed default seed would let anyone holding replaced data test guesses for the originals.
+        # The drawn seed is saved with the resolved configuration, so the run can be reproduced.
+        resolved = resolved.model_copy(update={"seed": secrets.randbits(63)})
+    return resolved
 
 
 def _with_available_sampler(

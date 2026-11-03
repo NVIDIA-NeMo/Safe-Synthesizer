@@ -149,6 +149,7 @@ class TestLocalVllmServerLifecycle:
             "OUTLINES_CACHE_DIR": str(cache_dir),
             "VLLM_V1_USE_OUTLINES_CACHE": "1",
             "VLLM_DEBUG_LOG_API_SERVER_RESPONSE": "true",
+            "VLLM_SERVER_DEV_MODE": "1",
         }
 
         with LocalVllmServer(PROFILE, port=None, environ=base) as server:
@@ -168,6 +169,8 @@ class TestLocalVllmServerLifecycle:
         assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
         # Responses can contain cell samples, so response logging stays off.
         assert fixture_server_harness.child_env["VLLM_DEBUG_LOG_API_SERVER_RESPONSE"] == "false"
+        # Dev-mode endpoints skip the API key, so they stay off.
+        assert fixture_server_harness.child_env["VLLM_SERVER_DEV_MODE"] == "0"
         # The schema probe stays within the profile's startup deadline.
         assert 0 < fixture_server_harness.probe_timeouts[0] <= PROFILE.startup_timeout_seconds
 
@@ -273,6 +276,23 @@ class TestLocalVllmServerLifecycle:
             LocalVllmServer(PROFILE).start()
 
         assert fixture_server_harness.group.signals == [signal.SIGTERM]
+
+    def test_interrupt_during_shutdown_kills_the_server(
+        self, fixture_server_harness: Harness, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fixture_server_harness.group.ignore_sigterm = True
+        server = LocalVllmServer(PROFILE)
+        server.start()
+
+        def interrupted(*args: object) -> bool:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(server, "_wait_for_group_exit", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            server.stop()
+
+        assert fixture_server_harness.group.signals == [signal.SIGTERM, signal.SIGKILL]
+        assert not fixture_server_harness.group.alive
 
     def test_server_ignoring_sigterm_is_killed(self, fixture_server_harness: Harness) -> None:
         fixture_server_harness.group.ignore_sigterm = True

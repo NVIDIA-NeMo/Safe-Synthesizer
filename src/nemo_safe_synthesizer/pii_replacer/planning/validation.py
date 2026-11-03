@@ -160,7 +160,8 @@ def _pattern_coverage(df: pd.DataFrame, spec: PiiColumnPlan) -> float | None:
     pattern = spec.pattern
     if pattern is None or spec.column_name not in df.columns:
         return None
-    values = df[spec.column_name].dropna().astype(str).tolist()
+    # Blank strings are left unreplaced, so they do not count against the pattern.
+    values = [value for value in df[spec.column_name].dropna().astype(str).tolist() if value.strip()]
     if not values:
         return None
     if ENTITY_BY_TYPE[spec.entity_type].pattern_syntax is PatternSyntax.STRFTIME:

@@ -408,18 +408,7 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     during the pipeline, after this propagation. ``tests/cli/test_cli_import``
     guards the hub-free import invariant.
     """
-    if settings.inference_endpoint_url is not None:
-        os.environ["NSS_INFERENCE_ENDPOINT"] = settings.inference_endpoint_url
-    if settings.inference_api_key is not None:
-        os.environ["NSS_INFERENCE_KEY"] = settings.inference_api_key
-    if settings.inference_model_id is not None:
-        os.environ["NSS_INFERENCE_MODEL"] = settings.inference_model_id
-    if settings.inference_timeout_seconds is not None:
-        os.environ["NSS_INFERENCE_TIMEOUT"] = f"{settings.inference_timeout_seconds:g}"
-    if settings.inference_request_options is not None:
-        os.environ["NSS_INFERENCE_REQUEST_OPTIONS"] = settings.inference_request_options
-    if settings.inference_local_profile is not None:
-        os.environ["NSS_INFERENCE_LOCAL_PROFILE"] = settings.inference_local_profile
+    os.environ.update(settings.inference_environ())
     if settings.huggingface_remote is not None:
         offline = "0" if settings.huggingface_remote else "1"
         os.environ["HF_HUB_OFFLINE"] = offline

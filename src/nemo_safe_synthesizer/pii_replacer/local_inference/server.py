@@ -352,7 +352,13 @@ class LocalVllmServer:
         process_group = process.pid
         if process.poll() is None or _group_alive(process_group):
             _signal_group(process_group, signal.SIGTERM)
-            if not self._wait_for_group_exit(process, process_group, self._profile.shutdown_timeout_seconds):
+            try:
+                stopped = self._wait_for_group_exit(process, process_group, self._profile.shutdown_timeout_seconds)
+            except BaseException:
+                # A second Ctrl-C during the graceful wait must not leave the server holding the GPU.
+                _signal_group(process_group, signal.SIGKILL)
+                raise
+            if not stopped:
                 logger.user.warning(
                     f"Local vLLM server did not stop within {self._profile.shutdown_timeout_seconds:g}s; killing it"
                 )
@@ -371,6 +377,8 @@ class LocalVllmServer:
         harden_outlines_cache(environ)
         # Responses can contain cell samples; never let the shell turn on response logging.
         environ["VLLM_DEBUG_LOG_API_SERVER_RESPONSE"] = "false"
+        # Dev-mode endpoints are served without the API key; never let the shell turn them on.
+        environ["VLLM_SERVER_DEV_MODE"] = "0"
         environ["VLLM_API_KEY"] = self._api_key
         return environ
 

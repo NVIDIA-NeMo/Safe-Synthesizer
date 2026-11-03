@@ -11,22 +11,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
+from ...config.inference_environment import ENDPOINT_ENV, KEY_ENV, LOCAL_PROFILE_ENV, InferenceEnvironment, nonblank
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
 from ...observability import get_logger
 from ..llm_client import (
-    ENDPOINT_ENV,
-    KEY_ENV,
-    MODEL_ENV,
     InferenceSettings,
     configured_model_id,
-    explicit_inference_timeout,
-    explicit_request_options,
+    endpoint_inference_settings,
     is_loopback_host,
     merge_request_options,
-    nonblank,
-    resolve_inference_settings,
 )
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import DEFAULT_HOST, LocalVllmServer
@@ -40,13 +35,6 @@ __all__ = [
     "planning_inference_settings",
     "resolve_planning_inference",
 ]
-
-LOCAL_PROFILE_ENV = "NSS_INFERENCE_LOCAL_PROFILE"
-"""Runtime setting naming a custom profile YAML path (or a bundled profile name).
-
-When neither this nor ``NSS_INFERENCE_ENDPOINT`` is set, the configured model
-selects a bundled profile instead.
-"""
 
 
 class InvalidLocalServerSettingsError(ParameterError):
@@ -102,16 +90,18 @@ def _managed_address(endpoint: str | None) -> tuple[str, int | None]:
         raise InvalidLocalServerSettingsError(
             f"With {LOCAL_PROFILE_ENV}, NSS_INFERENCE_ENDPOINT must be {expected_form}"
         )
-    return host, port
+    # vLLM listens on IPv4 for "localhost", but name resolution may list ::1 first, which would make the
+    # port-in-use check probe the wrong address.
+    return ("127.0.0.1" if host.casefold() == "localhost" else host), port
 
 
-def _check_model_names(config: LLMConfig, environ: Mapping[str, str], profile: LocalVllmProfile) -> None:
+def _check_model_names(config: LLMConfig, environment: InferenceEnvironment, profile: LocalVllmProfile) -> None:
     served = profile.served_name
     conflicts: list[str] = []
     configured = nonblank(config.model_id)
     if configured is not None and configured != served:
         conflicts.append(f"replace_pii.llm.model_id is {configured!r}")
-    env_model = nonblank(environ.get(MODEL_ENV))
+    env_model = environment.model_id
     if env_model is not None and env_model != served:
         conflicts.append(f"NSS_INFERENCE_MODEL is {env_model!r}")
     if conflicts:
@@ -128,9 +118,9 @@ def _explicit_profile(reference: str) -> LocalVllmProfile:
         raise InvalidLocalServerSettingsError(str(exc)) from exc
 
 
-def _bundled_profile(config: LLMConfig, environ: Mapping[str, str]) -> LocalVllmProfile:
+def _bundled_profile(config: LLMConfig, environment: InferenceEnvironment) -> LocalVllmProfile:
     """Return the bundled profile for the configured model, or for the default local model."""
-    model_id = configured_model_id(config, environ) or DEFAULT_NSS_INFERENCE_LOCAL_MODEL
+    model_id = configured_model_id(config, environment) or DEFAULT_NSS_INFERENCE_LOCAL_MODEL
     profile = bundled_profile_for_model(model_id)
     if profile is None:
         served = ", ".join(sorted(load_profile(name).served_name for name in bundled_profile_names()))
@@ -149,8 +139,8 @@ def resolve_planning_inference(
 ) -> LocalServerRequest | InferenceSettings:
     """Resolve where LLM-assisted planning runs, without launching anything.
 
-    This is the one place that reads the ``NSS_INFERENCE_*`` settings for
-    planning; preflight and plan discovery both call it. An explicit
+    Preflight and plan discovery both call this, and it reads the
+    ``NSS_INFERENCE_*`` settings through ``InferenceEnvironment``. An explicit
     ``NSS_INFERENCE_LOCAL_PROFILE`` always selects a managed server, and any
     configured model must match it. Without a profile, an explicit
     ``NSS_INFERENCE_ENDPOINT`` selects that endpoint and no managed server.
@@ -176,25 +166,27 @@ def resolve_planning_inference(
         MissingInferenceModelError: If an explicit endpoint has no model ID.
         ParameterError: If an explicit endpoint is invalid.
     """
-    runtime_env = os.environ if environ is None else environ
-    reference = nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
-    endpoint = nonblank(runtime_env.get(ENDPOINT_ENV))
-    if reference is None and endpoint is not None:
-        return resolve_inference_settings(config, environ=runtime_env)
-    timeout = explicit_inference_timeout(runtime_env)
-    explicit_options = explicit_request_options(runtime_env)
+    return _planning_inference(config, InferenceEnvironment.from_environ(environ))
+
+
+def _planning_inference(config: LLMConfig, environment: InferenceEnvironment) -> LocalServerRequest | InferenceSettings:
+    """Resolve where planning runs from already-read settings; see ``resolve_planning_inference``."""
+    reference = environment.local_profile
+    if reference is None and environment.endpoint is not None:
+        return endpoint_inference_settings(config, environment)
     if reference is not None:
         profile = _explicit_profile(reference)
-        _check_model_names(config, runtime_env, profile)
+        _check_model_names(config, environment, profile)
     else:
-        profile = _bundled_profile(config, runtime_env)
-    host, port = _managed_address(endpoint)
+        profile = _bundled_profile(config, environment)
+    host, port = _managed_address(environment.endpoint)
+    timeout = environment.timeout_seconds
     return LocalServerRequest(
         profile=profile,
         host=host,
         port=port,
         timeout_seconds=profile.request_timeout_seconds if timeout is None else timeout,
-        request_options=merge_request_options(profile.request_options, explicit_options),
+        request_options=merge_request_options(profile.request_options, environment.request_options),
     )
 
 
@@ -238,12 +230,13 @@ def planning_inference_settings(
         GenerationError: If the managed server fails to start.
     """
     runtime_env = os.environ if environ is None else environ
-    inference = resolve_planning_inference(config, environ=runtime_env)
+    environment = InferenceEnvironment.from_environ(runtime_env)
+    inference = _planning_inference(config, environment)
     if isinstance(inference, InferenceSettings):
         _log_external_destination(inference.endpoint_url)
         yield inference
         return
-    if nonblank(runtime_env.get(KEY_ENV)) is not None:
+    if environment.api_key is not None:
         logger.user.warning(
             f"{KEY_ENV} is set, but PII planning runs in a local vLLM server, which uses its own key, so it is "
             f"ignored. Set {ENDPOINT_ENV} to send planning requests to a remote service instead."

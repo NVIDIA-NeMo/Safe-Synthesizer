@@ -299,7 +299,8 @@ class ConfigBuilder:
     def _resolve_datasource(self, **kwargs) -> None:
         """Convert the data source into a ``pandas.DataFrame``.
 
-        If ``_data_source`` is already a DataFrame it is kept as-is. A string
+        If ``_data_source`` is already a DataFrame it is kept, with non-string column names converted to
+        strings. A string
         ending in ``.parquet``, ``.json``, or ``.jsonl`` is read with the
         matching pandas reader, as the CLI does. Any other string is treated as
         a CSV path or URL and read once into a ``CsvSource``, which is kept so
@@ -325,3 +326,6 @@ class ConfigBuilder:
                 self._data_source = source.read()
             case _:
                 raise ValueError("Data source must be a pandas DataFrame or a URL")
+        if not all(isinstance(column, str) for column in self._data_source.columns):
+            # Configurations and PII plans name columns as text, so a column named 0 would never match "0".
+            self._data_source = self._data_source.rename(columns=str)

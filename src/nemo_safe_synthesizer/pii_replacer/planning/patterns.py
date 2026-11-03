@@ -174,6 +174,8 @@ def parse_character_mask(pattern: str) -> tuple[tuple[CharacterMaskPart, ...] | 
             parts.append(CharacterMaskPart(choices=choices))
             has_variable = True
             index = end
+        elif character == "]":
+            return None, "has an unmatched ']'; escape it as '\\]' to write it literally"
         else:
             parts.append(CharacterMaskPart(literal=character))
         index += 1
