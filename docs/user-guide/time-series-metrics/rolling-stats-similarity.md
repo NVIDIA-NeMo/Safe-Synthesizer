@@ -75,7 +75,7 @@ the [example scenarios](#example-scenarios):
   average and spread over time, as with the same process (about 9) or the same
   level step (about 9.4).
 - About 5 to 8 means the synthetic data has the right shape but is somewhat off
-  in size or timing, as with a trend two-thirds as strong (about 7.5) or a
+  in size or timing, as with a trend two-thirds as strong (about 7.4) or a
   level offset of half a standard deviation (about 6.1).
 - About 2 to 5 means the synthetic data loses a large part of the training
   data's behavior, as with a spread half as large (about 2.6) or shuffled
@@ -301,15 +301,20 @@ position, from the start of the sequence to the end, giving training values
 metric compares them in three steps:
 
 1. Estimate how much a segment value varies by chance. Each segment value is a
-   weighted average of the underlying values, so its variance follows from the
-   series' autocovariance. The metric removes a straight-line trend from each
-   series, so a steady trend does not inflate the chance estimate, and fits a
-   first-order autoregressive model with standard small-sample corrections,
-   which gives smooth autocovariances even for short sequences. The local
-   spread uses the same model on the squared deviations, converted with
+   weighted average of the finite values in the segment's windows, so its
+   variance follows from those weights and the series' autocovariance. A
+   window with missing values averages fewer values, so each remaining value
+   carries more weight and the chance estimate grows to match. The metric
+   removes a straight-line trend from each series, so a steady trend does not
+   inflate the chance estimate, and fits a first-order autoregressive model
+   with standard small-sample corrections, which gives smooth autocovariances
+   even for short sequences. When missing values leave few adjacent pairs, the
+   model's lag-one correlation comes from the shortest lag, up to 4 steps, with
+   enough pairs of values. The local spread uses the same model on the squared
+   deviations, converted with
    \(\operatorname{Var}(s) \approx \operatorname{Var}(s^2) / (4\,\mathrm{E}[s^2])\).
-   The noise allowance \(\sigma^2\) for each statistic adds the training and
-   synthetic variances.
+   The noise allowance \(\sigma^2\) for each statistic averages these
+   variances over the segments and adds the training and synthetic averages.
 2. Weight each statistic by \(1 / \sigma^2\), sum the squared gaps between the
    segment values, and subtract the squared gap that chance alone would
    produce, \(\sigma^2\) per segment. What remains is the excess difference,
