@@ -14,6 +14,7 @@ tests/stub_datasets/LICENSES.md
 
 # Generated and signed by the NVSkills publication service; editing breaks the signature
 skills/*/BENCHMARK.md
+skills/*/skill-card.md
 
 # AI / IDE / CI configuration directories
 .agents/

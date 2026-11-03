@@ -125,7 +125,7 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
         --find-links https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/ \
         --find-links https://flashinfer.ai/whl/flashinfer-cubin/ \
-        --find-links https://wheels.vllm.ai/0.27.0/cu129/vllm/ \
+        --find-links https://wheels.vllm.ai/0.32.0/cu129/vllm/ \
         --find-links https://download.pytorch.org/whl/cu129/torch/ \
         --find-links https://download.pytorch.org/whl/cu129/torchaudio/ \
         --find-links https://download.pytorch.org/whl/cu129/torchvision/ \

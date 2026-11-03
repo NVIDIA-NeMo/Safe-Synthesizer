@@ -52,7 +52,6 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else none (server defaults) | JSON object of chat-completions fields sent with every request; overrides a profile's options field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Profile YAML path, or bundled profile name, for the local vLLM server Safe Synthesizer runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_NEMOTRON_PERSONAS_PATH` | nss | -- | PII replacement | `~/.data-designer/managed-assets` | Directory containing downloaded Nemotron-Personas `datasets/<locale>.parquet` files; `replace_pii.sampler.nemotron_personas_path` takes precedence | [Nemotron-Personas](customize-pii-replacement.md#nemotron-personas) |
-| `PERSON_RANDOM_SEED` | nss | -- | PII replacement | `42` | Seed for generated replacement values when `replace_pii.seed` is unset | [Configuration](configuration.md#replacing-pii) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
@@ -195,7 +194,9 @@ need mapping to the sampler's values. Where they go depends only on
   service. Only use a service that is approved to receive the input data,
   including rows that may later be held out for evaluation.
 
-The run log states which case applies when planning starts.
+The run log states which case applies when planning starts. Planning also runs
+during evaluation when PII replacement is off and `evaluation.pii_replay_enabled`
+is true, to find the PII the replay check looks for.
 
 ```bash title="PII inference environment" hl_lines="1 2 3"
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1

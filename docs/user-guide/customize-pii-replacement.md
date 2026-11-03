@@ -14,6 +14,12 @@ setting, see [Configuration Reference -- Replacing PII](configuration.md#replaci
 Set `replace_pii: null` in YAML, pass `--no-replace-pii` on the command line, or
 call `.with_replace_pii(enable=False)` in the SDK.
 
+The PII replay check in the evaluation still needs to know which values are
+PII, so evaluation runs PII planning on the training data. Planning uses the
+local planning model, or sends samples to `NSS_INFERENCE_ENDPOINT` when it is
+set; see [Where planning requests go](environment.md#where-planning-requests-go).
+Set `evaluation.pii_replay_enabled: false` to skip it.
+
 ## Review and Reuse the Plan
 
 The replacement plan lists the columns to replace, the kind of PII in each, an
@@ -150,7 +156,8 @@ are only recognized by discovery so it does not mistake them for PII.
 
 A column's optional `pattern` sets the format of its replacement values. It
 should match at least 99% of the column's non-null values. Values the pattern
-does not fit still get replacements written in the pattern.
+does not fit still get replacements written in the pattern. To use the entity's
+default format, leave `pattern` out; an empty pattern is rejected.
 
 Name templates, for names and `email`, combine literal text with placeholders,
 such as `{First} {Last}` or `{f}.{last}@{domain}`:
@@ -173,7 +180,8 @@ produces values like `pmc-482913`:
   letter.
 - `[01]` is one character from the brackets. Brackets list characters, not
   ranges, so `CUST-10[01]###` starts with `CUST-100` or `CUST-101`.
-- `\` makes the next token or bracket literal, so `\#` writes `#`.
+- `\` makes the next token or bracket literal, so `\#` writes `#`. A `]` without
+  an opening `[` is rejected; write it as `\]`.
 
 Date formats, for `date_of_birth`, use Python `strftime` codes such as
 `%m/%d/%Y` or `%B %d, %Y`. Prose and ordinal forms such as `December 10th` are
@@ -313,8 +321,9 @@ confident it is PII. The settings you are most likely to change are:
   catch more PII of that type, at the cost of replacing more words that are
   not PII.
 - `name_exclusion_thresholds`: labels for terms often mistaken for names, such
-  as medical conditions and family relationships. A name overlapping one of
-  these is not replaced. Labels you set are added to the defaults or change
+  as medical conditions and family relationships. A detected name overlapping
+  one of these is not replaced, unless it is a value already known in the
+  record. Labels you set are added to the defaults or change
   their thresholds; set a label to `null` to drop it. Dropping every default
   label turns exclusion off, for text where missed names matter more than
   false ones.

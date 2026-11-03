@@ -305,6 +305,8 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
+├── safe-synthesizer-config.yaml     # resolved configuration, when PII replacement runs
+├── pii_replacement_plan.yaml        # the PII replacement plan that configuration names
 ├── train/
 │   ├── safe-synthesizer-config.json
 │   └── adapter/                     # trained PEFT adapter
@@ -322,6 +324,7 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 │   ├── training.csv
 │   ├── test.csv
 │   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
 └── logs/
     └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
