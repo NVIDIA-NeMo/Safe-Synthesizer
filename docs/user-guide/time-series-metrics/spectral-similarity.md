@@ -75,7 +75,7 @@ With about 200 points per sequence, scores fall into rough tiers, taken from the
   wrong length, as with shuffled values (about 1.4) or a cycle half as long
   (about 1.0).
 - Exactly 0 means the synthetic values are constant, follow a straight line, or
-  are mostly missing, while the training values vary.
+  have fewer than `min_points` finite values, while the training values vary.
 
 Use these tiers as a guide. Whether a difference matters depends on the use
 case. For example, reproducing a daily cycle may be critical for demand
@@ -258,9 +258,11 @@ Values are ordered by `time_series.timestamp_column` and split into sequences by
   observations are evenly spaced in time. Irregular timestamps or long gaps
   distort the cycle lengths it sees.
 - Short sequences carry less evidence, so their scores bunch toward the middle.
-  Synthetic data from the same process still scores highly at any length. A
-  sequence of 30 observations shows at most about one 24-step cycle, so a
-  missing daily cycle in 30 hourly values still scores about 6.
+  Synthetic data from the same process still scores highly at any length of at
+  least `min_points`. Training sequences with fewer finite values are skipped,
+  and synthetic sequences with fewer score 0. A sequence of 30 observations
+  shows at most about one 24-step cycle, so a missing daily cycle in 30 hourly
+  values still scores about 6.
 - A sequence cannot show cycles longer than itself.
 - Cycles of similar length need long sequences to tell apart. A 26-step cycle in
   place of a 24-step one scores about 9.7 at 200 points and about 6.9 at 1,000.
@@ -330,10 +332,10 @@ The metric then compares the training shares \(T_b\) and synthetic shares
 \text{pair similarity} = 1 - \sqrt{\frac{\max\left(0, \sum_b \left[(T_b - S_b)^2 - \sigma_b^2\right]\right)}{\sum_b \max(T_b, S_b, \sigma_b)^2}}
 \]
 
-Subtracting the expected chance difference before taking the square root means
-that two sequences from the same process do not lose points on average, and
-pooling the bands before the square root keeps several small chance gaps from
-adding up to a large penalty. The result is clipped to the range 0 to 1. The
+Subtracting the expected chance difference before taking the square root
+removes most of the penalty from chance, so two sequences from the same process
+lose few points, and pooling the bands before the square root keeps several
+small chance gaps from adding up to a large penalty. The result is clipped to the range 0 to 1. The
 final 0–10 score is ten times the mean pair similarity across group-column
 pairs. Therefore, 10 means the shares agree within chance, and 0 means the
 synthetic data puts its variation at entirely different cycle lengths from the

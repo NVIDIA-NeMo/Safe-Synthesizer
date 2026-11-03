@@ -319,8 +319,8 @@ class SpectralSimilarity(TimeSeriesComponent):
         its share of variation in each cycle-length band is compared on the
         same bands, so sequences of different lengths can be compared. The
         difference between the two band profiles is scored by
-        ``_noise_aware_error``, so differences explained by sampling noise do
-        not lower the score on average. Level, scale, phase, and a straight-line
+        ``_noise_aware_error``, so differences explained by sampling noise
+        lower the score only a little. Level, scale, phase, and a straight-line
         trend do not affect the score.
 
         Training sequences that are too short, constant, or trend-only are
