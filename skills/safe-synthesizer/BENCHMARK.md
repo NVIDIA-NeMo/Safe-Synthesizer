@@ -50,12 +50,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 91.0% — baseline ran, but no comparable score was available; uplift unavailable | 87.9% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 92.2% — baseline ran, but no comparable score was available; uplift unavailable | 91.1% — baseline ran, but no comparable score was available; uplift unavailable |
 | Security | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Correctness | 60.0% → 93.3% (+33.3 points) | 83.3% → 93.3% (+10.0 points) |
+| Correctness | 56.7% → 93.3% (+36.6 points) | 80.0% → 100.0% (+20.0 points) |
 | Discoverability | 100.0% — baseline ran, but no comparable score was available; uplift unavailable | 95.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 38.5% → 85.7% (+47.2 points) | 68.1% → 79.6% (+11.5 points) |
-| Efficiency | 75.9% — baseline ran, but no comparable score was available; uplift unavailable | 71.6% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 38.5% → 86.9% (+48.4 points) | 60.9% → 87.9% (+27.0 points) |
+| Efficiency | 80.8% — baseline ran, but no comparable score was available; uplift unavailable | 72.4% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -70,9 +70,9 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Agent | Dimension | Basis | Baseline → With skill (uplift) | Explanation |
 | --- | --- | --- | --- | --- |
 | claude-code | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| claude-code | Efficiency | Token-only comparison | 98.5% → 98.0% (-0.5 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| claude-code | Efficiency | Token-only comparison | 98.5% → 97.5% (-1.0 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 | codex | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| codex | Efficiency | Token-only comparison | 90.0% → 88.9% (-1.1 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| codex | Efficiency | Token-only comparison | 91.3% → 89.7% (-1.6 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 
 ## Token Usage
 
@@ -80,21 +80,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 805,738 | 573,100 | +232,638 | +40.59% | skill 6/6; base 6/6 |
-| claude-code | safe-synthesizer-artifact-locations | 219,438 | 142,746 | +76,692 | +53.73% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-config-num-records | 145,468 | 143,322 | +2,146 | +1.50% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-diagnose-generation-oom | 219,912 | 107,417 | +112,495 | +104.73% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-negative-general-dp | 37,127 | 36,896 | +231 | +0.63% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-negative-react-ui | 35,534 | 35,216 | +318 | +0.90% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-run-dp-cli | 148,259 | 107,503 | +40,756 | +37.91% | skill 1/1; base 1/1 |
-| codex | All cases | 302,623 | 175,404 | +127,219 | +72.53% | skill 6/6; base 6/6 |
-| codex | safe-synthesizer-artifact-locations | 87,766 | 21,784 | +65,982 | +302.89% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-config-num-records | 50,372 | 21,490 | +28,882 | +134.40% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-diagnose-generation-oom | 72,911 | 21,681 | +51,230 | +236.29% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-negative-general-dp | 22,325 | 13,662 | +8,663 | +63.41% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-negative-react-ui | 18,149 | 13,649 | +4,500 | +32.97% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-run-dp-cli | 51,100 | 83,138 | -32,038 | -38.54% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 1,108,361 | 748,504 | +359,857 | +48.08% | skill 12/12; base 12/12 |
+| claude-code | All cases | 774,425 | 572,623 | +201,802 | +35.24% | skill 6/6; base 6/6 |
+| claude-code | safe-synthesizer-artifact-locations | 219,884 | 142,862 | +77,022 | +53.91% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-config-num-records | 145,393 | 143,089 | +2,304 | +1.61% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-diagnose-generation-oom | 226,507 | 107,268 | +119,239 | +111.16% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-negative-general-dp | 37,050 | 36,817 | +233 | +0.63% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-negative-react-ui | 35,417 | 35,223 | +194 | +0.55% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-run-dp-cli | 110,174 | 107,364 | +2,810 | +2.62% | skill 1/1; base 1/1 |
+| codex | All cases | 290,101 | 140,693 | +149,408 | +106.19% | skill 6/6; base 6/6 |
+| codex | safe-synthesizer-artifact-locations | 68,896 | 21,629 | +47,267 | +218.54% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-config-num-records | 50,357 | 21,512 | +28,845 | +134.09% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-diagnose-generation-oom | 73,037 | 21,653 | +51,384 | +237.31% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-negative-general-dp | 13,827 | 13,635 | +192 | +1.41% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-negative-react-ui | 18,332 | 13,575 | +4,757 | +35.04% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-run-dp-cli | 65,652 | 48,689 | +16,963 | +34.84% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 1,064,526 | 713,316 | +351,210 | +49.24% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. Change is `100 * (with - without) / without`; negative means fewer tokens. N/A comparisons include their reason in the coverage column; coverage is never estimated.
 
