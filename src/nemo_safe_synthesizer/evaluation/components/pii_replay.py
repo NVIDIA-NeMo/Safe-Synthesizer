@@ -7,18 +7,17 @@ import math
 import re
 from collections.abc import Iterable
 from functools import cached_property
-from typing import TYPE_CHECKING
+from numbers import Integral, Real
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
+from ...config.replace_pii import EntityType
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 logger = get_logger(__name__)
 
@@ -94,20 +93,25 @@ class PIIReplay(Component):
         pii_replay_columns = config.get("pii_replay_columns") if config else None
 
         # Build up a list of keys of tuple(col_name, entity_type)
-        classified_entities = []
+        classified_entities: list[tuple[str, str, str]] = []
         for col, column_statistics in evaluation_datasets.column_statistics.items():
             entity_names = column_statistics.detected_entity_counts.keys()
-            entity_assigned_type = column_statistics.assigned_type
+            entity_assigned_type = column_statistics.assigned_type or UNKNOWN_ENTITY
             # Scope down to user supplied set of entities if there is one
             if pii_replay_entities:
                 entity_names = set(entity_names).intersection(set(pii_replay_entities))
             classified_entities += [(col, entity_name, entity_assigned_type) for entity_name in entity_names]
-            # But add user specified set of columns as needed if there is one
-            if pii_replay_columns:
-                for user_specified_col in set(pii_replay_columns).difference(
-                    set(evaluation_datasets.column_statistics.keys())
+        # Add user-specified columns without detected PII, comparing the whole column. Columns missing from
+        # either dataset are skipped.
+        if pii_replay_columns:
+            for user_specified_col in sorted(
+                set(pii_replay_columns).difference(evaluation_datasets.column_statistics.keys())
+            ):
+                if (
+                    user_specified_col in evaluation_datasets.training.columns
+                    and user_specified_col in evaluation_datasets.synthetic.columns
                 ):
-                    classified_entities.append((user_specified_col, UNKNOWN_ENTITY))
+                    classified_entities.append((user_specified_col, UNKNOWN_ENTITY, UNKNOWN_ENTITY))
 
         pii_replay_data = []
         for col, entity_name, entity_assigned_type in classified_entities:
@@ -123,14 +127,16 @@ class PIIReplay(Component):
                     entity_name
                 ]
 
-            training_entity_unique_count = len(training_entity_unique_values)
+            # Values that differ only in letter case, or in how a number is written, count once.
+            training_keys = {_replay_key(value) for value in training_entity_unique_values if not _is_missing(value)}
+            training_entity_unique_count = len(training_keys)
             synthetic_col = evaluation_datasets.synthetic[col]
             synthetic_entity_count, synthetic_entity_unique_count = _synthetic_replay_counts(
                 synthetic_col,
-                training_entity_unique_values,
+                training_keys,
                 substring_match=(
                     entity_name != UNKNOWN_ENTITY
-                    and evaluation_datasets.column_statistics[col].assigned_entity == "free_text"
+                    and evaluation_datasets.column_statistics[col].assigned_entity == EntityType.FREE_TEXT
                 ),
             )
             replay_percentage = (
@@ -164,30 +170,66 @@ class PIIReplay(Component):
 # Text splits into maximal runs of word characters and single other characters, so "Ada's file" is
 # "Ada", "'", "s", " ", "file". A replayed value always covers whole tokens; see ``_EmbeddedValueIndex``.
 _TOKEN = re.compile(r"\w+|\W")
+# Text of a whole number that a float column wrote with a zero fraction, such as "123456789.0".
+_ZERO_FRACTION = re.compile(r"(-?\d+)\.0+")
 
 
 def _synthetic_replay_counts(
     synthetic: pd.Series,
-    training_values: Iterable[object],
+    training_keys: set[str],
     *,
     substring_match: bool,
 ) -> tuple[int, int]:
-    """Count synthetic rows and distinct training PII values that are replayed."""
+    """Count synthetic rows and distinct training PII values that are replayed.
+
+    ``training_keys`` come from ``_replay_key``. Values are compared ignoring letter case and as text, so an
+    SSN detected as ``"123456789"`` matches a synthetic column that reads it back as the integer
+    ``123456789`` or the float ``123456789.0``, and ``KENNETH`` matches ``Kenneth``.
+    """
     if not substring_match:
-        matches = synthetic[synthetic.isin(training_values)]
+        synthetic_keys = synthetic.map(lambda value: None if _is_missing(value) else _replay_key(value))
+        matches = synthetic_keys[synthetic_keys.isin(training_keys)]
         return len(matches), len(matches.unique())
 
-    index = _EmbeddedValueIndex(value for value in training_values if isinstance(value, str) and value)
+    index = _EmbeddedValueIndex(key for key in training_keys if key)
     replayed_values: set[str] = set()
     matching_rows = 0
     for synthetic_value in synthetic:
         if not isinstance(synthetic_value, str):
             continue
-        row_matches = index.find(synthetic_value)
+        row_matches = index.find(synthetic_value.casefold())
         if row_matches:
             matching_rows += 1
             replayed_values.update(row_matches)
     return matching_rows, len(replayed_values)
+
+
+def _is_missing(value: object) -> bool:
+    """Return whether a scalar cell is empty: ``None``, ``NaN``, ``pd.NA``, or ``pd.NaT``."""
+    return value is None or value is pd.NA or value is pd.NaT or (isinstance(value, float) and math.isnan(value))
+
+
+def _replay_key(value: object) -> str:
+    """Return the key a PII value is compared by: its replay text in case-folded form."""
+    return _replay_text(value).casefold()
+
+
+def _replay_text(value: object) -> str:
+    """Return the text a whole PII value is compared by, writing whole numbers without a fraction.
+
+    Example:
+        ``123456789``, ``123456789.0``, and ``"123456789.0"`` all become ``"123456789"``.
+    """
+    if isinstance(value, str):
+        zero_fraction = _ZERO_FRACTION.fullmatch(value)
+        return zero_fraction.group(1) if zero_fraction else value
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, Integral):
+        return str(int(value))
+    if isinstance(value, Real) and math.isfinite(float(value)) and float(value).is_integer():
+        return str(int(float(value)))
+    return str(value)
 
 
 class _EmbeddedValueIndex:

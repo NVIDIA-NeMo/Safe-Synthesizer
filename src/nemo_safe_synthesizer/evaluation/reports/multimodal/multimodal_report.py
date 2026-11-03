@@ -50,6 +50,7 @@ from ....evaluation.data_model.evaluation_score import (
 from ....observability import get_logger
 from ....pii_replacer.planning.patterns import describe_pattern
 from ....pii_replacer.replacement.descriptions import SAMPLER_LABELS, describe_replacement
+from ....pii_replacer.replacement.types import DetectionSource
 from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
@@ -59,9 +60,10 @@ TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (Autocorrelation
 
 # Report names for the free-text detectors recorded in ``ColumnStatistics.transform_functions``, in report order.
 _DETECTION_LABELS = {
-    "gliner": "GLiNER",
-    "structured_value": "values from replaced columns",
-    "detected_value": "values detected elsewhere in the same record or group",
+    DetectionSource.GLINER: "GLiNER",
+    DetectionSource.REGEX: "validated patterns",
+    DetectionSource.STRUCTURED_VALUE: "values from replaced columns",
+    DetectionSource.DETECTED_VALUE: "values detected elsewhere in the same record or group",
 }
 
 

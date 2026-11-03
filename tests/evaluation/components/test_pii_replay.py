@@ -8,6 +8,7 @@ import re
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.evaluation.components.pii_replay import (
     PIIReplay,
     _EmbeddedValueIndex,
@@ -99,6 +100,58 @@ def test_pii_replay_percentage_rounds_up_to_one_decimal_place():
     assert pii_replay.pii_replay_data[0].unique_synthetic_data_percentage == 33.4
 
 
+def test_pii_replay_matches_numeric_columns_read_back_as_numbers():
+    # Detected values are text; the synthetic column reads digits back as integers, or floats with blanks.
+    training = pd.DataFrame({"ssn": [123456789, 987654321]})
+    synthetic = pd.DataFrame({"ssn": [123456789.0, None, 555443333.0]})
+    column_statistics = {
+        "ssn": ColumnStatistics(
+            assigned_type="structured",
+            assigned_entity="national_id",
+            detected_entity_counts={"national_id": 2},
+            detected_entity_values={"national_id": {"123456789", "987654321"}},
+            is_transformed=False,
+            transform_functions=set(),
+        )
+    }
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training, synthetic, column_statistics=column_statistics, enable_sampling=False
+    )
+
+    datum = PIIReplay.from_evaluation_datasets(evaluation_datasets).pii_replay_data[0]
+
+    assert datum.total_synthetic_data == 1
+    assert datum.unique_synthetic_data == 1
+
+
+def test_pii_replay_ignores_letter_case_and_tolerates_columns_without_detected_pii():
+    training = pd.DataFrame({"name": ["Kenneth", "KENNETH", "Ada"], "city": ["Boston", "Austin", "Boston"]})
+    synthetic = pd.DataFrame({"name": ["kenneth", "Grace"], "city": ["Boston", "Denver"]})
+    column_statistics = {
+        "name": ColumnStatistics(
+            assigned_type="structured",
+            assigned_entity="first_name",
+            detected_entity_counts={"first_name": 3},
+            detected_entity_values={"first_name": {"Kenneth", "KENNETH", "Ada"}},
+            is_transformed=False,
+            transform_functions=set(),
+        )
+    }
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training, synthetic, column_statistics=column_statistics, enable_sampling=False
+    )
+    config = SafeSynthesizerParameters.model_validate({"evaluation": {"pii_replay_columns": ["city"]}})
+
+    data = {
+        datum.column_name: datum
+        for datum in PIIReplay.from_evaluation_datasets(evaluation_datasets, config).pii_replay_data
+    }
+
+    # "Kenneth" and "KENNETH" are one value, and "kenneth" replays it.
+    assert (data["name"].unique_training_data, data["name"].unique_synthetic_data) == (2, 1)
+    assert (data["city"].unique_training_data, data["city"].unique_synthetic_data) == (2, 1)
+
+
 def test_pii_replay_finds_detected_values_embedded_in_free_text():
     training = pd.DataFrame({"notes": ["Ada met Grace", "Call Ada"]})
     synthetic = pd.DataFrame({"notes": ["Ada appeared inside a sentence", "Grace and Ada", "No replay here", None]})
@@ -187,9 +240,12 @@ def test_embedded_value_index_matches_the_regex_search(seed: int):
 
     for text in texts:
         assert index.find(text) == _reference_replayed_values(text, values), (text, values)
-    expected_rows = sum(1 for text in texts if _reference_replayed_values(text, values))
-    expected_values = set().union(*(_reference_replayed_values(text, values) for text in texts))
-    assert _synthetic_replay_counts(pd.Series(texts), values, substring_match=True) == (
+    # Counting ignores letter case: keys and synthetic text are compared case-folded.
+    keys = {value.casefold() for value in values}
+    folded_texts = [text.casefold() for text in texts]
+    expected_rows = sum(1 for text in folded_texts if _reference_replayed_values(text, keys))
+    expected_values = set().union(*(_reference_replayed_values(text, keys) for text in folded_texts))
+    assert _synthetic_replay_counts(pd.Series(texts), keys, substring_match=True) == (
         expected_rows,
         len(expected_values),
     )
