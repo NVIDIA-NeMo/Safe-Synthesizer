@@ -194,8 +194,9 @@ The score needs:
   `min_points` finite values, and has a segment with enough values.
 
 A training series that is constant or too sparse to measure has no local level
-or spread to compare, so the metric skips that pair. When no pair is usable,
-the score is unavailable.
+or spread to compare, so the metric skips that pair. The metric also skips a
+pair when the synthetic series has values only in segments where the training
+series has none. When no pair is usable, the score is unavailable.
 
 ## Example scenarios
 
