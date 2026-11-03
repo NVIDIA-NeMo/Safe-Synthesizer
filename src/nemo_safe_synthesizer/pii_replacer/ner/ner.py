@@ -75,7 +75,7 @@ class NERPrediction:
                 the prediction.
 
         Returns:
-            A a tuple of unique values that can be used to dedupe
+            A tuple of unique values that can be used to dedupe
             similar predictions by label.
         """
         if self.value_path:
