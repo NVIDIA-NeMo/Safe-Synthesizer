@@ -85,8 +85,8 @@ the [example scenarios](#example-scenarios):
 - About 0 to 2 means the synthetic data has lost or reversed the training
   data's changes over time, as when a trend or a level step is missing or the
   sequence runs backward.
-- A score of 0 means the synthetic values are constant or mostly missing while
-  the training values vary.
+- A pair also scores 0 when its synthetic values are constant or mostly
+  missing while the training values vary.
 
 Longer sequences measure each segment more precisely, so a real difference
 stands out more clearly and scores lower. Shorter sequences carry less
