@@ -30,9 +30,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, Field, PrivateAttr, field_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from ..config.inference_environment import (
+    ENDPOINT_ENV,
+    KEY_ENV,
+    LOCAL_PROFILE_ENV,
+    MODEL_ENV,
+    REQUEST_OPTIONS_ENV,
+    TIMEOUT_ENV,
+    InferenceEnvironment,
+)
 from ..defaults import DEFAULT_ARTIFACTS_PATH
 from ..observability import NSSObservabilitySettings
 from .wandb_setup import WandbMode, WandbSettings
@@ -197,8 +206,6 @@ class CLISettings(BaseSettings):
 
     inference_timeout_seconds: float | None = Field(
         default=None,
-        gt=0,
-        allow_inf_nan=False,
         validation_alias=AliasChoices("inference_timeout_seconds", "NSS_INFERENCE_TIMEOUT"),
         description="Per-request timeout in seconds for PII inference",
     )
@@ -251,6 +258,24 @@ class CLISettings(BaseSettings):
         if isinstance(v, WandbMode):
             return v
         return WandbMode(v)
+
+    @model_validator(mode="after")
+    def validate_inference_settings(self) -> CLISettings:
+        """Check the PII inference values with the same reader planning uses, so errors appear before a run."""
+        InferenceEnvironment.from_environ(self.inference_environ())
+        return self
+
+    def inference_environ(self) -> dict[str, str]:
+        """Return the ``NSS_INFERENCE_*`` variables for the PII inference values that are set."""
+        values = {
+            ENDPOINT_ENV: self.inference_endpoint_url,
+            KEY_ENV: self.inference_api_key,
+            MODEL_ENV: self.inference_model_id,
+            TIMEOUT_ENV: None if self.inference_timeout_seconds is None else f"{self.inference_timeout_seconds:g}",
+            REQUEST_OPTIONS_ENV: self.inference_request_options,
+            LOCAL_PROFILE_ENV: self.inference_local_profile,
+        }
+        return {name: value for name, value in values.items() if value is not None}
 
     @field_validator("inference_timeout_seconds", mode="before")
     @classmethod

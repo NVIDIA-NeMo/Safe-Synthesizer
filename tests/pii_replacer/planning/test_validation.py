@@ -150,6 +150,17 @@ class TestValidatePlan:
         with pytest.raises(ParameterError, match="unsupported character|trailing"):
             validate_plan(dataframe, plan, data_config=DataParameters())
 
+    def test_rejects_an_unmatched_closing_bracket_in_a_character_mask(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["ID-011"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="identifier", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="ID-01]#")
+            ]
+        )
+
+        with pytest.raises(ParameterError, match="unmatched"):
+            validate_plan(dataframe, plan, data_config=DataParameters())
+
     @pytest.mark.parametrize("placeholder", NAME_PART_PLACEHOLDERS)
     def test_accepts_every_documented_name_part_placeholder(self, placeholder: str) -> None:
         definition = NAME_PART_PLACEHOLDERS[placeholder]

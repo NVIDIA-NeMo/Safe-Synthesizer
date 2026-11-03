@@ -87,7 +87,7 @@ class TestResolvePlanningInference:
         [
             pytest.param(None, "127.0.0.1", None, id="unset-picks-free-port"),
             pytest.param("http://127.0.0.1:8123/v1", "127.0.0.1", 8123, id="ipv4-loopback"),
-            pytest.param("http://localhost:8000/v1/", "localhost", 8000, id="localhost-trailing-slash"),
+            pytest.param("http://localhost:8000/v1/", "127.0.0.1", 8000, id="localhost-trailing-slash"),
             pytest.param("http://[::1]:9000/v1", "::1", 9000, id="ipv6-loopback"),
         ],
     )

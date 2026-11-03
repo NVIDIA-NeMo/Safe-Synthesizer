@@ -521,6 +521,11 @@ class TestReplacePiiConfig:
         ):
             SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"unexpected": True}}})
 
+    def test_replace_pii_config_rejects_unknown_inline_plan_field(self) -> None:
+        # The SDK validates replace_pii alone, so a misspelled key must not leave an empty plan.
+        with pytest.raises(ValidationError, match="Unknown configuration field 'column_to_replace'"):
+            ReplacePiiConfig.model_validate({"replacement_plan": {"column_to_replace": []}})
+
     def test_plan_file_is_read_relative_to_the_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -597,7 +602,7 @@ class TestReplacePiiConfig:
             EntityType.API_KEY: 0.991,
             EntityType.UNIQUE_IDENTIFIER: 0.946,
         }
-        expected_exclusions = {
+        expected_exclusions: dict[str, float | None] = {
             "body_part": 0.053,
             "family_relationship": 0.229,
             "gender": 0.485,
@@ -699,8 +704,18 @@ class TestReplacePiiConfig:
     def test_free_text_detection_exclusion_label_set_to_none_is_dropped(self) -> None:
         config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"gender": None}})
 
-        assert "gender" not in config.name_exclusion_thresholds
-        assert "medical_condition" in config.name_exclusion_thresholds
+        assert config.name_exclusion_thresholds["gender"] is None
+        assert config.name_exclusion_thresholds["medical_condition"] is not None
+
+    def test_free_text_detection_dropped_exclusion_label_stays_dropped_when_validated_again(self) -> None:
+        # SDK overlays validate the stored value again; the defaults must not be merged back in.
+        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"gender": None}})
+
+        revalidated = FreeTextDetectionConfig.model_validate(
+            {"name_exclusion_thresholds": config.name_exclusion_thresholds}
+        )
+
+        assert revalidated.name_exclusion_thresholds["gender"] is None
 
     def test_free_text_detection_exclusion_mapping_round_trips(self) -> None:
         config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"gender": None}})

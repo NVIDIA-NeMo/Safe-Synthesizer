@@ -16,8 +16,6 @@ from pathlib import Path
 # default artifacts path
 DEFAULT_ARTIFACTS_PATH = Path("./safe-synthesizer-artifacts").resolve()
 DEFAULT_CONFIG_SAVE_NAME = "safe-synthesizer-config.json"
-DEFAULT_PII_REPLACEMENT_SEED = 42
-"""Base seed for PII replacement when neither the config nor the environment sets one."""
 
 # logging parameters
 LOG_DASHES = "-" * 100
@@ -97,7 +95,7 @@ def default_nemotron_personas_path() -> Path:
     """
     env = os.environ.get(NSS_NEMOTRON_PERSONAS_PATH_ENV)
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".data-designer" / "managed-assets"
 
 

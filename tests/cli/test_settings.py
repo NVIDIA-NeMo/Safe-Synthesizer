@@ -243,7 +243,7 @@ class TestCLISettings:
     @pytest.mark.parametrize("raw", ["0", "inf", "nan"])
     def test_invalid_inference_timeout_is_rejected(self, monkeypatch, raw):
         monkeypatch.setenv("NSS_INFERENCE_TIMEOUT", raw)
-        with pytest.raises(ValidationError, match="inference_timeout_seconds"):
+        with pytest.raises(ValidationError, match="NSS_INFERENCE_TIMEOUT must be a positive number"):
             CLISettings()
 
     def test_explicit_cli_fields_exclude_environment_loaded_values(self, monkeypatch):

@@ -114,6 +114,14 @@ class _InvalidStructuredOutputError(GenerationError):
     """Structured output stayed invalid after every allowed attempt."""
 
 
+class _RejectedResponseError(Exception):
+    """A well-formed LLM answer that cannot be used; the message is feedback for the next attempt.
+
+    Only this, invalid JSON, and schema errors are retried, so a bug in NSS's own parsing code fails at once
+    instead of being sent back to the model as feedback.
+    """
+
+
 class _LLMValueMappingEntry(_StructuredResponse):
     # Fields are documented with attribute docstrings rather than Field(description=...), because this
     # model's JSON schema is sent to the LLM and descriptions would change the planner's input.
@@ -519,11 +527,11 @@ def _apply_dependency_selection(
     selected: Sequence[DependencyCandidate],
     classifications: Sequence[ColumnClassification],
 ) -> PiiReplacementPlan:
-    """Apply selected dependencies, raising ``ValueError`` with specific feedback when invalid."""
+    """Apply selected dependencies, raising ``_RejectedResponseError`` with specific feedback when invalid."""
     try:
         return apply_dependencies(plan, selected, classifications=classifications)
     except (ParameterError, ValidationError) as exc:
-        raise ValueError(
+        raise _RejectedResponseError(
             "selected dependencies do not form a valid replacement plan: " + _validation_feedback(exc)
         ) from exc
 
@@ -596,17 +604,17 @@ def _mapping_coverage_issue(expected: Sequence[tuple[str, str]], actual: Sequenc
 
 
 def _resolved_sampler_values(sampler_values: Sequence[str], supplied: Sequence[str]) -> list[str]:
-    """Return ``sampler_values`` in their supplied spelling, or raise ``ValueError`` naming the invalid values."""
+    """Return ``sampler_values`` in their supplied spelling, or raise ``_RejectedResponseError`` naming invalid ones."""
     if not sampler_values:
-        raise ValueError("sampler_values must be non-empty")
+        raise _RejectedResponseError("sampler_values must be non-empty")
     available = {sampler_value.casefold(): sampler_value for sampler_value in supplied}
     normalized = [sampler_value.casefold() for sampler_value in sampler_values]
     if duplicates := sorted({sampler_value for sampler_value in normalized if normalized.count(sampler_value) > 1}):
-        raise ValueError("sampler_values must not repeat values: " + _quoted(duplicates))
+        raise _RejectedResponseError("sampler_values must not repeat values: " + _quoted(duplicates))
     if unknown := sorted(
         {sampler_value for sampler_value in sampler_values if sampler_value.casefold() not in available}
     ):
-        raise ValueError(
+        raise _RejectedResponseError(
             "sampler_values must come from the values supplied for the column; unknown: " + _quoted(unknown)
         )
     return [available[sampler_value] for sampler_value in normalized]
@@ -758,7 +766,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
             actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
             if issue := _mapping_coverage_issue(list(expected), actual):
-                raise ValueError(issue)
+                raise _RejectedResponseError(issue)
             result: DataToSamplerValueMapping = {}
             for item in response.mappings:
                 source_value, mapping_input = expected[(item.column_name, item.source_value.casefold())]
@@ -785,8 +793,13 @@ class LLMPlanEnhancer(PlanEnhancer):
         """Run one request per batch, concurrently up to ``max_workers``, preserving batch order."""
         if len(batches) == 1:
             return [request(batches[0])]
-        with ThreadPoolExecutor(max_workers=min(self.settings.max_workers, len(batches))) as executor:
+        executor = ThreadPoolExecutor(max_workers=min(self.settings.max_workers, len(batches)))
+        try:
             return list(executor.map(request, batches))
+        finally:
+            # On Ctrl-C or a failed batch, drop queued batches instead of waiting for them, so a managed
+            # server stops right away; requests already running then fail when it does.
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def _classify_batch(
         self,
@@ -800,7 +813,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         def parse_types(response: _ClassificationResponse) -> dict[str, EntityType | None]:
             actual = [classification.column_name for classification in response.classifications]
             if issue := _classification_coverage_issue(expected, actual):
-                raise ValueError(issue)
+                raise _RejectedResponseError(issue)
             return {item.column_name: item.entity_type for item in response.classifications}
 
         entity_types = self._request_structured(
@@ -843,7 +856,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         def parse(response: _PatternResponse) -> dict[str, str | None]:
             actual = [item.column_name for item in response.patterns]
             if issue := _classification_coverage_issue(eligible, actual, key="patterns"):
-                raise ValueError(issue)
+                raise _RejectedResponseError(issue)
             return {item.column_name: item.pattern for item in response.patterns}
 
         return self._request_structured(
@@ -922,8 +935,8 @@ class LLMPlanEnhancer(PlanEnhancer):
             messages: Original chat messages for every attempt.
             response_model: Strict response envelope to validate against.
             parse: Converts a validated response into the result; raises
-                ``ValueError`` with specific feedback when the response is
-                semantically invalid.
+                ``_RejectedResponseError`` with specific feedback when the
+                response is semantically invalid.
 
         Returns:
             The value returned by ``parse``.
@@ -946,7 +959,7 @@ class LLMPlanEnhancer(PlanEnhancer):
             except TransientInferenceError as exc:
                 # Keep the latest validation feedback: the failed request never reached the model.
                 self._wait_before_transient_retry(purpose, attempt, exc)
-            except (InvalidInferenceResponse, ValidationError, ValueError) as exc:
+            except (InvalidInferenceResponse, ValidationError, _RejectedResponseError) as exc:
                 _raise_if_invalid_output_exhausted(purpose, attempt)
                 feedback = _validation_feedback(exc)
         raise InternalError(f"{purpose} retry loop ended without a result")
@@ -998,10 +1011,14 @@ class LLMPlanEnhancer(PlanEnhancer):
 
         def parse(response: _PatternRepairResponse) -> str:
             if not response.pattern.strip():
-                raise ValueError("pattern must be non-empty")
+                raise _RejectedResponseError("pattern must be non-empty")
             candidate = spec.model_copy(update={"pattern": response.pattern})
-            if (next_issue := column_pattern_issue(dataframe, candidate)) is not None:
-                raise ValueError(next_issue)
+            # Same checks as the first proposal, so a repaired mask also needs a value for every distinct original.
+            next_issue = column_pattern_issue(dataframe, candidate) or identifier_mask_capacity_issue(
+                dataframe, candidate
+            )
+            if next_issue is not None:
+                raise _RejectedResponseError(next_issue)
             return response.pattern
 
         try:

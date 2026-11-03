@@ -14,6 +14,7 @@ also a replace target inherits the entity from that target.
 
 from __future__ import annotations
 
+import heapq
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
@@ -28,7 +29,6 @@ from pydantic import (
     SkipValidation,
     ValidationError,
     ValidationInfo,
-    field_serializer,
     field_validator,
     model_serializer,
     model_validator,
@@ -390,7 +390,7 @@ def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
     }
 
 
-def _default_name_exclusion_thresholds() -> dict[str, float]:
+def _default_name_exclusion_thresholds() -> dict[str, float | None]:
     """Return a fresh copy of the tuned name exclusion labels."""
     return dict(_DEFAULT_NAME_EXCLUSION_THRESHOLDS)
 
@@ -597,7 +597,7 @@ class PiiSamplerConfig(NSSBaseModel):
     def resolved_nemotron_personas_path(self) -> Path:
         """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
         if self.nemotron_personas_path is not None:
-            return Path(self.nemotron_personas_path)
+            return Path(self.nemotron_personas_path).expanduser()
         return default_nemotron_personas_path()
 
 
@@ -783,35 +783,49 @@ class PiiReplacementPlan(Parameters):
     @model_validator(mode="after")
     def _reject_dependency_cycles(self) -> Self:
         """Reject cycles defensively even though the current catalog is acyclic."""
-        targets = {spec.column_name for spec in self.columns_to_replace}
-        adjacency: dict[str, set[str]] = {column: set() for column in targets}
-        indegree = dict.fromkeys(targets, 0)
+        self.replacement_order()
+        return self
 
-        for spec in self.columns_to_replace:
+    def replacement_order(self) -> tuple[PiiColumnPlan, ...]:
+        """Return ``columns_to_replace`` so every column comes after the columns it depends on.
+
+        Independent columns keep their listed order. Dependencies on columns that are not replaced
+        do not affect the order.
+
+        Raises:
+            ParameterError: If the dependencies form a cycle; the message names the columns in it.
+        """
+        specs = self.columns_to_replace
+        by_name = {spec.column_name: spec for spec in specs}
+        position = {spec.column_name: index for index, spec in enumerate(specs)}
+        outgoing: dict[str, set[str]] = {column: set() for column in by_name}
+        indegree = dict.fromkeys(by_name, 0)
+        for spec in specs:
             for dependency in spec.depends_on:
                 source = dependency.column_name
-                if source not in targets or spec.column_name in adjacency[source]:
+                if source not in by_name or spec.column_name in outgoing[source]:
                     continue
-                adjacency[source].add(spec.column_name)
+                outgoing[source].add(spec.column_name)
                 indegree[spec.column_name] += 1
 
-        ready = [column for column, degree in indegree.items() if degree == 0]
-        visited = 0
+        ready = [(position[column], column) for column, degree in indegree.items() if degree == 0]
+        heapq.heapify(ready)
+        ordered: list[PiiColumnPlan] = []
         while ready:
-            source = ready.pop()
-            visited += 1
-            for target in adjacency[source]:
+            _, source = heapq.heappop(ready)
+            ordered.append(by_name[source])
+            for target in outgoing[source]:
                 indegree[target] -= 1
                 if indegree[target] == 0:
-                    ready.append(target)
+                    heapq.heappush(ready, (position[target], target))
 
-        if visited != len(targets):
+        if len(ordered) != len(by_name):
             cycle_columns = sorted(column for column, degree in indegree.items() if degree > 0)
             raise ParameterError(
                 "replacement dependencies contain a cycle involving: "
                 + ", ".join(repr(column) for column in cycle_columns)
             )
-        return self
+        return tuple(ordered)
 
 
 class LLMConfig(NSSBaseModel):
@@ -889,13 +903,14 @@ class FreeTextDetectionConfig(NSSBaseModel):
             "apart. Locales without a check, such as en_GB, use only the national_id threshold."
         ),
     )
-    name_exclusion_thresholds: dict[str, _ConfidenceThreshold] = Field(
+    name_exclusion_thresholds: dict[str, _ConfidenceThreshold | None] = Field(
         default_factory=_default_name_exclusion_thresholds,
         description=(
             "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
             "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
             "replaced, and find_and_replace does not replace text inside them. Labels you set are merged into the "
-            "defaults; set a label to null to drop it. Dropping every label turns exclusion off, which finds more "
+            "defaults; set a label to null to drop it, and it stays null in the configuration. Dropping every "
+            "label turns exclusion off, which finds more "
             "real names at the cost of more false names in clinical text."
         ),
     )
@@ -957,7 +972,8 @@ class FreeTextDetectionConfig(NSSBaseModel):
         """Merge selected labels into the defaults; a label set to ``None`` is dropped.
 
         Labels are matched after normalizing case and separators, so ``Medical Condition`` overrides the default
-        ``medical_condition`` instead of adding a second label.
+        ``medical_condition`` instead of adding a second label. A dropped label stays in the value as ``None``, so
+        validating a stored value again, as SDK overlays and saved configurations do, does not merge it back.
         """
         if not isinstance(value, Mapping):
             return value
@@ -969,26 +985,20 @@ class FreeTextDetectionConfig(NSSBaseModel):
             for label, threshold in _default_name_exclusion_thresholds().items()
             if _normalize_gliner_label(label) not in {_normalize_gliner_label(key) for key in overrides}
         }
-        merged.update({label: threshold for label, threshold in overrides.items() if threshold is not None})
+        merged.update(overrides)
         return merged
-
-    @field_serializer("name_exclusion_thresholds")
-    def _serialize_name_exclusion_thresholds(self, value: dict[str, float]) -> dict[str, float | None]:
-        """Write dropped default labels as ``None`` so a reloaded dump does not merge them back."""
-        kept = {_normalize_gliner_label(label) for label in value}
-        dropped = {label: None for label in _DEFAULT_NAME_EXCLUSION_THRESHOLDS if label not in kept}
-        return {**value, **dropped}
 
     @field_validator("name_exclusion_thresholds")
     @classmethod
-    def _validate_name_exclusion_labels(cls, value: dict[str, float]) -> dict[str, float]:
+    def _validate_name_exclusion_labels(cls, value: dict[str, float | None]) -> dict[str, float | None]:
         """Reject blank, duplicate, and entity-type labels, since each would silently change detection."""
         normalized = {_normalize_gliner_label(label) for label in value}
         if "" in normalized:
             raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be nonempty")
         if len(normalized) != len(value):
             raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
-        colliding = sorted(normalized & {entity_type.value for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES})
+        active = {_normalize_gliner_label(label) for label, threshold in value.items() if threshold is not None}
+        colliding = sorted(active & {entity_type.value for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES})
         if colliding:
             raise ParameterError(
                 f"free_text_detection.name_exclusion_thresholds cannot use detected entity types: {colliding}"
@@ -1070,7 +1080,9 @@ class ReplacePiiConfig(Parameters):
     seed: int | None = Field(
         default=None,
         description=(
-            "Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42."
+            "Seed for synthetic value generation. When unset, each run draws a random seed and saves it in the "
+            "resolved configuration. Anyone who knows the seed can test guesses for original values in the "
+            "replaced data, so keep a configuration that contains it as private as the input data."
         ),
     )
     sampler: PiiSamplerConfig = Field(
@@ -1172,6 +1184,10 @@ class ReplacePiiConfig(Parameters):
         Left to the union, a malformed inline plan reports the plan's own errors
         *and* a sentinel mismatch. Validating a mapping as a plan up front keeps
         the report to the fields the user actually got wrong.
+
+        Unknown plan fields are always rejected, as in plan files: a misspelled
+        ``columns_to_replace`` would otherwise leave an empty plan and train on
+        the original values.
         """
         if value == AUTO_DISCOVERY or isinstance(value, PiiReplacementPlan):
             return value
@@ -1187,6 +1203,10 @@ class ReplacePiiConfig(Parameters):
                 f"replace_pii.replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or the path of a YAML "
                 f"plan file (got {value!r})"
             )
+        try:
+            value = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], value), "reject")
+        except ParameterError as exc:
+            raise ParameterError(f"invalid replacement plan ({exc})") from exc
         try:
             return PiiReplacementPlan.model_validate(value)
         except ValidationError as exc:
