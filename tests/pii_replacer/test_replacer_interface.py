@@ -28,6 +28,7 @@ from nemo_safe_synthesizer.pii_replacer import (
     StructuredReplacementRecord,
     TabularPiiReplacer,
 )
+from nemo_safe_synthesizer.pii_replacer.replacement.types import DetectionSource, MappingScope
 from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
 
 
@@ -170,7 +171,9 @@ class TestTabularPiiReplacerInterface:
         )
 
         first = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
-        second = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+        # The seed drawn for the first run is saved in its resolved configuration and reproduces it.
+        assert first.resolved_config.seed is not None
+        second = TabularPiiReplacer(first.resolved_config, data_config=DataParameters()).replace(dataframe)
 
         assert first.transformed_df.equals(second.transformed_df)
         assert first.transformed_df.index.tolist() == [3, 3]
@@ -384,7 +387,7 @@ class TestReplacementMap:
             row_position=0,
             column_name="email",
             entity_type=EntityType.EMAIL,
-            scope="record",
+            scope=MappingScope.RECORD,
             original_value="ada@example.com",
             replacement_value="grace@example.org",
         )
@@ -394,9 +397,9 @@ class TestReplacementMap:
             start=0,
             end=3,
             entity_type=EntityType.FIRST_NAME,
-            detection_source="gliner",
+            detection_source=DetectionSource.GLINER,
             score=0.9,
-            scope="record",
+            scope=MappingScope.RECORD,
             original_value="Ada",
             replacement_value="Eve",
         )

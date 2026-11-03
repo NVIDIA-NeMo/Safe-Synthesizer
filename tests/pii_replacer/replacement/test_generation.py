@@ -609,6 +609,11 @@ class TestReplacementGenerator:
     def test_relative_date_expression_is_not_parsed_as_a_birth_date(self, original: str) -> None:
         assert birth_dates.shift_birth_date(original, None, Random(0), locale="en_US") is None
 
+    @pytest.mark.parametrize("original", ["0001-01-01", "9999-12-31"])
+    def test_placeholder_date_at_the_calendar_edge_is_kept(self, original: str) -> None:
+        for seed in range(20):
+            assert birth_dates.shift_birth_date(original, "%Y-%m-%d", Random(seed), locale="en_US") == original
+
     @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
     def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
         replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="en_US")

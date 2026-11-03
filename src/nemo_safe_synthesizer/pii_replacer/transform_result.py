@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
 from ..errors import InternalError
+from .replacement.types import DetectionSource, MappingScope
 
 __all__ = [
     "ColumnStatistics",
@@ -33,7 +34,7 @@ class StructuredReplacementRecord(BaseModel):
     row_position: int = Field(ge=0, description="Zero-based position of the replaced dataframe row.")
     column_name: str = Field(description="Name of the structured column that was replaced.")
     entity_type: EntityType = Field(description="Normalized entity type used to generate the replacement.")
-    scope: Literal["record", "group"] = Field(description="Mapping scope used for replacement reuse.")
+    scope: MappingScope = Field(description="Mapping scope used for replacement reuse.")
     original_value: str = Field(repr=False, description="Canonical original value. May contain sensitive data.")
     replacement_value: str = Field(repr=False, description="Generated replacement value.")
 
@@ -53,7 +54,7 @@ class FreeTextReplacementRecord(BaseModel):
     start: int = Field(ge=0, description="Inclusive start offset in the original cell.")
     end: int = Field(gt=0, description="Exclusive end offset in the original cell. Must be greater than start.")
     entity_type: EntityType = Field(description="Normalized entity type assigned to the accepted span.")
-    detection_source: Literal["gliner", "regex", "structured_value", "detected_value"] = Field(
+    detection_source: DetectionSource = Field(
         description=(
             "Detector that produced the accepted span, or, for structured_value and detected_value, the known "
             "value whose occurrence was found by searching the text."
@@ -66,7 +67,7 @@ class FreeTextReplacementRecord(BaseModel):
         allow_inf_nan=False,
         description="Detector confidence in [0, 1] when the detector supplies one.",
     )
-    scope: Literal["record", "group"] = Field(description="Mapping scope used for replacement reuse.")
+    scope: MappingScope = Field(description="Mapping scope used for replacement reuse.")
     original_value: str = Field(repr=False, description="Exact text covered by the span. May contain sensitive data.")
     replacement_value: str = Field(repr=False, description="Replacement inserted for the accepted span.")
 

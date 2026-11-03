@@ -20,11 +20,9 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
 )
 from nemo_safe_synthesizer.errors import DataError, GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.replacement.compiler import compile_plan
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
     ReplacementExecutionResult,
     ReplacementExecutor,
-    resolve_base_seed,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
 from nemo_safe_synthesizer.pii_replacer.replacement.generators import FakerReplacementGenerator
@@ -32,6 +30,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     DetectedSpan,
     DetectionCell,
     DetectionCellId,
+    DetectionSource,
     FreeTextDetections,
     ProtectedSpan,
 )
@@ -90,6 +89,21 @@ class _ScriptedNameGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
         return self._names[min(len(self.requests), len(self._names)) - 1]
+
+
+class _DependentFirstNameGenerator(_ScriptedNameGenerator):
+    """Return the scripted full name, and for a first name, the first word of its full-name dependency."""
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        if request.entity_type is EntityType.FIRST_NAME:
+            self.requests.append(request)
+            full_name = next(
+                value.normalized_value
+                for entity_type, value in request.effective_dependency_tuple
+                if entity_type is EntityType.FULL_NAME and value is not None
+            )
+            return full_name.split()[0]
+        return super().generate(request)
 
 
 def _warning_counts(caplog: pytest.LogCaptureFixture, field: str) -> list[object]:
@@ -190,7 +204,7 @@ def _span(
     for _ in range(occurrence + 1):
         start = text.index(value, start + 1)
     return DetectedSpan(
-        DetectionCellId(row_position, column_name), start, start + len(value), entity_type, "gliner", 0.95
+        DetectionCellId(row_position, column_name), start, start + len(value), entity_type, DetectionSource.GLINER, 0.95
     )
 
 
@@ -253,7 +267,7 @@ class TestPlanCompiler:
             _target("first", EntityType.FIRST_NAME),
         )
 
-        assert [spec.column_name for spec in compile_plan(plan)] == ["unrelated", "first", "email"]
+        assert [spec.column_name for spec in plan.replacement_order()] == ["unrelated", "first", "email"]
 
     def test_defensively_rejects_a_cycle_when_model_validation_is_bypassed(self) -> None:
         first = PiiColumnPlan.model_construct(
@@ -270,7 +284,7 @@ class TestPlanCompiler:
         )
 
         with pytest.raises(ParameterError, match="cycle involving"):
-            compile_plan(PiiReplacementPlan.model_construct(columns_to_replace=[first, full]))
+            PiiReplacementPlan.model_construct(columns_to_replace=[first, full]).replacement_order()
 
 
 @pytest.mark.unit
@@ -655,6 +669,22 @@ class TestReplacementExecutor:
         assert result.dataframe["full_name"].tolist() == ["John Brown"]
         assert _warning_counts(caplog, "kept_name_part_count") == [1]
 
+    def test_name_part_read_from_a_full_name_that_kept_it_is_used_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"full_name": ["John Smith"], "first_name": ["John"]})
+        plan = _plan(
+            _target("full_name", EntityType.FULL_NAME),
+            _target("first_name", EntityType.FIRST_NAME, ("full_name", None)),
+        )
+
+        result = _execute(dataframe, plan, _DependentFirstNameGenerator("John Brown"))
+
+        assert result.dataframe.iloc[0].tolist() == ["John Brown", "John"]
+        assert _warning_counts(caplog, "kept_name_part_count") == [1, 1]
+
     @pytest.mark.parametrize(
         ("original", "candidate", "pattern", "keeps"),
         [
@@ -664,9 +694,13 @@ class TestReplacementExecutor:
             ("Smith, John", "Brown, John", "{Last}, {First}", True),
             ("Dr. Ana Ruiz", "Dr. Maria Lopez", "Dr. {First} {Last}", False),
             ("J. Smith", "J. Brown", None, False),
+            ("Mr. John Smith", "John Brown", None, True),
+            ("John Smith Jr.", "Mary Smith", None, True),
+            ("Smith, John", "John Brown", None, True),
+            ("John Michael Smith", "Mary Michael Brown", "{First} {Middle} {Last}", True),
         ],
     )
-    def test_keeps_original_name_part_compares_first_and_last_names(
+    def test_keeps_original_name_part_compares_parsed_name_parts(
         self,
         original: str,
         candidate: str,
@@ -681,6 +715,15 @@ class TestReplacementExecutor:
 
         with pytest.raises(GenerationError, match="differs from the original"):
             _execute(dataframe, plan, _EchoGenerator())
+
+    def test_birth_date_that_only_prints_unchanged_is_kept(self) -> None:
+        # A shifted ``%Y`` year, or a placeholder such as 0001-01-01, can print the same as the original.
+        dataframe = pd.DataFrame({"birth_year": ["1975"]})
+        plan = _plan(_target("birth_year", EntityType.DATE_OF_BIRTH, pattern="%Y"))
+
+        result = _execute(dataframe, plan, _EchoGenerator())
+
+        assert result.dataframe["birth_year"].tolist() == ["1975"]
 
     def test_free_text_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
         dataframe = pd.DataFrame({"patient": ["A", None], "notes": ["Ada called", "Ada called"]})
@@ -714,8 +757,8 @@ class TestReplacementExecutor:
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
         detector = _StaticDetector(
             [
-                DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9),
-                DetectedSpan(DetectionCellId(0, "notes"), 15, 30, EntityType.EMAIL, "regex"),
+                DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9),
+                DetectedSpan(DetectionCellId(0, "notes"), 15, 30, EntityType.EMAIL, DetectionSource.REGEX),
             ]
         )
         generator = _RecordingGenerator()
@@ -764,8 +807,8 @@ class TestReplacementExecutor:
         )
         detector = _StaticDetector(
             [
-                DetectedSpan(DetectionCellId(0, "primary"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9),
-                DetectedSpan(DetectionCellId(0, "secondary"), 5, 8, EntityType.FIRST_NAME, "gliner", 0.9),
+                DetectedSpan(DetectionCellId(0, "primary"), 0, 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9),
+                DetectedSpan(DetectionCellId(0, "secondary"), 5, 8, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9),
             ]
         )
         generator = _RecordingGenerator()
@@ -793,7 +836,9 @@ class TestReplacementExecutor:
     def test_free_text_identifier_reuses_an_allocated_integer_replacement(self) -> None:
         dataframe = pd.DataFrame({"api_key": [12345, 67890], "notes": ["Key 12345 issued", "No key"]})
         plan = _plan(_target("api_key", EntityType.API_KEY), _target("notes", EntityType.FREE_TEXT))
-        detector = _StaticDetector([DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.API_KEY, "gliner", 0.9)])
+        detector = _StaticDetector(
+            [DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.API_KEY, DetectionSource.GLINER, 0.9)]
+        )
         generator = _RecordingGenerator()
 
         result = _execute(dataframe, plan, generator, free_text_detector=detector)
@@ -831,7 +876,9 @@ class TestReplacementExecutor:
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
         detector = _StaticDetector(
             [
-                DetectedSpan(DetectionCellId(0, "notes"), start, start + 3, EntityType.FIRST_NAME, "gliner", 0.9)
+                DetectedSpan(
+                    DetectionCellId(0, "notes"), start, start + 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9
+                )
                 for start in (0, 5, 10)
             ]
         )
@@ -851,7 +898,7 @@ class TestReplacementExecutor:
             _target("first_name", EntityType.FIRST_NAME),
         )
         detector = _StaticDetector(
-            [DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)]
+            [DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9)]
         )
         generator = _RecordingGenerator()
 
@@ -869,7 +916,7 @@ class TestReplacementExecutor:
             _target("full_name", EntityType.FULL_NAME, pattern="{First} {Last}"),
         )
         detector = _StaticDetector(
-            [DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.LAST_NAME, "gliner", 0.9)]
+            [DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.LAST_NAME, DetectionSource.GLINER, 0.9)]
         )
         generator = _CompositeNameGenerator()
 
@@ -1252,6 +1299,23 @@ class TestKnownValueMatching:
             result.dataframe.at[0, "notes"] == f"Has Parkinson's disease. {result.dataframe.at[0, 'last_name']} called."
         )
 
+    def test_search_replaces_a_known_value_an_exclusion_covers_exactly(self) -> None:
+        # GLiNER2 can also tag a surname as a family relationship; the record's own column says it is a name.
+        text = "Mrs. Johnson called."
+        dataframe = pd.DataFrame({"last_name": ["Johnson"], "notes": [text]})
+        plan = _plan(_target("last_name", EntityType.LAST_NAME), _target("notes", EntityType.FREE_TEXT))
+        relationship = ProtectedSpan(DetectionCellId(0, "notes"), text.index("Johnson"), text.index(" called"))
+
+        result = _execute(
+            dataframe,
+            plan,
+            _RecordingGenerator(),
+            free_text_detector=_StaticDetector([], protected=[relationship]),
+            find_and_replace=True,
+        )
+
+        assert result.dataframe.at[0, "notes"] == f"Mrs. {result.dataframe.at[0, 'last_name']} called."
+
     def test_longer_match_beats_a_detected_span_and_equal_length_keeps_the_detected_span(self) -> None:
         text = "Kenneth Gonzales met Jordan"
         dataframe = pd.DataFrame({"full_name": ["Kenneth Gonzales"], "first_name": ["Jordan"], "notes": [text]})
@@ -1485,20 +1549,3 @@ class TestDetect:
         assert detected["notes"].detected_entity_values["street_address"] == {"489 Park Blvd"}
         assert "P-1" in detected["notes"].detected_entity_values["unique_identifier"]
         assert "Gonzales" in detected["notes"].detected_entity_values["last_name"]
-
-
-@pytest.mark.unit
-class TestResolveBaseSeed:
-    def test_precedence_is_explicit_then_environment_then_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("PERSON_RANDOM_SEED", "17")
-
-        assert resolve_base_seed(9) == 9
-        assert resolve_base_seed(None) == 17
-        monkeypatch.delenv("PERSON_RANDOM_SEED")
-        assert resolve_base_seed(None) == 42
-
-    def test_invalid_environment_seed_is_a_parameter_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("PERSON_RANDOM_SEED", "not-an-integer")
-
-        with pytest.raises(ParameterError, match="PERSON_RANDOM_SEED must be an integer"):
-            resolve_base_seed(None)

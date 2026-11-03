@@ -14,7 +14,8 @@ from __future__ import annotations
 import math
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias, get_args
+from enum import StrEnum
+from typing import TypeAlias
 
 from ...config.replace_pii import EntityType
 from ...errors import InternalError
@@ -25,6 +26,7 @@ __all__ = [
     "DetectionCell",
     "DetectionCellId",
     "DetectionSource",
+    "MappingScope",
     "EffectiveDependencyTuple",
     "FreeTextDetections",
     "FreeTextMappingKey",
@@ -39,14 +41,29 @@ __all__ = [
     "require_effective_dependency_tuple",
 ]
 
-DetectionSource: TypeAlias = Literal["gliner", "regex", "structured_value", "detected_value"]
-"""Where an accepted free-text span came from.
 
-``gliner`` and ``regex`` are detectors. ``structured_value`` and ``detected_value`` are
-occurrences of a value already known in the same record or group, found by searching the
-text: a structured column's original value, or a value a detector found elsewhere.
-"""
-_DETECTION_SOURCES: frozenset[str] = frozenset(get_args(DetectionSource))
+class DetectionSource(StrEnum):
+    """Where an accepted free-text span came from.
+
+    ``GLINER`` and ``REGEX`` are detectors. ``STRUCTURED_VALUE`` and ``DETECTED_VALUE`` are
+    occurrences of a value already known in the same record or group, found by searching the
+    text: a structured column's original value, or a value a detector found elsewhere.
+    """
+
+    GLINER = "gliner"
+    REGEX = "regex"
+    STRUCTURED_VALUE = "structured_value"
+    DETECTED_VALUE = "detected_value"
+
+
+class MappingScope(StrEnum):
+    """How widely one original's replacement is reused: within its record, or within its group."""
+
+    RECORD = "record"
+    GROUP = "group"
+
+
+_DETECTION_SOURCES: frozenset[str] = frozenset(DetectionSource)
 
 
 def _require_row_position(row_position: object, owner: str) -> None:
@@ -238,8 +255,10 @@ class ProtectedSpan:
 
     GLiNER2 produces these from its name-exclusion labels, such as
     ``medical_condition``. Searching for known values skips any occurrence that
-    overlaps one, so a structured last name such as ``Parkinson`` does not
-    change ``Parkinson's disease``.
+    lies inside a longer one, so a structured last name such as ``Parkinson``
+    does not change ``Parkinson's disease``. An exclusion covering exactly the
+    known value, such as ``Johnson`` also tagged as a family relationship, does
+    not protect it: the record's own column says the text is that person's name.
 
     Example:
         # "Parkinson's disease" in "Has Parkinson's disease", tagged as a medical condition
@@ -265,9 +284,14 @@ class ProtectedSpan:
                 f"protected span offsets must satisfy 0 <= start < end, got start={self.start}, end={self.end}"
             )
 
-    def overlaps(self, span: DetectedSpan) -> bool:
-        """Return whether ``span`` lies in the same cell and shares at least one character with this span."""
-        return span.cell_id == self.cell_id and span.start < self.end and self.start < span.end
+    def encloses(self, span: DetectedSpan) -> bool:
+        """Return whether ``span`` lies in the same cell, inside this span, and is shorter than it."""
+        return (
+            span.cell_id == self.cell_id
+            and self.start <= span.start
+            and span.end <= self.end
+            and (span.start, span.end) != (self.start, self.end)
+        )
 
 
 @dataclass(frozen=True, slots=True)

@@ -42,7 +42,6 @@ _SCOWL_NAME_FILES = ("english-proper-names.35", "english-proper-names.50", "amer
 _NAMES_NOT_WORDS = frozenset(
     {
         "cooper",
-        "don",
         "earl",
         "harry",
         "jay",

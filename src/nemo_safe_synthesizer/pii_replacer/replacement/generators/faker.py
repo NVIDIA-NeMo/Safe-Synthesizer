@@ -59,6 +59,8 @@ class FakerReplacementGenerator:
             )
         self._locale = locale
         self._warned_generation_fallbacks: set[str] = set()
+        # Building a Faker takes most of a value's generation time, so one instance is reseeded per value.
+        self._fake: Faker | None = None
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Generate a Faker-backed replacement for ``request``."""
@@ -114,12 +116,14 @@ class FakerReplacementGenerator:
         raise GenerationError(f"entity type {entity_type.value!r} is not supported by structured replacement")
 
     def _faker(self, seed: int) -> Faker:
-        try:
-            fake = Faker(self._locale)
-        except Exception as exc:
-            raise GenerationError("PII replacement could not initialize Faker for the configured locale") from exc
-        fake.seed_instance(seed)
-        return fake
+        """Return this generator's Faker, reseeded with ``seed``; reseeding gives the same values as a new one."""
+        if self._fake is None:
+            try:
+                self._fake = Faker(self._locale)
+            except Exception as exc:
+                raise GenerationError("PII replacement could not initialize Faker for the configured locale") from exc
+        self._fake.seed_instance(seed)
+        return self._fake
 
     def _generate_email(
         self,

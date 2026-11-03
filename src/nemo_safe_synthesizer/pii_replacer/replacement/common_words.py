@@ -20,7 +20,7 @@ COMMON_WORDS: frozenset[str] = frozenset(
     burns bush butler camel canaries candy cannon canon carnation carol carpenter carrier cascades case challenger
     chambers chance charity chase cheer cherry chi chuck church clay cliff closure colon combs cook corning cotton
     cox coy craft crane crest cross cruise crystal curry curt daisy dawn day dean derrick destiny dial diamond dodge
-    dole dolly dot downs downy drew drudge duke dusty earnest ebony enterprise faith farmer fern fields finch fisher
+    dole dolly don dot downs downy drew drudge duke dusty earnest ebony enterprise faith farmer fern fields finch fisher
     flowers ford foreman forest foster fox frank french frost fry fuller gale gall gamble gap garrison gates gay
     gene gentry gill ginger glass glen gnu golden good goodwill grace grant graves gray green grimes gross guy hale
     hall hallmark halon ham hardy hart hay hays hazel head heath heather herring hickory hicks hill hiss ho holder

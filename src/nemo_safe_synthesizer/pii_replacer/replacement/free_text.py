@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 from random import Random
 from string import ascii_uppercase
-from typing import Literal
 
 import pandas as pd
 
@@ -33,8 +32,10 @@ from .types import (
     DetectedSpan,
     DetectionCell,
     DetectionCellId,
+    DetectionSource,
     FreeTextMappingKey,
     GroupMappingKey,
+    MappingScope,
     ProtectedSpan,
     RecordMappingKey,
     detected_text,
@@ -63,8 +64,6 @@ _NAME_ROLE_PART_TYPES = {
 }
 # Roles of words kept unchanged, such as Dr. and Jr.
 _KEPT_NAME_ROLES = frozenset({"title", "suffix"})
-
-_KnownValueSource = Literal["structured_value", "detected_value"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,7 +250,7 @@ class FreeTextReplacementExecutor:
         # initial takes its name's replacement letter wherever the name appears.
         for spec in specs:
             self._map_name_words(cells[spec.column_name], self._statistics_for(spec))
-        scope = "record" if group_identities is None else "group"
+        scope = MappingScope.RECORD if group_identities is None else MappingScope.GROUP
         for spec in specs:
             self._write_cells(working, spec, cells[spec.column_name], scope)
         return FreeTextExecutionResult(
@@ -297,7 +296,7 @@ class FreeTextReplacementExecutor:
         known: dict[Hashable, _KnownValues] = {}
         for key in self._cache:
             known.setdefault(key.scope_identity, _KnownValues()).add(
-                key.original_value, key.entity_type, "structured_value"
+                key.original_value, key.entity_type, DetectionSource.STRUCTURED_VALUE
             )
         for spec in specs:
             column_position = working.columns.get_loc(spec.column_name)
@@ -455,7 +454,7 @@ class FreeTextReplacementExecutor:
                 matches = [
                     match
                     for match in values.find(cell_id, original)
-                    if not any(span.overlaps(match) for span in protected)
+                    if not any(span.encloses(match) for span in protected)
                 ]
                 spans = resolve_overlapping_spans((*spans, *matches))
             if spans:
@@ -491,7 +490,7 @@ class FreeTextReplacementExecutor:
         working: pd.DataFrame,
         spec: PiiColumnPlan,
         cells: list[_CellToReplace],
-        scope: Literal["record", "group"],
+        scope: MappingScope,
     ) -> None:
         """Write the replaced text of ``cells`` into one free-text target column."""
         column_position = working.columns.get_loc(spec.column_name)
@@ -511,7 +510,7 @@ class FreeTextReplacementExecutor:
         cell: DetectionCell,
         spans: tuple[DetectedSpan, ...],
         scope_identity: Hashable,
-        scope: Literal["record", "group"],
+        scope: MappingScope,
         statistics: FreeTextColumnStatistics,
     ) -> str:
         """Construct one replacement cell from ascending original-text offsets."""
@@ -646,8 +645,8 @@ class FreeTextReplacementExecutor:
                 break
         else:
             if (fallback := chooser.fallback()) is not None:
-                replacement, _ = fallback
-                if statistics is not None:
+                replacement, outcome = fallback
+                if statistics is not None and outcome == "kept_name_part":
                     statistics.kept_name_part_count += 1
         if replacement is not None:
             self._generated_count += 1
@@ -665,7 +664,8 @@ class FreeTextReplacementExecutor:
         except SafeSynthesizerError:
             raise
         except Exception as exc:
-            raise GenerationError("PII replacement generation failed for an accepted free-text span") from exc
+            # The generator is NSS code, so an unexpected exception from it is a bug, not a problem with the data.
+            raise InternalError("PII replacement generation failed for an accepted free-text span") from exc
         finally:
             self._generation_elapsed += time.perf_counter() - started
 
@@ -733,10 +733,10 @@ def _add_detected_values(values: _KnownValues, text: str, spans: tuple[DetectedS
     """Add each detected value in ``text``, and the words of a detected plain full name, as known values."""
     for span in spans:
         value = text[span.start : span.end]
-        values.add(value, span.entity_type, "detected_value")
+        values.add(value, span.entity_type, DetectionSource.DETECTED_VALUE)
         if span.entity_type is EntityType.FULL_NAME:
             for part_type, word in _registrable_name_words(value, locale):
-                values.add(word, part_type, "detected_value")
+                values.add(word, part_type, DetectionSource.DETECTED_VALUE)
 
 
 class _KnownValues:
@@ -748,10 +748,10 @@ class _KnownValues:
     """
 
     def __init__(self) -> None:
-        self._values: dict[str, tuple[str, EntityType, _KnownValueSource]] = {}
+        self._values: dict[str, tuple[str, EntityType, DetectionSource]] = {}
         self._pattern: re.Pattern[str] | None = None
 
-    def add(self, value: str, entity_type: EntityType, source: _KnownValueSource) -> None:
+    def add(self, value: str, entity_type: EntityType, source: DetectionSource) -> None:
         """Keep the first entity type and source added for a value, skipping values unsafe to search for."""
         if not _is_searchable(value) or entity_type not in fresh_detection_entity_types():
             return
@@ -766,7 +766,8 @@ class _KnownValues:
         if self._pattern is None:
             values = sorted((value for value, _, _ in self._values.values()), key=len, reverse=True)
             alternatives = "|".join(re.escape(value) for value in values)
-            self._pattern = re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)", re.IGNORECASE)
+            # The ``'t`` guard keeps a known ``Don`` from matching the start of ``don't``.
+            self._pattern = re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)(?!['\u2019]t(?!\w))", re.IGNORECASE)
         spans: list[DetectedSpan] = []
         for match in self._pattern.finditer(text):
             # Case-insensitive matching and case folding disagree on a few characters, such as "ß"; skip those.

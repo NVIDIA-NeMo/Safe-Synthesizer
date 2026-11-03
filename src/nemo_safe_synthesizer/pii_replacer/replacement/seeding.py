@@ -6,28 +6,11 @@
 from __future__ import annotations
 
 import hashlib
-import os
 
-from ...defaults import DEFAULT_PII_REPLACEMENT_SEED
-from ...errors import InternalError, ParameterError
+from ...errors import InternalError
 from .types import CanonicalValue, FreeTextMappingKey, RecordMappingKey, StructuredMappingKey
 
-__all__ = ["derive_seed", "resolve_base_seed"]
-
-_PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
-
-
-def resolve_base_seed(explicit_seed: int | None) -> int:
-    """Resolve explicit, environment, and default seed precedence."""
-    if explicit_seed is not None:
-        return explicit_seed
-    environment_seed = os.environ.get(_PERSON_RANDOM_SEED_ENV)
-    if environment_seed is None:
-        return DEFAULT_PII_REPLACEMENT_SEED
-    try:
-        return int(environment_seed)
-    except ValueError as exc:
-        raise ParameterError(f"{_PERSON_RANDOM_SEED_ENV} must be an integer") from exc
+__all__ = ["derive_seed"]
 
 
 def derive_seed(

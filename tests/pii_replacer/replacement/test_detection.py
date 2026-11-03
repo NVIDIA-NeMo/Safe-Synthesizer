@@ -30,6 +30,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     DetectedSpan,
     DetectionCell,
     DetectionCellId,
+    DetectionSource,
     FreeTextDetections,
     ProtectedSpan,
 )
@@ -740,6 +741,22 @@ class TestRegexDetector:
             ("3782 822463 10005", EntityType.CREDIT_DEBIT_CARD)
         ]
 
+    @pytest.mark.parametrize(
+        ("text", "card"),
+        [
+            ("Visa 4111 1111 1111 1111 03/27 yesterday", "4111 1111 1111 1111"),
+            ("Card 5500-0000-0000-0004 123 on file", "5500-0000-0000-0004"),
+            ("Order 12 4111 1111 1111 1111 shipped", "4111 1111 1111 1111"),
+            ("card 4111111111111111 12 2025", "4111111111111111"),
+        ],
+    )
+    def test_finds_cards_next_to_short_digit_groups(self, text: str, card: str) -> None:
+        spans = RegexDetector().detect([_cell(text)]).spans
+
+        assert [(text[span.start : span.end], span.entity_type) for span in spans] == [
+            (card, EntityType.CREDIT_DEBIT_CARD)
+        ]
+
     def test_rejects_repeated_digit_and_non_ascii_card_candidates(self) -> None:
         text = "Invalid cards 4111 1111 1111 1112, 0000 0000 0000 0000, and ٤١١١ ١١١١ ١١١١ ١١١١."
 
@@ -788,41 +805,41 @@ class TestOverlapResolution:
     def test_longer_spans_win_and_touching_spans_survive(self) -> None:
         cell_id = DetectionCellId(0, "notes")
         spans = [
-            DetectedSpan(cell_id, 0, 10, EntityType.FULL_NAME, "gliner", 0.6),
-            DetectedSpan(cell_id, 0, 4, EntityType.FIRST_NAME, "gliner", 0.9),
-            DetectedSpan(cell_id, 10, 15, EntityType.EMAIL, "regex"),
+            DetectedSpan(cell_id, 0, 10, EntityType.FULL_NAME, DetectionSource.GLINER, 0.6),
+            DetectedSpan(cell_id, 0, 4, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9),
+            DetectedSpan(cell_id, 10, 15, EntityType.EMAIL, DetectionSource.REGEX),
         ]
 
         assert resolve_overlapping_spans(spans) == (spans[0], spans[2])
 
     def test_more_confident_span_wins_a_same_length_partial_overlap(self) -> None:
         cell_id = DetectionCellId(0, "notes")
-        earlier = DetectedSpan(cell_id, 0, 5, EntityType.FIRST_NAME, "gliner", 0.6)
-        later = DetectedSpan(cell_id, 2, 7, EntityType.LAST_NAME, "gliner", 0.9)
+        earlier = DetectedSpan(cell_id, 0, 5, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.6)
+        later = DetectedSpan(cell_id, 2, 7, EntityType.LAST_NAME, DetectionSource.GLINER, 0.9)
 
         assert resolve_overlapping_spans([earlier, later]) == (later,)
         assert resolve_overlapping_spans([later, earlier]) == (later,)
 
     def test_regex_counts_as_fully_confident_in_a_same_length_partial_overlap(self) -> None:
         cell_id = DetectionCellId(0, "notes")
-        gliner_span = DetectedSpan(cell_id, 0, 5, EntityType.API_KEY, "gliner", 0.99)
-        regex_span = DetectedSpan(cell_id, 2, 7, EntityType.EMAIL, "regex")
+        gliner_span = DetectedSpan(cell_id, 0, 5, EntityType.API_KEY, DetectionSource.GLINER, 0.99)
+        regex_span = DetectedSpan(cell_id, 2, 7, EntityType.EMAIL, DetectionSource.REGEX)
 
         assert resolve_overlapping_spans([gliner_span, regex_span]) == (regex_span,)
 
     def test_regex_wins_an_exact_cross_source_tie_and_gliner_confidence_breaks_its_ties(self) -> None:
         cell_id = DetectionCellId(0, "notes")
-        low = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, "gliner", 0.5)
-        high = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, "gliner", 0.9)
-        regex_span = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, "regex")
+        low = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, DetectionSource.GLINER, 0.5)
+        high = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, DetectionSource.GLINER, 0.9)
+        regex_span = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, DetectionSource.REGEX)
 
         assert resolve_overlapping_spans([low, high]) == (high,)
         assert resolve_overlapping_spans([high, regex_span]) == (regex_span,)
 
     def test_composite_resolves_cross_source_candidates(self) -> None:
         cell = _cell("ada@example.com")
-        gliner_span = DetectedSpan(cell.cell_id, 0, 3, EntityType.FULL_NAME, "gliner", 0.9)
-        regex_span = DetectedSpan(cell.cell_id, 0, 15, EntityType.EMAIL, "regex")
+        gliner_span = DetectedSpan(cell.cell_id, 0, 3, EntityType.FULL_NAME, DetectionSource.GLINER, 0.9)
+        regex_span = DetectedSpan(cell.cell_id, 0, 15, EntityType.EMAIL, DetectionSource.REGEX)
         detector = CompositeFreeTextDetector(
             FreeTextDetectionConfig(),
             gliner=_StaticDetector([gliner_span]),
@@ -834,10 +851,10 @@ class TestOverlapResolution:
     def test_nested_duplicates_have_stable_order_independent_of_input_order(self) -> None:
         first_cell = DetectionCellId(0, "notes")
         second_cell = DetectionCellId(1, "notes")
-        preferred = DetectedSpan(first_cell, 2, 12, EntityType.FULL_NAME, "gliner", 0.9)
-        duplicate = DetectedSpan(first_cell, 2, 12, EntityType.FULL_NAME, "gliner", 0.5)
-        nested = DetectedSpan(first_cell, 4, 8, EntityType.LAST_NAME, "gliner", 0.99)
-        later_cell = DetectedSpan(second_cell, 0, 3, EntityType.FIRST_NAME, "gliner", 0.8)
+        preferred = DetectedSpan(first_cell, 2, 12, EntityType.FULL_NAME, DetectionSource.GLINER, 0.9)
+        duplicate = DetectedSpan(first_cell, 2, 12, EntityType.FULL_NAME, DetectionSource.GLINER, 0.5)
+        nested = DetectedSpan(first_cell, 4, 8, EntityType.LAST_NAME, DetectionSource.GLINER, 0.99)
+        later_cell = DetectedSpan(second_cell, 0, 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.8)
 
         expected = (preferred, later_cell)
         assert resolve_overlapping_spans([nested, duplicate, later_cell, preferred]) == expected
