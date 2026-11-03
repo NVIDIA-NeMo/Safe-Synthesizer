@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
-from jinja2 import Environment, FunctionLoader
+from jinja2 import Environment, FunctionLoader, select_autoescape
 
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -337,7 +337,8 @@ def test_spectral_report_renders_when_every_synthetic_sequence_collapses() -> No
     context = report.jinja_context["spectral_similarity"]
     assert context["constant_synthetic_profile_count"] == 1
     assert len(context["figures"]) == 3
-    card = Environment(loader=FunctionLoader(_get_template)).get_template("jinja/components/spectral_similarity.j2")
+    env = Environment(loader=FunctionLoader(_get_template), autoescape=select_autoescape(["html", "xml"]))
+    card = env.get_template("jinja/components/spectral_similarity.j2")
     assert "1 pair has constant, straight-line, or mostly missing synthetic values." in " ".join(
         card.render(ctx=report.jinja_context).split()
     )
