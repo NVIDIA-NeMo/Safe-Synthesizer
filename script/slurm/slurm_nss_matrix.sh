@@ -44,7 +44,7 @@ fi
 
 if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
     echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
-    echo "Create it with at least NSS_INFERENCE_KEY (and WANDB_API_KEY if WANDB_MODE=online)." >&2
+    echo "Create it with WANDB_API_KEY (required when WANDB_MODE=online) and HF_TOKEN." >&2
     exit 1
 fi
 source "${LUSTRE_DIR}/.api_tokens.sh"
