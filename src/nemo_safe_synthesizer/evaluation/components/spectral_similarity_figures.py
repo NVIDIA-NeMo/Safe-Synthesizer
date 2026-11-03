@@ -11,6 +11,7 @@ bands, so every figure places bands by their cycle length.
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -254,8 +255,21 @@ def _cycle_lengths(profiles: Sequence[Mapping[str, Any]]) -> np.ndarray:
 
 
 def _cycle_labels(cycle_lengths: np.ndarray) -> list[str]:
-    """Label each band by its cycle length in whole observations."""
-    return [f"{value:.0f}" for value in cycle_lengths]
+    """Label each band by its cycle length in whole observations, adding decimals only where two bands would match.
+
+    The category axis places bands by label, so equal labels would draw
+    different bands at the same position.
+    """
+    labels = [f"{value:.0f}" for value in cycle_lengths]
+    for decimals in range(1, 7):
+        counts = Counter(labels)
+        if len(counts) == len(labels):
+            break
+        labels = [
+            f"{value:.{decimals}f}".rstrip("0").rstrip(".") if counts[label] > 1 else label
+            for label, value in zip(labels, cycle_lengths, strict=True)
+        ]
+    return labels
 
 
 def _update_cycle_axis(figure: go.Figure, cycle_lengths: np.ndarray, labels: list[str]) -> None:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from nemo_safe_synthesizer.errors import DataError
+from nemo_safe_synthesizer.evaluation.components.spectral_similarity import SpectralSimilarity
 from nemo_safe_synthesizer.evaluation.components.spectral_similarity_figures import (
     SPECTRAL_SUMMARY_TRACES_PER_COLUMN,
     generate_spectral_band_difference_figure,
@@ -66,6 +67,19 @@ def test_band_figure_places_pairs_with_different_bands_by_cycle_length():
     training = _trace(figure, "Training median share")
     assert list(training.x) == ["2", "3", "4", "6"]
     assert list(training.y) == pytest.approx([30.0, 35.0, 30.0, 40.0])
+
+
+def test_band_figures_keep_bands_with_close_centers_apart():
+    cycles = (2.0 ** SpectralSimilarity._band_centers(200, 23)).tolist()
+    shares = [1 / len(cycles)] * len(cycles)
+    synthetic = [*shares[:-1], shares[-1] + 0.1]
+    profiles = [_profile("a", "value", shares, synthetic, 0.9, cycles=cycles)]
+
+    medians = _trace(generate_spectral_band_figure(profiles), "Training median share")
+    bars = _trace(generate_spectral_band_difference_figure(profiles), "Mean difference")
+
+    assert list(medians.x) == list(bars.x) == ["2", "3", "4", "6", "8", "11", "16", "22.6", "23"]
+    assert list(bars.y) == pytest.approx([0.0] * 8 + [10.0])
 
 
 def test_band_figure_medians_leave_out_pairs_without_synthetic_shares():
