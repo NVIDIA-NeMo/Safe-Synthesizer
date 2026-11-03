@@ -44,9 +44,10 @@ windows, after allowing for chance. The more of the training data the synthetic
 data copies, the lower the score. A full copy scores about 0.5, the lowest
 possible score, because the flag threshold always flags 5% of holdout windows.
 
-Exact copies always lower the score. Continuous values almost never repeat
-exactly by chance, so the metric never discounts an exact copy as noise, even
-when the holdout is small.
+Exact copies lower the score whenever a larger share of training windows than
+holdout windows has an exact match in the synthetic data. Continuous values
+almost never repeat exactly by chance, so the metric never discounts an exact
+copy as noise, even when the holdout is small.
 
 With about 200 points per group and 10 holdout groups, scores fall into rough
 tiers, taken from the [example scenarios](#example-scenarios):
