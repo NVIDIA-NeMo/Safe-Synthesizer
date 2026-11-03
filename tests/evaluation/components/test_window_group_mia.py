@@ -352,6 +352,40 @@ def test_window_group_mia_window_cap_is_balanced_and_reproducible():
     assert {row["windows"] for row in first.details["per_group"]} == {10}
 
 
+def test_window_group_mia_window_cap_samples_groups_whatever_their_names():
+    rng = np.random.default_rng(16)
+    sequences = [_Sequence(group=f"g{index:04d}", values=rng.normal(size=(20, 1))) for index in range(1500)]
+
+    first = WindowGroupMIA._balanced(sequences, 10, 5, 1000)
+    second = WindowGroupMIA._balanced(sequences, 10, 5, 1000)
+
+    assert (first.groups, first.starts) == (second.groups, second.starts)
+    assert len(first) == len(set(first.groups)) == 1000
+    assert first.groups == sorted(first.groups)
+    late_groups = {sequence.group for sequence in sequences[1000:]}
+    late = sum(group in late_groups for group in first.groups)
+    assert abs(late - 1000 / 3) < 40
+
+
+def test_window_group_mia_window_cap_finds_copies_in_the_groups_that_sort_last():
+    rng = np.random.default_rng(27)
+    training, synthetic = _entities(rng, 30, count=150), _entities(rng, 30, count=150)
+    names = [f"train-{index}" for index in range(150)]
+    copied = sorted(names)[-30:]
+    for name in copied:
+        index = names.index(name)
+        synthetic[index] = training[index].copy()
+
+    component = _evaluate(training, synthetic, _entities(rng, 30), _config(WindowGroupMIAParameters(max_windows=100)))
+
+    assert component.details["counts"]["training_windows"] == 100
+    sampled = {row["group"]: row for row in component.details["per_group"]}
+    assert {sampled[name]["exact_copy_rate"] for name in set(copied) & set(sampled)} == {1.0}
+    assert component.details["exact_copy_rate"] >= 0.1
+    assert component.score.score is not None
+    assert component.score.score < 5.0
+
+
 def test_window_group_mia_window_sampling_memory_scales_with_the_sample():
     rng = np.random.default_rng(15)
     sequences = [_Sequence(group=str(index), values=rng.normal(size=(500_000, 1))) for index in range(2)]

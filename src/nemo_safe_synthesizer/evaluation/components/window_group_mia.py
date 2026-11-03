@@ -474,8 +474,12 @@ class WindowGroupMIA(TimeSeriesComponent):
     def _balanced(sequences: list[_Sequence], window: int, stride: int, limit: int) -> _Windows:
         """Build at most ``limit`` windows every ``stride`` steps, round robin across groups.
 
-        Window positions are shuffled within each group with a fixed seed, so
-        repeated runs sample the same windows.
+        One generator with a fixed seed shuffles the window positions within
+        each group, then the order in which the round robin visits the groups,
+        so repeated runs sample the same windows. When ``limit`` ends a round
+        early, or there are more groups than ``limit``, every group has the
+        same chance of a window, whatever its name. The selected windows are
+        returned round by round in the order of ``sequences``.
         """
         rng = np.random.default_rng(_SAMPLING_SEED)
         queues: list[tuple[int, NDArray[np.int64]]] = []
@@ -485,15 +489,17 @@ class WindowGroupMIA(TimeSeriesComponent):
             total += len(starts)
             if len(starts):
                 queues.append((index, starts[rng.permutation(len(starts))]))
-        selected: list[tuple[int, int]] = []
+        queues = [queues[i] for i in rng.permutation(len(queues))]
+        selected: list[tuple[int, int, int]] = []
         depth = 0
         while queues and len(selected) < limit:
             for index, starts in queues:
                 if len(selected) < limit:
-                    selected.append((index, int(starts[depth])))
+                    selected.append((depth, index, int(starts[depth])))
             depth += 1
             queues = [(index, starts) for index, starts in queues if len(starts) > depth]
-        return WindowGroupMIA._build(sequences, selected, total, window)
+        selected.sort()
+        return WindowGroupMIA._build(sequences, [(index, start) for _, index, start in selected], total, window)
 
     @staticmethod
     def _every_step(
