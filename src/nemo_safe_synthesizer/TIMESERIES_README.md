@@ -133,7 +133,7 @@ evaluation:
       max_groups: 128      # reproducible sample of shared groups above this count
     spectral:
       value_columns: null  # null evaluates every numeric training column
-      max_cycle_length: 128  # longest cycle, in observations, told apart from slower variation
+      max_cycle_length: 128  # longest cycle with its own band, which also holds slower variation
       min_points: 16       # minimum finite observations in each sequence
       max_groups: 128      # reproducible sample of shared groups above this count
 ```
