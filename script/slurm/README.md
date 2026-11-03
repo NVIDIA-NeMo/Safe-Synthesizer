@@ -24,7 +24,7 @@ Pipeline entrypoints invoked from the prebuilt project virtualenv:
 ### Prerequisites
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
-- Optional: a hosted LLM endpoint for PII planning. Without `NSS_INFERENCE_ENDPOINT`, planning runs a local vLLM server on the job's GPU. To use a hosted service, set `NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY`; you can generate a key at [build.nvidia.com](https://build.nvidia.com).
+- An API key for PII planning: `slurm_nss_matrix.sh` sets `NSS_INFERENCE_ENDPOINT` to the hosted NVIDIA service, so PII planning sends column samples from your data there. Set `NSS_INFERENCE_KEY` to a key from [build.nvidia.com](https://build.nvidia.com). To keep the data on the cluster, remove the `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` exports from the script; planning then runs a local vLLM server on the job's GPU.
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
