@@ -3,249 +3,175 @@
 
 # Window Membership Inference Protection
 
-Window Membership Inference Protection checks whether the synthetic data gives
-away which sequences were used for training. A generator that memorizes its
-training data reproduces stretches of the training sequences, so the synthetic
-data sits closer to those sequences than to similar sequences the generator
-never saw. This metric looks for that difference.
+Window Membership Inference Protection is the time-series counterpart of
+[Membership Inference
+Protection](../../product-overview/evaluation.md#membership-inference-protection).
+Both ask whether an attacker who holds a real record and the synthetic data can
+tell if that record was used for training.
+Membership Inference Protection attacks single rows. This metric attacks
+windows, which are short stretches of consecutive values (10 steps by default)
+taken from one group, such as one sensor or one patient, as set by
+`data.group_training_examples_by`. It compares windows from the training groups
+with windows from the holdout groups, which Safe Synthesizer set aside before
+training, and checks whether training windows sit closer to the synthetic data.
+If they do, the generator memorized stretches of its training sequences, even
+when no single row stands out.
 
-Two terms matter most:
+An exact copy of the training data is therefore the worst case.
+Every training window has a twin in the synthetic data and no holdout window
+does, so an attacker can tell members from non-members perfectly.
 
-- Membership inference: an attack in which someone who holds a real sequence,
-  such as one sensor's readings or one patient's measurements, tries to tell
-  whether it was in the training data. A generator protects its training data
-  when the synthetic data doesn't help the attacker.
-- Memorization: reproducing training data instead of learning the process
-  behind it. A synthetic sensor that replays an hour of a real sensor's
-  readings, exactly or with a little noise added, has memorized that hour.
-
-The metric works on windows: short stretches of consecutive values, 10 steps
-by default, across all evaluated numeric columns at once. It compares windows
-from the training data and from the holdout data, the groups that Safe
-Synthesizer set aside before training, with their nearest synthetic window.
-This guide says "the attack" for that comparison and "the score" for the 0–10
-metric.
-
-The existing [Membership Inference
-Protection](../../product-overview/evaluation.md#membership-inference-protection)
-metric attacks single records. This metric attacks stretches of a sequence, so
-it can find a copied trajectory even when no single row stands out.
-
-The figure below shows one training group against three synthetic datasets
-generated from the same training data. The right column shows what the attack
-compares: how close each training window (blue) and each holdout window (gray)
-comes to its nearest synthetic window. Windows to the left of the dashed line
-are flagged as suspiciously close.
+The figure below shows one training group against three synthetic datasets.
+The right column shows how close each training window (blue) and each holdout
+window (gray) comes to its nearest synthetic window.
+Windows left of the dashed line are flagged as suspiciously close.
 
 ![One training series in blue against three synthetic datasets. Fresh groups from the same process, in orange, score 10.0, and their training and holdout distances overlap. Fresh groups with 20% of points pasted from training, in red, score 2.4, and a spike of training windows sits at distance 0. A copy of the training data with noise of 0.3 standard deviations, in red, scores 0.6, and the training distances sit well left of the holdout distances.](assets/window-mia-copies.png)
 
-- Synthetic A is new data from the same process as the training data. Its
-  windows are about as close to training windows as to holdout windows, so the
-  two histograms overlap and it scores 10.0.
-- Synthetic B is new data with 20% of its points pasted from training in short
-  stretches, shaded in the plot. The pasted windows match training windows
-  exactly, so a spike of training windows sits at distance 0 and it scores 2.4.
+- Synthetic A is new data from the same process. Training and holdout windows
+  are equally close to it, so the histograms overlap and it scores 10.0.
+- Synthetic B is new data with 20% of its points pasted from training, shaded
+  in the plot. The pasted windows sit at distance 0, so it scores 2.4.
 - Synthetic C is the training data with a little noise added. No window is an
-  exact copy, but every training window has a close synthetic twin that holdout
-  windows don't have, so it scores 0.6.
+  exact copy, but every training window has a close twin that holdout windows
+  lack, so it scores 0.6.
 
 ## Reading the score
 
-A higher score means stronger protection: training windows are no easier to
-find in the synthetic data than holdout windows. Differences small enough to be
-explained by chance don't lower the score, so synthetic data generated by the
-same process as the training data scores near 10. Synthetic data that copies
-training sequences, in whole or in part, scores lower the more it copies, and
-an exact copy scores about 0.5. Exact copies count in full: windows of
-continuous data almost never match exactly by chance, so the chance correction
-never removes them, and a small holdout can't hide them.
+The score runs from 0 to 10, and higher means stronger protection. A score near
+10 means training windows are no closer to the synthetic data than holdout
+windows, after allowing for chance. The more of the training data the synthetic
+data copies, the lower the score. A full copy scores about 0.5, the lowest
+possible score, because the flag threshold always flags 5% of holdout windows.
 
-The score is relative to the holdout data. It asks whether the synthetic data
-favors the training groups over unseen groups from the same source, not whether
-it resembles real data in general. Synthetic data that matches the training
-process closely can still score 10, and synthetic data of poor quality, even a
-constant series, also scores highly as long as it copies nothing. Read this
-score alongside the Synthetic Quality Score and the time-series fidelity
-metrics, which measure quality.
-
-A high score means this attack found no sign of memorization. It is not a
-guarantee: other attacks might still learn something about the training data,
-as the Limitations section describes.
-
-### When the score is available
-
-The score needs grouped data (`data.group_training_examples_by`), groups of at
-least `window_size` points, at least 20 training and 20 holdout windows, and at
-least two holdout groups. With one holdout group, chance can cancel the signal
-of a blurred copy and report a perfect 10, so the metric doesn't score it.
-Otherwise the report shows copy diagnostics only: the share of training windows
-with an exact copy in the synthetic data, and the closest match.
-
-Safe Synthesizer holds out whole groups when `data.group_training_examples_by`
-is set and `data.holdout` is above 0. Because of a known issue
-([#804](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/804)), the grouped
-holdout currently doesn't follow `data.holdout`; for typical time-series data
-it is about 5% of groups, so datasets with 20 or fewer groups get one holdout
-group and report copy diagnostics only. Raising `data.holdout` doesn't help
-until that issue is fixed.
-
-### Example scenarios
-
-The figures below show how the metric scores a range of synthetic datasets,
-ordered from the highest average score to the lowest. Each dataset has 10
-training, 10 holdout, and 10 synthetic groups of 200 points with two numeric
-columns: a 24-step cycle with short-term noise, and a slowly wandering series,
-each group at its own level. Copied stretches are 40 steps long and pasted into
-the same group at the same position they came from. Noise is a multiple of each
-column's standard deviation over all training groups combined, so noise of 0.5
-is half of that standard deviation. Each row shows:
-
-- The first column of one training group (blue) and the matching synthetic
-  group (orange). Where the synthetic data copies the training data, the lines
-  lie on top of each other.
-- The distance from every training window (blue) and holdout window (gray) to
-  its nearest synthetic window, as the typical difference per value in training
-  standard deviations. The dashed line is the flag threshold.
-- The average score across 200 random datasets from the same scenario.
-
-![Nine synthetic datasets with their distance histograms and average scores: fresh groups from a different process, fresh groups from the same process, shuffled training rows, 5% copied stretches, one group of 10 copied, 20% copied stretches, a copy with noise half the data's spread, a copy shifted by 5 steps, and an exact copy.](assets/window-mia-scenarios-core.png)
-
-![Eight more synthetic datasets: fresh groups with gaps, fresh groups a quarter as long, fresh groups with 20% of values missing, a constant series, a copy with noise as large as the data, a copy with gaps, a copy with 20% of values missing, and a copy with tiny noise.](assets/window-mia-scenarios-additional.png)
+Exact copies always lower the score. Continuous values almost never repeat
+exactly by chance, so the metric never discounts an exact copy as noise, even
+when the holdout is small.
 
 With about 200 points per group and 10 holdout groups, scores fall into rough
-tiers:
+tiers, taken from the [example scenarios](#example-scenarios):
 
-- About 8 to 10: nothing is copied, for example fresh groups from the same
-  process or a different one (about 9.8), shuffled training rows (about 9.5),
-  shorter or gappy fresh groups (about 9.6 to 9.8), or a constant series (about
-  9.5).
-- About 5 to 8: a small share of the training data is copied, for example 5% of
-  points pasted from training in 40-step stretches (about 5.5).
-- About 2 to 5: a large share is copied or closely imitated, for example one
-  whole group of 10 (about 3.5), 20% of points in 40-step stretches (about 2.3),
-  or a copy of every group with noise of 0.5 standard deviations (about 2.1).
-- About 0 to 2: the synthetic data reproduces the training data, exactly, with
-  tiny noise, shifted by a few steps, or with values missing (about 0.5 to
-  0.7). The score bottoms out near 0.5 rather than 0, because the flag
-  threshold always lets through 5% of holdout windows.
+- About 8 to 10 means nothing is copied, as with fresh groups (about 9.8),
+  shuffled training rows (about 9.5), or a constant series (about 9.5).
+- About 5 to 8 means a small share is copied, as with 5% of points pasted from
+  training (about 5.5).
+- About 2 to 5 means a large share is copied or closely imitated, as with one
+  whole group out of 10 (about 3.5), 20% of points (about 2.3), or every group
+  with noise of half a standard deviation (about 2.1).
+- About 0 to 2 means the synthetic data reproduces the training data, exactly,
+  with tiny noise, shifted by a few steps, or with values missing (about 0.5 to
+  0.7).
 
-Any exact-copy rate above zero deserves a look, whatever the score. A little
-verbatim copying still scores high: 2% of points pasted from training in 40-step
-stretches averages about 7.4, which the [Data Privacy Score
-table](../../product-overview/evaluation.md#dps-interpretation) would call Very
-Good, with about 2% of training windows copied exactly.
+Use these tiers as a guide. How much copying is acceptable depends on the use
+case. Data shared outside an organization may need no detectable copying, while
+data used only for internal testing may tolerate some.
 
-A copy with noise of 1 standard deviation, as large as the data's own
-variation, scores about 9.4. The noise buries each training window so deeply
-that unrelated synthetic windows come closer, and the attack can't tell which
-synthetic sequence came from which training sequence. The synthetic data still
-carries some information about the training data, so a high score means the
-attack failed, not that nothing was learned.
-
-Sequence length and holdout size matter for copies that aren't exact. Exact
-copies score about the same at every length: one copied group of 10 scores
-about 3.8 with 50 points per group, 3.5 with 200, and 3.4 with 1,000. A blurred
-copy has to stand out from chance instead. Longer sequences give more windows,
-which helps, and fewer holdout groups give a noisier reference, which hurts. A
-copy with noise of 0.5 standard deviations averages about 2.1 with 10 holdout
-groups and 2.7 with 2, and single runs spread more widely with fewer groups.
-Copies of most of the training data score near 0 at any length or holdout size.
-
-These tiers are a guide rather than pass or fail thresholds. Within one report,
-every window uses the same columns, groups, and `window_size`. When you compare
-scores across runs, check that those settings, the holdout, and the input
-data's columns and groups are the same, because changing them changes what the
-score measures. How much copying is acceptable depends on the use case. For
-example, data shared outside an organization may need no detectable copying at
-all, while data used only for internal testing may tolerate a small amount.
-
-If the score is lower than your use case allows:
-
-- Check the exact-copy rate above the charts and the Closest match chart. Exact
-  copies mean the generator reproduced training sequences. Train for less time
-  by lowering `training.num_input_records_to_sample`, add more training groups,
-  or remove sequences that repeat in the training data. Differential privacy is
-  not available in time-series mode.
-- Check the Groups flagged most chart. A few groups far above the others point
-  to sequences that are rare, short, or repeated in the training data, which are
-  the easiest to memorize.
-- If the score is unavailable, see
-  [When the score is available](#when-the-score-is-available). The copy
-  diagnostics still show exact copies.
+The score measures copying only. Poor synthetic data, even a constant series,
+scores high as long as it copies nothing. Read it alongside the
+Synthetic Quality Score and the time-series fidelity metrics. Compare scores
+across runs only when the columns, groups, holdout, and `window_size` are the
+same.
 
 ### Reading the report charts
 
-The Window Membership Inference Protection card is in the automatically
-generated HTML quality and privacy report. Select Data Privacy in the report's
-navigation and find the card in the Protection Metrics panel, right after
-Membership Inference Protection, then expand it to see up to three charts:
-Groups flagged most appears only when there is a score. Select the info icon
-next to a chart title for a short reminder of how to read it. The card appears
-in time-series mode whenever the report shows its Data Privacy section, which
-needs the Data Privacy Score from the row-level privacy metrics. This score is
-reported on its own and is not part of the Data Privacy Score.
+The card is in the Protection Metrics panel of the Data Privacy section of the
+HTML evaluation report, right after Membership Inference Protection. Expand it
+to see the charts, and select the info icon next to a chart title for a short
+reminder of how to read it. The score is reported on its own and is not part of
+the Data Privacy Score.
 
 ![The Window Membership Inference Protection card in the HTML evaluation report, showing a score of 3.4 with the Distance to synthetic data, Groups flagged most, and Closest match charts.](assets/window-mia-report.png)
 
-The example above comes from a dataset of 20 training sensors and 2 holdout
-sensors, grouped by sensor ID, with three numeric columns of 300 hourly points.
-Each synthetic sensor is new data from the same process, except that a share of
-its points is pasted from the same training sensor in 20-step stretches. The
-share rises gradually from none for `sensor_00` to 27% for `sensor_19`.
+This example has 20 training sensors and 2 holdout sensors, each with three
+numeric columns of 300 hourly points. Each synthetic sensor is new data, except
+that a share of its points is pasted from the matching training sensor in
+20-step stretches. The share rises from none for `sensor_00` to 27% for
+`sensor_19`.
 
-Above the charts, the card summarizes what was compared: 1,000 training windows
-from 20 groups, sampled from 1,180, and 118 holdout windows from 2 holdout
-groups, against 5,820 synthetic windows of 10 steps across 3 numeric columns. It
-then gives the result of the attack: 16.5% of training windows and 5.1% of
-holdout windows are flagged, and 11.4% of training windows have an exact copy in
-the synthetic data. You can confirm each of the details below in the report
-itself: hover over any bar to see its exact values, and use the column selector
-on Closest match.
+The summary above the charts says what was compared and what the attack found.
+Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
+11.4% of training windows have an exact copy in the synthetic data.
 
 - Distance to synthetic data
-  - What it shows: how close each training window (blue) and holdout window
+  - This chart shows how close each training window (blue) and holdout window
     (gray) comes to its nearest synthetic window, as the typical difference per
-    value in training standard deviations. Windows left of the dashed flag
-    threshold are flagged. In well-protected synthetic data the blue and gray
-    bars overlap. Blue bars piled up near 0, or blue bars shifted left of the
-    gray ones, mean training windows have close copies in the synthetic data.
-  - In this example: a spike of blue bars sits at 0, the 11.4% of training
-    windows that were copied exactly. The rest of the blue bars overlap the gray
-    ones around 0.3 to 0.5, so the windows that weren't copied are no closer to
-    the synthetic data than holdout windows are.
+    value in training standard deviations. Windows left of the dashed line are
+    flagged. In well-protected data the blue and gray bars overlap. Blue bars
+    piled up at 0, or shifted left of the gray ones, mean training windows have
+    close copies.
+  - In this example, a spike of blue bars at 0 is the 11.4% of training windows
+    copied exactly. The remaining blue bars overlap the gray ones, so the
+    windows that weren't copied are no closer than holdout windows.
 - Groups flagged most
-  - What it shows: the share of each training group's windows that are
-    flagged, for up to 12 groups, most-flagged first. Chance alone flags about
-    as many windows as the dashed holdout line. Bars shade from white at that
-    line to red when every window of a group is flagged, and the axis always
-    spans 0 to 100% so small excesses look small. Hover over a bar to see its
-    full group name, window count, and share of exact copies.
-  - In this example: `sensor_15` and `sensor_17` have the most flagged windows,
-    32% each, followed by `sensor_18` at 30%. These are among the sensors with
-    the most pasted stretches; `sensor_15` has 24% exact copies. Some groups
-    with no copies are also flagged above the holdout line, such as `sensor_02`
-    at 18% with no exact copies. With only two holdout groups, the holdout line
-    is a rough reference, so look for groups that stand clearly above the
-    others and for exact copies.
+  - This chart shows the share of each training group's windows that are
+    flagged, for up to 12 groups, most-flagged first. The dashed line is the
+    holdout flag rate, which is what chance alone produces. Bars turn redder
+    the further they rise above it. Hover over a bar to see the group's share
+    of exact copies.
+  - In this example, `sensor_15` and `sensor_17` lead at 32% each, and
+    `sensor_15` has 24% exact copies. Both are among the sensors with the most
+    pasted stretches. Some uncopied sensors, such as `sensor_02` at 18%, also
+    sit above the line. With only two holdout groups the line is a rough
+    reference, so look for groups that stand clearly above the rest.
 - Closest match
-  - What it shows: the synthetic window (orange, dashed) that comes closest to
-    any training window, for one numeric column at a time. When it is an exact
-    copy, the training window (blue) is drawn too, and the two lines lie on top
-    of each other. Otherwise the report hides the training window, so it never
-    shows training values that the synthetic data doesn't already contain, and
-    the text above the charts gives the typical difference per value instead.
-    Use the column selector next to the title to switch columns.
-  - In this example: the closest training window is from `sensor_12`, and the
-    synthetic data contains an exact copy of it, so the two lines coincide in
-    every column. The chart opens on `humidity`, the first column in
-    alphabetical order.
+  - This chart shows the synthetic window (orange, dashed) closest to any
+    training window, one numeric column at a time. If it is an exact copy, the
+    training window (blue) is drawn on top of it. Otherwise the training window
+    stays hidden, so the report never shows training values that the synthetic
+    data doesn't already contain.
+  - In this example, the closest match is an exact copy of a `sensor_12`
+    window, so the two lines coincide in every column.
+
+### If the score is low
+
+- Check the exact-copy rate and the Closest match chart. Exact copies mean the
+  generator reproduced training sequences. Train for less time by lowering
+  `training.num_input_records_to_sample`, add more training groups, or remove
+  sequences that repeat in the training data. Differential privacy is not
+  available in time-series mode.
+- Check Groups flagged most. A few groups far above the rest usually point to
+  sequences that are rare, short, or repeated, which are the easiest to
+  memorize.
+
+### When the score is available
+
+The score needs:
+
+- Grouped data, set by `data.group_training_examples_by`.
+- Groups at least `window_size` points long.
+- At least 20 training windows and 20 holdout windows.
+- At least two holdout groups. A single holdout group can happen to sit close
+  to the synthetic data, which hides a blurred copy and can make it score a
+  perfect 10.
+
+When these aren't met, the card skips the score. It still shows the share of
+training windows with an exact copy in the synthetic data and the Closest match
+chart.
+
+## Example scenarios
+
+The figures below score a range of synthetic datasets, ordered from the highest
+average score to the lowest. Each dataset has 10 training, 10 holdout, and 10
+synthetic groups of 200 points with two numeric columns, a 24-step cycle and a
+slowly wandering series. Copied stretches are 40 steps long, and noise is
+measured in training standard deviations. Each row shows one training group
+(blue) with its synthetic counterpart (orange), the distance histograms, and the
+average score across 200 random datasets.
+
+![Nine synthetic datasets with their distance histograms and average scores. They are fresh groups from a different process, fresh groups from the same process, shuffled training rows, 5% copied stretches, one group of 10 copied, 20% copied stretches, a copy with noise half the data's spread, a copy shifted by 5 steps, and an exact copy.](assets/window-mia-scenarios-core.png)
+
+![Eight more synthetic datasets. They are fresh groups with gaps, fresh groups a quarter as long, fresh groups with 20% of values missing, a constant series, a copy with noise as large as the data, a copy with gaps, a copy with 20% of values missing, and a copy with tiny noise.](assets/window-mia-scenarios-additional.png)
+
+Exact copies score about the same regardless of sequence length or holdout
+size. Blurred copies are judged against chance, so a smaller holdout makes them
+harder to see. A copy with noise of half a standard deviation averages about
+2.1 with 10 holdout groups and 2.7 with 2, and single runs vary more.
 
 ## Configuration
 
 Time-series evaluation runs by default whenever `time_series.is_timeseries` is
-true. It computes the metric and adds its card to the Protection Metrics panel
-in the Data Privacy section of the HTML evaluation report. Set
-`evaluation.time_series.enabled: false` to skip all time-series metrics.
+true. Set `evaluation.time_series.enabled: false` to skip all time-series
+metrics.
 
 ```yaml
 data:
@@ -265,38 +191,30 @@ evaluation:
 ```
 
 Values are ordered by `time_series.timestamp_column` and split into sequences by
-`data.group_training_examples_by`; the holdout must hold at least two of those
-groups (see [When the score is available](#when-the-score-is-available)).
-`value_columns: null` combines the numeric training columns, up to a
-reproducible sample of `max_columns`; set an explicit list to check selected
-columns, such as one sensitive column on its own. Lower `window_size` to find
-partial copies in short sequences, or raise it to find copies blurred by noise.
-Lower `max_windows` to bound runtime, at the cost of a noisier score.
+`data.group_training_examples_by`.
+
+- Leave `value_columns` as `null` to combine the numeric training columns, up
+  to a reproducible sample of `max_columns`. Set an explicit list to check
+  selected columns, such as one sensitive column on its own.
+- Lower `window_size` to find partial copies in short sequences, or raise it to
+  find copies blurred by noise.
+- Lower `max_windows` to bound runtime, at the cost of a noisier score.
 
 ## Limitations
 
-The metric runs one attack, on numeric columns only. It can't rule out other
-attacks: a copy blurred by noise as large as the data scores about 9.4 even
-though each synthetic value still correlates about 0.7 with the training value
-it came from. Transformed copies (rescaled, shifted in level, or run backward),
-copied stretches shorter than `window_size`, and copied categorical or text
-sequences are not caught. Row-level [Membership Inference
-Protection](../../product-overview/evaluation.md#membership-inference-protection)
-covers single records.
-
-A copy limited to some of the columns is mostly missed, because the columns that
-weren't copied dominate the distance between windows. With one column copied
-exactly from every training group and the other columns fresh, the score
-averaged 6.8 with 2 columns, 9.2 with 6, and 9.6 with 12. Set `value_columns`
-to a sensitive column to check it on its own.
-
-The holdout groups must come from the same source as the training groups. With
-every holdout value shifted by 1.5, about one and a half standard deviations,
-fresh synthetic data averaged 7.0 instead of 9.8, and single runs went as low
-as 1.1. With two or three holdout groups, a single run varies noticeably. The
-lowest possible score is about 0.5, not 0. The score summarizes all windows,
-columns, and groups in one number, so check Groups flagged most and Closest
-match for the groups that matter to you.
+- The metric runs one attack on numeric columns only. Transformed copies
+  (rescaled, shifted in level, or run backward), copied stretches shorter than
+  `window_size`, and copied categorical or text sequences are not caught.
+- Heavy noise hides copies. A copy blurred by noise as large as the data scores
+  about 9.4, even though each synthetic value still correlates about 0.7 with
+  the training value it came from.
+- Partial-column copies are mostly missed, because the uncopied columns dominate
+  the distance. With one column copied exactly from every group, the score
+  averaged 6.8 with 2 columns, 9.2 with 6, and 9.6 with 12. Set `value_columns`
+  to a sensitive column to check it on its own.
+- The holdout must come from the same source as the training data. With every
+  holdout value shifted by 1.5 standard deviations, fresh synthetic data
+  averaged 7.0, down from 9.8, and single runs went as low as 1.1.
 
 ## Calculation
 
