@@ -481,7 +481,7 @@ See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the 
 
 Located in `src/nemo_safe_synthesizer/evaluation/components/rolling_stats_similarity.py`.
 
-Purpose: Measures whether the local average (rolling mean) and local spread (rolling standard deviation) of synthetic sequences change from beginning to end like the training sequences.
+This metric measures whether the local average (rolling mean) and local spread (rolling standard deviation) of synthetic sequences change from beginning to end like the training sequences.
 It averages both rolling statistics over ten aligned segments of each shared group and numeric column, discounts differences explained by chance, and averages the pair similarities into a 0--10 score.
 See `docs/user-guide/time-series-metrics/rolling-stats-similarity.md` for the full calculation.
 
