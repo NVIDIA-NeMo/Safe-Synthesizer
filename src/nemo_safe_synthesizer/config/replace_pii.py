@@ -74,7 +74,7 @@ __all__ = [
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
 DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
-DEFAULT_GLINER2_MODEL_REVISION = "c153999da5f4c509df4322b0c6a1baf3d2c284d7"
+DEFAULT_GLINER2_MODEL_REVISION = "c153999da5f4c509df4322b0c6a1baf3d2c284d7"  # pragma: allowlist secret
 """Hugging Face commit of ``DEFAULT_GLINER2_MODEL_ID`` that the default thresholds were tuned on."""
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.

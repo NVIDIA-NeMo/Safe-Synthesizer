@@ -196,7 +196,7 @@ class TestPlanningInferenceSettings:
         ("endpoint", "raises"),
         [
             ("https://hosted.example:8443/v1?key=secret", False),
-            ("https://user:secret@hosted.example:8443/v1", True),
+            ("https://user:secret@hosted.example:8443/v1", True),  # pragma: allowlist secret
         ],
         ids=["query", "credentials"],
     )
