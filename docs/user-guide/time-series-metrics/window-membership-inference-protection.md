@@ -122,17 +122,6 @@ Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
   - In this example, the closest match is an exact copy of a `sensor_12`
     window, so the two lines coincide in every column.
 
-### If the score is low
-
-- Check the exact-copy rate and the Closest match chart. Exact copies mean the
-  generator reproduced training sequences. Train for less time by lowering
-  `training.num_input_records_to_sample`, add more training groups, or remove
-  sequences that repeat in the training data. Differential privacy is not
-  available in time-series mode.
-- Check Groups flagged most. A few groups far above the rest usually point to
-  sequences that are rare, short, or repeated, which are the easiest to
-  memorize.
-
 ### When the score is available
 
 The score needs:
