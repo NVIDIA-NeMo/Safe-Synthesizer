@@ -152,10 +152,8 @@ fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
-# PII planning sends column samples to this hosted endpoint, which needs NSS_INFERENCE_KEY.
-# Unset both to plan with a local vLLM server on the job's GPU instead.
-export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+# Do not export NSS_INFERENCE_ENDPOINT and NSS_INFERENCE_MODEL as the endpoint couldn't handle
+# all the concurrent requests. Use the default local inference option.
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"
