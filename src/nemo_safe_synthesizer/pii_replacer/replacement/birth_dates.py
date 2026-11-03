@@ -32,6 +32,8 @@ _RANDOM_BIRTH_DATE_START = date(1930, 1, 1)
 _RANDOM_BIRTH_DATE_DAYS = (date(2010, 12, 31) - _RANDOM_BIRTH_DATE_START).days
 _SHIFT_STANDARD_DEVIATION_DAYS = 30
 _MAX_SHIFT_DAYS = 180
+_EARLIEST_SHIFTABLE = datetime.min + timedelta(days=_MAX_SHIFT_DAYS)
+_LATEST_SHIFTABLE = datetime.max - timedelta(days=_MAX_SHIFT_DAYS + 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +68,10 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random, *, locale:
     means the value could not be parsed; the caller then generates a random
     birth date so the original never survives.
 
+    A date within the shift range of either end of the calendar, such as the
+    placeholders ``0001-01-01`` and ``9999-12-31``, is returned unchanged: nobody
+    is born on it, so it keeps its meaning as a placeholder.
+
     Example:
         With pattern ``"%m/%d/%Y"``, ``"02/14/1990"`` shifts to a date such as
         ``"11/03/1989"``, ``"1990-02-14"`` also shifts and is written as
@@ -74,6 +80,8 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random, *, locale:
     parsed = _parse_birth_date(original, pattern, locale)
     if parsed is None:
         return None
+    if not _EARLIEST_SHIFTABLE <= parsed.value <= _LATEST_SHIFTABLE:
+        return original
     shifted = parsed.value + timedelta(days=_shift_days(rng))
     if parsed.output_pattern is not None:
         return shifted.strftime(parsed.output_pattern)

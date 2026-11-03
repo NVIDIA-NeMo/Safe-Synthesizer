@@ -43,7 +43,7 @@ def _span(
     start: int = 6,
     end: int = 21,
     entity_type: EntityType = EntityType.EMAIL,
-    source: DetectionSource = "regex",
+    source: DetectionSource = DetectionSource.REGEX,
     score: float | None = None,
 ) -> DetectedSpan:
     return DetectedSpan(
@@ -115,9 +115,9 @@ class TestMappingContracts:
             text="Call Ada",
             allowed_entity_types=frozenset({EntityType.FIRST_NAME}),
         )
-        first_span = DetectedSpan(first_cell.cell_id, 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)
-        repeated_span = DetectedSpan(first_cell.cell_id, 8, 11, EntityType.FIRST_NAME, "gliner", 0.8)
-        other_column_span = DetectedSpan(second_cell.cell_id, 5, 8, EntityType.FIRST_NAME, "gliner", 0.7)
+        first_span = DetectedSpan(first_cell.cell_id, 0, 3, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.9)
+        repeated_span = DetectedSpan(first_cell.cell_id, 8, 11, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.8)
+        other_column_span = DetectedSpan(second_cell.cell_id, 5, 8, EntityType.FIRST_NAME, DetectionSource.GLINER, 0.7)
 
         first_key = free_text_mapping_key(first_cell, first_span, scope_identity=first_cell.cell_id.row_position)
         repeated_key = free_text_mapping_key(first_cell, repeated_span, scope_identity=first_cell.cell_id.row_position)

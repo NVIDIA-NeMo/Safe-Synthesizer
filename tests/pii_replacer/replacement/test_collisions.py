@@ -94,15 +94,16 @@ class TestDistinctColumns:
 
         assert result["ssn"].tolist() == ["333-33-3333", "444-44-4444"]
 
-    def test_a_column_with_repeated_values_may_repeat_replacements(self) -> None:
+    def test_only_the_same_original_may_repeat_a_replacement(self) -> None:
+        # Rows 0 and 1 hold the same SSN and may share 333; row 2 holds another and must not.
         dataframe = pd.DataFrame({"ssn": ["111-11-1111", "111-11-1111", "222-22-2222"]})
-        generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "333-33-3333")
+        generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "333-33-3333", "444-44-4444")
 
         result = _execute(
             dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID), generator=generator
         )
 
-        assert result["ssn"].tolist() == ["333-33-3333"] * 3
+        assert result["ssn"].tolist() == ["333-33-3333", "333-33-3333", "444-44-4444"]
 
     def test_a_replacement_may_equal_another_rows_or_columns_original(self) -> None:
         dataframe = pd.DataFrame({"ssn": ["111-11-1111"], "spouse_ssn": ["222-22-2222"]})
@@ -187,9 +188,9 @@ class TestCrossColumnSharing:
 
         assert result.to_dict("list") == {"account_id": ["1", "0"], "parent_id": ["0", "1"]}
 
-    def test_a_distinct_column_does_not_take_a_shared_value_it_already_has(self) -> None:
-        # ssn repeats a value, so it may repeat replacements: rows 0 and 1 both get 444. alt_ssn must stay
-        # distinct, so it shares 444 in row 0 but generates a new value in row 1.
+    def test_columns_sharing_a_format_never_give_one_replacement_to_two_originals(self) -> None:
+        # alt_ssn shares ssn's 444 for the same original in row 0. In row 1, 444 is offered for another
+        # original and rejected in both columns.
         dataframe = pd.DataFrame(
             {
                 "ssn": ["111-11-1111", "222-22-2222", "111-11-1111"],
@@ -202,8 +203,8 @@ class TestCrossColumnSharing:
         result = _execute(dataframe, *specs, generator=generator)
 
         assert result.to_dict("list") == {
-            "ssn": ["444-44-4444", "444-44-4444", "777-77-7777"],
-            "alt_ssn": ["444-44-4444", "888-88-8888", "999-99-9999"],
+            "ssn": ["444-44-4444", "777-77-7777", "888-88-8888"],
+            "alt_ssn": ["444-44-4444", "777-77-7777", "999-99-9999"],
         }
 
     def test_columns_with_different_patterns_are_replaced_separately(self) -> None:
@@ -217,6 +218,28 @@ class TestCrossColumnSharing:
 
         assert result["work_phone"].tolist() == ["555.987.6543"]
         assert result["phone"].iloc[0] != "555.987.6543"
+
+
+@pytest.mark.unit
+class TestGroupedIdentifiers:
+    def test_ids_repeated_within_groups_still_get_one_replacement_per_original(self) -> None:
+        # Each patient's SSN repeats on every visit row, so the column is not distinct row by row.
+        dataframe = pd.DataFrame(
+            {"patient": ["A", "A", "B", "B"], "ssn": ["111-11-1111", "111-11-1111", "222-22-2222", "222-22-2222"]}
+        )
+        generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "444-44-4444")
+        executor = ReplacementExecutor(
+            PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="ssn", entity_type=EntityType.NATIONAL_ID)]
+            ),
+            generator,
+            group_column="patient",
+            base_seed=42,
+        )
+
+        result = executor.execute(dataframe).dataframe
+
+        assert result["ssn"].tolist() == ["333-33-3333", "333-33-3333", "444-44-4444", "444-44-4444"]
 
 
 @pytest.mark.unit

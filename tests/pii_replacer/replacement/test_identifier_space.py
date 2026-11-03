@@ -63,14 +63,24 @@ class TestIdentifierSpace:
         assert number_space_for(["17", "A42"], distinct=True) is None
         assert number_space_for([], distinct=True) is None
 
-    def test_distinct_allocation_uses_every_other_value_before_repeating(self) -> None:
+    def test_distinct_allocation_gives_each_original_its_own_values_before_repeating(self) -> None:
         allocator = IdentifierAllocator(NumberSpace(1))
 
-        first = [allocator.allocate(seed, "0", avoid=set()) for seed in range(9)]
-        repeated = [allocator.allocate(seed, "0", avoid=set()) for seed in range(3)]
+        # Originals "a" through "i" are not in the space, so each of the 10 digits is free for them.
+        first = [allocator.allocate(seed, original, avoid=set()) for seed, original in enumerate("abcdefghij")]
+        repeated = [allocator.allocate(seed, "k", avoid=set()) for seed in range(3)]
 
-        assert sorted(first) == [(str(value), "new") for value in range(1, 10)]
+        assert sorted(first) == [(str(value), "new") for value in range(10)]
         assert all(allocation is not None and allocation[1] == "repeat" for allocation in repeated)
+
+    def test_distinct_allocation_lets_the_same_original_reuse_its_values(self) -> None:
+        allocator = IdentifierAllocator(NumberSpace(1))
+
+        # "0" can take the 9 other digits; once they are its own, later rows holding "0" reuse them.
+        allocations = [allocator.allocate(seed, "0", avoid=set()) for seed in range(20)]
+
+        assert all(allocation is not None and allocation[1] == "new" for allocation in allocations)
+        assert {allocation[0] for allocation in allocations if allocation is not None} <= set("123456789")
 
     def test_allocation_without_distinctness_only_skips_the_own_original(self) -> None:
         allocator = IdentifierAllocator(NumberSpace(1))

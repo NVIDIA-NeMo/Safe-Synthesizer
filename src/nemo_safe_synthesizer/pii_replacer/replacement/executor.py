@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Hashable, Mapping
+from collections.abc import Container, Hashable, Mapping
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -23,27 +23,27 @@ from ..transform_result import (
 )
 from .addresses import AddressParts, detect_address_parts
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
-from .collisions import IDENTIFIER_ENTITY_TYPES, CandidateChooser, ReplacementOutcome, all_distinct
-from .compiler import compile_plan
+from .collisions import IDENTIFIER_ENTITY_TYPES, CandidateChooser, ReplacementOutcome, ReplacementOwners, all_distinct
 from .detection import FreeTextDetector
 from .free_text import FreeTextColumnStatistics, FreeTextReplacementExecutor
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .identifier_space import IdentifierAllocator, MaskSpace, NumberSpace, identifier_allocator
 from .letter_case import case_insensitive_identity, match_letter_case
-from .seeding import derive_seed, resolve_base_seed
+from .seeding import derive_seed
 from .types import (
     CanonicalValue,
     EffectiveDependencyTuple,
     GroupDependencyDrift,
     GroupMappingKey,
     GroupMappingProvenance,
+    MappingScope,
     RecordMappingKey,
     StructuredMappingKey,
 )
 
 logger = get_logger(__name__)
 
-__all__ = ["ReplacementExecutionResult", "ReplacementExecutor", "resolve_base_seed"]
+__all__ = ["ReplacementExecutionResult", "ReplacementExecutor"]
 
 _MAX_GENERATION_ATTEMPTS = 10
 # A grouping column has no fallback, so it gets more attempts to find a value no other group uses.
@@ -104,6 +104,7 @@ class ReplacementExecutor:
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
+        self._locale = locale
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._full_name_patterns = _full_name_patterns(plan)
         self._capture_replacement_map = capture_replacement_map
@@ -120,12 +121,15 @@ class ReplacementExecutor:
         )
         self._replacement_records: list[StructuredReplacementRecord] = []
         self._shared: dict[_SharedMappingKey, str] = {}
-        # Case-folded replacements used so far in each identifier column whose originals are all distinct.
-        self._used_by_distinct_column: dict[str, set[str]] = {}
+        # The original each replacement went to in every identifier column, so two originals never share one.
+        self._owners_by_column: dict[str, ReplacementOwners] = {}
+        # Identifier columns whose originals are all distinct, such as key columns; numeric ranges widen for them.
+        self._distinct_columns: set[str] = set()
         self._group_replacements: set[str] = set()
-        # Case-folded replacements in every column of a format that a distinct or grouping column has. New
-        # values in that column avoid them, so a value another column shares into it later is not a repeat.
-        self._used_by_format: dict[_FormatKey, set[str]] = {}
+        # The same for every column of a format that an identifier or grouping column has. New values in
+        # that column avoid other originals' values, so a value another column shares into it later is not a
+        # repeat.
+        self._owners_by_format: dict[_FormatKey, ReplacementOwners] = {}
         self._repeated_by_target: dict[str, int] = {}
         self._kept_name_parts_by_target: dict[str, int] = {}
         self._identifier_allocators: dict[str, IdentifierAllocator] = {}
@@ -143,15 +147,15 @@ class ReplacementExecutor:
         self._seed_reserved_values(dataframe)
         self._prepare_identifier_allocators(dataframe)
         for spec in self._plan.columns_to_replace:
-            if self._own_replacements(spec) is not None:
-                self._used_by_format.setdefault(self._format_key(spec), set())
+            if spec.column_name in self._owners_by_column or spec.column_name == self._group_column:
+                self._owners_by_format.setdefault(self._format_key(spec), ReplacementOwners())
         self._address_parts = detect_address_parts(
             self._detector,
             dataframe,
             [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.STREET_ADDRESS],
         )
         free_text_detections = self._free_text.detect(dataframe, free_text_specs)
-        ordered_specs = compile_plan(self._plan)
+        ordered_specs = self._plan.replacement_order()
         for spec in ordered_specs:
             if spec.entity_type is not EntityType.FREE_TEXT:
                 self._execute_target(working, spec, original_group_identities)
@@ -235,7 +239,7 @@ class ReplacementExecutor:
                 dataframe,
                 [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.STREET_ADDRESS],
             )
-            for spec in compile_plan(self._plan):
+            for spec in self._plan.replacement_order():
                 if spec.entity_type is not EntityType.FREE_TEXT:
                     self._register_originals(dataframe, spec, group_identities)
         free_text_detections = self._free_text.detect(dataframe, free_text_specs)
@@ -267,7 +271,7 @@ class ReplacementExecutor:
         address_parts = self._address_parts.get(spec.column_name, {})
         for row_position in range(len(dataframe)):
             original = dataframe.iat[row_position, column_position]
-            if is_missing_scalar(original):
+            if _is_blank(original):
                 continue
             key = self._mapping_key(spec, row_position, canonicalize_scalar(original), group_identities)
             text = original_texts[row_position]
@@ -279,9 +283,10 @@ class ReplacementExecutor:
         self._free_text.reset()
         self._replacement_records.clear()
         self._shared.clear()
-        self._used_by_distinct_column.clear()
+        self._owners_by_column.clear()
+        self._distinct_columns.clear()
         self._group_replacements.clear()
-        self._used_by_format.clear()
+        self._owners_by_format.clear()
         self._repeated_by_target.clear()
         self._kept_name_parts_by_target.clear()
         self._identifier_allocators.clear()
@@ -301,18 +306,21 @@ class ReplacementExecutor:
         return tuple(canonicalize_scalar(value) for value in values)
 
     def _seed_reserved_values(self, dataframe: pd.DataFrame) -> None:
-        # Replacements stay distinct only in identifier columns whose original values are all distinct,
-        # such as key columns, compared in the same text form generators receive and return.
+        # Two different originals never share a replacement in an identifier column, whether or not its
+        # values repeat, as an ID repeats on each of a patient's visit rows. Values are compared in the same
+        # text form generators receive and return.
         for spec in self._plan.columns_to_replace:
-            if spec.entity_type in IDENTIFIER_ENTITY_TYPES and all_distinct(_original_texts(dataframe, spec)):
-                self._used_by_distinct_column[spec.column_name] = set()
+            if spec.entity_type in IDENTIFIER_ENTITY_TYPES:
+                self._owners_by_column[spec.column_name] = ReplacementOwners()
+                if all_distinct(_original_texts(dataframe, spec)):
+                    self._distinct_columns.add(spec.column_name)
 
     def _prepare_identifier_allocators(self, dataframe: pd.DataFrame) -> None:
         for spec in self._plan.columns_to_replace:
             if spec.entity_type not in IDENTIFIER_ENTITY_TYPES:
                 continue
             originals = _original_texts(dataframe, spec)
-            distinct = spec.column_name in self._used_by_distinct_column or spec.column_name == self._group_column
+            distinct = spec.column_name in self._distinct_columns or spec.column_name == self._group_column
             allocator = identifier_allocator(spec.entity_type, spec.pattern, originals, distinct=distinct)
             if allocator is None:
                 continue
@@ -350,7 +358,7 @@ class ReplacementExecutor:
 
         for row_position in range(len(working)):
             original = working.iat[row_position, column_position]
-            if is_missing_scalar(original):
+            if _is_blank(original):
                 continue
             canonical_original = canonicalize_scalar(original)
             dependencies = _effective_dependencies(working, row_position, spec)
@@ -368,7 +376,7 @@ class ReplacementExecutor:
                         row_position=row_position,
                         column_name=spec.column_name,
                         entity_type=spec.entity_type,
-                        scope="record" if group_identities is None else "group",
+                        scope=MappingScope.RECORD if group_identities is None else MappingScope.GROUP,
                         original_value=original_text,
                         replacement_value=replacement,
                     )
@@ -405,11 +413,12 @@ class ReplacementExecutor:
         shared_key = self._shared_key(key, spec)
         shared = self._shared.get(shared_key)
         # Another column of the same type and format already replaced this value in this record or group.
-        # A grouping column, or a column that must stay distinct, reuses it only if the column does not
-        # already have it, so no other group or original gets the same replacement.
-        if shared is not None and ((own := self._own_replacements(spec)) is None or shared.casefold() not in own):
+        # A grouping or identifier column reuses it only if the column has not given it to another group or
+        # original.
+        taken = self._taken_in_column(spec, original_text)
+        if shared is not None and (taken is None or shared.casefold() not in taken):
             self._cache[key] = _CachedReplacement(shared, provenance)
-            self._record_used(spec, shared)
+            self._record_used(spec, shared, original_text)
             self._free_text.register_structured_mapping(key, spec, original_text, shared, address_parts)
             return shared
         if address_parts is None:
@@ -422,30 +431,33 @@ class ReplacementExecutor:
             replacement = street + address_parts.locality
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
-        self._record_used(spec, replacement)
+        self._record_used(spec, replacement, original_text)
         self._free_text.register_structured_mapping(key, spec, original_text, replacement, address_parts)
         self._generated_count += 1
         return replacement
 
-    def _record_used(self, spec: PiiColumnPlan, replacement: str) -> None:
-        folded = replacement.casefold()
-        if (used := self._used_by_distinct_column.get(spec.column_name)) is not None:
-            used.add(folded)
+    def _record_used(self, spec: PiiColumnPlan, replacement: str, original: str) -> None:
+        if (owners := self._owners_by_column.get(spec.column_name)) is not None:
+            owners.record(replacement, original)
         if spec.column_name == self._group_column:
-            self._group_replacements.add(folded)
-        if (used_by_format := self._used_by_format.get(self._format_key(spec))) is not None:
-            used_by_format.add(folded)
+            self._group_replacements.add(replacement.casefold())
+        if (format_owners := self._owners_by_format.get(self._format_key(spec))) is not None:
+            format_owners.record(replacement, original)
 
-    def _own_replacements(self, spec: PiiColumnPlan) -> set[str] | None:
-        """Return the case-folded replacements in ``spec``'s column if it must stay distinct, else ``None``."""
+    def _taken_in_column(self, spec: PiiColumnPlan, original: str) -> Container[str] | None:
+        """Return the case-folded values ``original`` must not get in ``spec``'s column, or ``None`` if any may repeat.
+
+        A grouping column gives every group its own value; an identifier column gives every original its own.
+        """
         if spec.column_name == self._group_column:
             return self._group_replacements
-        return self._used_by_distinct_column.get(spec.column_name)
+        owners = self._owners_by_column.get(spec.column_name)
+        return None if owners is None else owners.taken_for(original)
 
-    def _avoided_replacements(self, spec: PiiColumnPlan) -> set[str] | None:
-        """Return the case-folded values a new replacement in ``spec``'s column should avoid, or ``None``.
+    def _avoided_replacements(self, spec: PiiColumnPlan, original: str) -> Container[str] | None:
+        """Return the case-folded values a new replacement for ``original`` should avoid, or ``None``.
 
-        A column that must stay distinct avoids its own replacements and those of every column it shares
+        A grouping or identifier column avoids values other originals got in it and in every column it shares
         replacements with. Otherwise a new value could equal one that another column later shares into it.
         When only such values are left, an allocated identifier takes one its own column has not used.
 
@@ -454,9 +466,9 @@ class ReplacementExecutor:
             ``X`` in row 2. If row 2's ``parent_id`` equals its ``account_id``, it would share ``X`` and
             repeat it, so row 1 avoids ``X``.
         """
-        if self._own_replacements(spec) is None:
+        if self._taken_in_column(spec, original) is None:
             return None
-        return self._used_by_format[self._format_key(spec)]
+        return self._owners_by_format[self._format_key(spec)].taken_for(original)
 
     def _format_key(self, spec: PiiColumnPlan) -> _FormatKey:
         allocator = self._identifier_allocators.get(spec.column_name)
@@ -495,7 +507,7 @@ class ReplacementExecutor:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
         one_to_one = spec.column_name == self._group_column
-        avoid = self._avoided_replacements(spec)
+        avoid = self._avoided_replacements(spec, original_text)
         chooser = CandidateChooser(
             spec.entity_type,
             original_text,
@@ -503,6 +515,7 @@ class ReplacementExecutor:
             used=None if one_to_one else avoid,
             one_to_one=avoid if one_to_one else None,
             written_suffix=kept_locality or "",
+            locale=self._locale,
         )
         attempts = _MAX_GROUP_GENERATION_ATTEMPTS if one_to_one else _MAX_GENERATION_ATTEMPTS
         for attempt in range(attempts):
@@ -526,7 +539,8 @@ class ReplacementExecutor:
             except SafeSynthesizerError:
                 raise
             except Exception as exc:
-                raise GenerationError(
+                # The generator is NSS code, so an unexpected exception from it is a bug, not a data problem.
+                raise InternalError(
                     f"PII replacement generation failed for column {spec.column_name!r} "
                     f"at row position {key.row_position if isinstance(key, RecordMappingKey) else 'group'}"
                 ) from exc
@@ -567,10 +581,10 @@ class ReplacementExecutor:
         """Take the next usable value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        avoid = self._avoided_replacements(spec)
+        avoid = self._avoided_replacements(spec, original_text)
         allocation = allocator.allocate(seed, original_text, avoid=avoid)
-        own = self._own_replacements(spec)
-        if (allocation is None or allocation[1] != "new") and own is not None and own is not avoid:
+        own = self._taken_in_column(spec, original_text)
+        if (allocation is None or allocation[1] != "new") and own is not None:
             # Every value left is used by a column that shares this format; take one this column has not used.
             # A value shared into this column later is then replaced instead of repeated.
             allocation = allocator.allocate(seed, original_text, avoid=own)
@@ -676,7 +690,7 @@ def _effective_dependencies(
         if not isinstance(column_position, int):
             raise ParameterError(f"dependency column {dependency.column_name!r} is duplicated in the dataframe")
         value = dataframe.iat[row_position, column_position]
-        canonical = None if is_missing_scalar(value) else canonicalize_scalar(value)
+        canonical = None if _is_blank(value) else canonicalize_scalar(value)
         dependencies.append((dependency.entity_type, canonical))
     return tuple(dependencies)
 
@@ -758,7 +772,7 @@ def _column_statistics(
                 kept_name_part_count=detected.kept_name_part_count,
             )
             continue
-        non_missing = [value for value in source.tolist() if not is_missing_scalar(value)]
+        non_missing = [value for value in source.tolist() if not _is_blank(value)]
         changed = sum(
             not _equal_scalars(before, after)
             for before, after in zip(source.tolist(), transformed[spec.column_name].tolist())
@@ -811,7 +825,13 @@ def _original_texts(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> list[str]:
     """Return the text forms of the column's non-missing original values, as generators receive them."""
     column = dataframe[spec.column_name]
     return [
-        text
-        for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
-        if not is_missing_scalar(value)
+        text for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True) if not _is_blank(value)
     ]
+
+
+def _is_blank(value: object) -> bool:
+    """Return whether a cell holds no value to replace: a missing marker or a blank string.
+
+    A blank string, such as an empty middle name, is left as written rather than replaced with a made-up value.
+    """
+    return is_missing_scalar(value) or (isinstance(value, str) and not value.strip())

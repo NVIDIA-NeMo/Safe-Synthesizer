@@ -179,12 +179,16 @@ class IdentifierAllocator:
     def __init__(self, space: MaskSpace | NumberSpace) -> None:
         self.space = space
         self._allocated: list[int] = []
-        self._allocated_set: set[int] = set()
+        # Case-folded original each allocated index went to, when the column must stay distinct.
+        self._owner_by_index: dict[int, str] = {}
+        self._indices_by_owner: dict[str, list[int]] = {}
+        # Values of the allocated indices, kept once the space is full so later rows do not rebuild them.
+        self._full_space_values: list[str] | None = None
 
     @property
     def free_count(self) -> int:
         """Number of values not yet allocated to a column that must stay distinct."""
-        return self.space.size - len(self._allocated_set)
+        return self.space.size - len(self._owner_by_index)
 
     def allocate(
         self, seed: int, own_original: str, *, avoid: Container[str] | None
@@ -195,8 +199,8 @@ class IdentifierAllocator:
         by ``seed`` that differs from ``own_original`` ignoring letter case: the executor writes each
         replacement in its occurrence's case, which would turn ``"A"`` back into an original ``"a"``. When
         ``avoid`` is given, the column must stay distinct: the replacement must also not have been
-        allocated here before or be in ``avoid``, ignoring case. If no such value is left, a seeded choice
-        among earlier replacements is repeated.
+        allocated here to a different original or be in ``avoid``, ignoring case. The same original may get
+        a value again. If no such value is left, a seeded choice among earlier replacements is repeated.
 
         The start is drawn over the whole space rather than taken as ``seed % size``: a seed has 64 bits,
         and a long mask such as ``ADM-`` followed by 32 alphanumeric positions has far more, so a modulo
@@ -205,8 +209,8 @@ class IdentifierAllocator:
         Args:
             seed: Seed that picks the starting position.
             own_original: The original value being replaced.
-            avoid: Case-folded values the column must not get, such as values it received from another
-                column, or ``None`` when replacements may repeat.
+            avoid: Case-folded values ``own_original`` must not get, such as values other originals
+                received in a column sharing this format, or ``None`` when replacements may repeat.
 
         Example:
             In ``NumberSpace(1)``, seed 9 starts at 7, so ``allocate(9, "7", avoid=None)`` skips ``"7"``
@@ -216,15 +220,19 @@ class IdentifierAllocator:
         own_index = self.space.index_of(own_original)
         own_folded = own_original.casefold()
         distinct = avoid is not None
+        if distinct and not self.free_count:
+            return self._allocate_from_full_space(seed, own_index, own_folded, avoid)
         index = Random(seed).randrange(size)
         for _ in range(size):
-            if index != own_index and not (distinct and index in self._allocated_set):
+            owner = self._owner_by_index.get(index)
+            if index != own_index and not (distinct and owner is not None and owner != own_folded):
                 value = self.space.value_at(index)
                 folded = value.casefold()
                 if folded != own_folded and (avoid is None or folded not in avoid):
-                    if distinct:
+                    if distinct and owner is None:
                         self._allocated.append(index)
-                        self._allocated_set.add(index)
+                        self._owner_by_index[index] = own_folded
+                        self._indices_by_owner.setdefault(own_folded, []).append(index)
                     return value, "new"
             index = (index + 1) % size
         repeats = [
@@ -232,6 +240,30 @@ class IdentifierAllocator:
             for value in (self.space.value_at(allocated) for allocated in self._allocated)
             if value.casefold() != own_folded
         ]
+        if repeats:
+            return repeats[seed % len(repeats)], "repeat"
+        return None
+
+    def _allocate_from_full_space(
+        self, seed: int, own_index: int | None, own_folded: str, avoid: Container[str]
+    ) -> tuple[str, AllocationKind] | None:
+        """Allocate once every value has an owner, without scanning the space.
+
+        Only the original's own values are left, so one of them is reused; without one, a seeded
+        earlier replacement is repeated, as a scan of the full space would find.
+        """
+        own = [
+            value
+            for value in (
+                self.space.value_at(index) for index in self._indices_by_owner.get(own_folded, ()) if index != own_index
+            )
+            if value.casefold() != own_folded and value.casefold() not in avoid
+        ]
+        if own:
+            return own[seed % len(own)], "new"
+        if self._full_space_values is None:
+            self._full_space_values = [self.space.value_at(index) for index in self._allocated]
+        repeats = [value for value in self._full_space_values if value.casefold() != own_folded]
         if repeats:
             return repeats[seed % len(repeats)], "repeat"
         return None

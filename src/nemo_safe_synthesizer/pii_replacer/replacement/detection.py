@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import math
 from bisect import bisect_right
 from collections import defaultdict
@@ -16,7 +15,6 @@ from typing import NamedTuple, Protocol
 from unicodedata import normalize
 
 import regex
-from stdnum import luhn
 from typing_extensions import TypeIs
 
 from ...config.replace_pii import (
@@ -30,7 +28,8 @@ from ...errors import GenerationError, InternalError, ParameterError, SafeSynthe
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
 from .national_ids import national_id_check
-from .types import DetectedSpan, DetectionCell, DetectionCellId, FreeTextDetections, ProtectedSpan
+from .types import DetectedSpan, DetectionCell, DetectionCellId, DetectionSource, FreeTextDetections, ProtectedSpan
+from .value_checks import is_ipv4, is_ipv6, is_luhn_valid
 
 logger = get_logger(__name__)
 
@@ -87,7 +86,12 @@ _MIDDLE_NAME_NEIGHBOR_GAP = 3
 # joiners, with inner hyphens or underscores. GLiNER2 spans start and end on these words within a chunk.
 _GLINER_WORD = regex.compile(r"[\w\p{M}\u200c\u200d]+(?:[-_][\w\p{M}\u200c\u200d]+)*")
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
-_SOURCE_ORDER = {"regex": 0, "gliner": 1, "structured_value": 2, "detected_value": 3}
+_SOURCE_ORDER = {
+    DetectionSource.REGEX: 0,
+    DetectionSource.GLINER: 1,
+    DetectionSource.STRUCTURED_VALUE: 2,
+    DetectionSource.DETECTED_VALUE: 3,
+}
 
 
 class FreeTextDetector(Protocol):
@@ -241,7 +245,7 @@ class Gliner2Detector:
         spans: list[DetectedSpan] = []
         protected: list[ProtectedSpan] = []
         for text, text_cells in cells_by_text.items():
-            for span in _filter_name_spans(candidates[text]):
+            for span in _filter_name_spans(candidates[text], text):
                 spans.extend(_copy_span_to_cells(span, text_cells))
             # Overlapping chunks can report the same exclusion span twice.
             for start, end in sorted(set(candidates[text].exclusions)):
@@ -368,18 +372,20 @@ class RegexDetector:
     ) -> tuple[DetectedSpan, ...]:
         """Return the spans of ``matches`` that pass the rule's validator, enforcing the match cap.
 
-        ``matches`` is consumed lazily, so a ``TimeoutError`` from the regex
-        engine propagates to the caller.
+        Only validated spans count toward the cap: candidates the validator rejects, such as the
+        ``10:01:22`` times of a transcript that the IPv6 pattern also matches, are not PII. The regex
+        timeout still bounds the work. ``matches`` is consumed lazily, so a ``TimeoutError`` from the
+        regex engine propagates to the caller.
         """
         spans: list[DetectedSpan] = []
-        for match_count, match in enumerate(matches, start=1):
-            if match_count > self._max_matches_per_rule:
-                raise GenerationError(
-                    f"built-in PII regex rule {rule.rule_id!r} exceeded the maximum of "
-                    f"{self._max_matches_per_rule} matches for one cell"
-                )
+        for match in matches:
             if span := _validated_regex_span(cell, rule, match):
                 spans.append(span)
+                if len(spans) > self._max_matches_per_rule:
+                    raise GenerationError(
+                        f"built-in PII regex rule {rule.rule_id!r} exceeded the maximum of "
+                        f"{self._max_matches_per_rule} matches for one cell"
+                    )
         return tuple(spans)
 
 
@@ -442,8 +448,12 @@ def _requested_labels(
 
 
 def _exclusion_thresholds(config: FreeTextDetectionConfig) -> dict[str, float]:
-    """Return name-exclusion thresholds keyed by normalized checkpoint label."""
-    return {_normalize_label(label): threshold for label, threshold in config.name_exclusion_thresholds.items()}
+    """Return name-exclusion thresholds keyed by normalized checkpoint label, leaving out dropped labels."""
+    return {
+        _normalize_label(label): threshold
+        for label, threshold in config.name_exclusion_thresholds.items()
+        if threshold is not None
+    }
 
 
 def _collect_chunk_candidates(
@@ -567,14 +577,26 @@ def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | 
     return original_start, original_end
 
 
-def _filter_name_spans(candidates: _TextCandidates) -> list[_TextSpan]:
-    """Drop names overlapping an exclusion span, then middle names without neighbouring name pieces.
+CONTRACTION_SUFFIX = regex.compile(r"['\u2019]t(?!\w)", regex.IGNORECASE)
+"""The ``'t`` of a negative contraction such as ``don't``, which never follows a name."""
+
+
+def _filter_name_spans(candidates: _TextCandidates, text: str) -> list[_TextSpan]:
+    """Drop names overlapping an exclusion span or followed by ``n't``, then middle names without name neighbours.
+
+    GLiNER2 can tag the ``don`` of ``don't`` as a first name when ``Don`` appears in the same text; a name is
+    never followed by ``'t``.
 
     A middle name is kept only inside a detected full name or directly between a detected first and last
     name, which rejects words such as clothing sizes that GLiNER2 tags as middle names. The name thresholds
     were tuned with this rule in place.
     """
-    kept = [span for span in candidates.spans if not _is_excluded_name(span, candidates.exclusions)]
+    kept = [
+        span
+        for span in candidates.spans
+        if not _is_excluded_name(span, candidates.exclusions)
+        and not (span.entity_type in _NAME_ENTITY_TYPES and CONTRACTION_SUFFIX.match(text, span.end))
+    ]
     return [span for span in kept if span.entity_type is not EntityType.MIDDLE_NAME or _has_name_neighbors(span, kept)]
 
 
@@ -620,7 +642,7 @@ def _model_label_threshold(
 def _copy_span_to_cells(span: _TextSpan, cells: list[DetectionCell]) -> tuple[DetectedSpan, ...]:
     """Copy one unique-text result to cells that allow its normalized entity type."""
     return tuple(
-        DetectedSpan(cell.cell_id, span.start, span.end, span.entity_type, "gliner", span.score)
+        DetectedSpan(cell.cell_id, span.start, span.end, span.entity_type, DetectionSource.GLINER, span.score)
         for cell in cells
         if span.entity_type in cell.allowed_entity_types
     )
@@ -635,7 +657,7 @@ def _validated_regex_span(
     value = match.group(0)
     if not rule.validator(value):
         return None
-    return DetectedSpan(cell.cell_id, match.start(), match.end(), rule.entity_type, "regex")
+    return DetectedSpan(cell.cell_id, match.start(), match.end(), rule.entity_type, DetectionSource.REGEX)
 
 
 def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSpan, ...]:
@@ -685,14 +707,14 @@ def _confidence(span: DetectedSpan) -> float:
 
     Known-value matches have no score and count as 0.0, so a detector span of equal length wins.
     """
-    if span.source == "regex":
+    if span.source is DetectionSource.REGEX:
         return 1.0
     return span.score if span.score is not None else 0.0
 
 
 def _tie_rank(span: DetectedSpan) -> tuple[int, float, int]:
     """Rank exact span ties by source, confidence, and stable entity order."""
-    confidence_rank = -(span.score if span.source == "gliner" and span.score is not None else 0.0)
+    confidence_rank = -(span.score if span.source is DetectionSource.GLINER and span.score is not None else 0.0)
     return (_SOURCE_ORDER[span.source], confidence_rank, _ENTITY_ORDER[span.entity_type])
 
 
@@ -810,24 +832,6 @@ def _load_gliner2_model(model_id: str, revision: str | None) -> _GlinerModel:
         return GLiNER2.from_pretrained(model_id, revision=revision, map_location=device)
 
 
-def _valid_ipv4(value: str) -> bool:
-    """Return whether a candidate is a valid IPv4 address."""
-    try:
-        ipaddress.IPv4Address(value)
-    except ValueError:
-        return False
-    return True
-
-
-def _valid_ipv6(value: str) -> bool:
-    """Return whether a candidate, with any enclosing URL brackets removed, is a valid IPv6 address."""
-    try:
-        ipaddress.IPv6Address(value.strip("[]"))
-    except ValueError:
-        return False
-    return True
-
-
 def _valid_email(value: str) -> bool:
     """Return whether an email candidate satisfies local-part and IDNA domain limits."""
     if len(value) > 254 or value.count("@") != 1:
@@ -859,7 +863,7 @@ def _valid_card(value: str) -> bool:
         return False
     if len(digits) == 15 and not digits.startswith(("34", "37")):
         return False
-    return luhn.is_valid(digits)
+    return is_luhn_valid(digits)
 
 
 _REGEX_RULES = (
@@ -878,28 +882,38 @@ _REGEX_RULES = (
     _RegexRule(
         "builtin.credit_debit_card",
         EntityType.CREDIT_DEBIT_CARD,
-        regex.compile(r"(?<![0-9])(?:[0-9][ -]?){12,18}[0-9](?![0-9])"),
+        # Card layouts only: 13-19 unseparated digits, groups of four (4-4-4-1 to 4-4-4-7), or the American
+        # Express and Diners 4-6-5 and 4-6-4 layouts, with one separator throughout. A looser digit run also
+        # took a neighbouring expiry, CVV, or quantity, and the whole run then failed the Luhn check.
+        regex.compile(
+            r"(?<![0-9])(?:"
+            r"[0-9]{13,19}"
+            r"|[0-9]{4}(?P<sep>[ -])[0-9]{4}(?P=sep)[0-9]{4}(?P=sep)[0-9]{1,7}"
+            r"|[0-9]{4}(?P<amex_sep>[ -])[0-9]{6}(?P=amex_sep)[0-9]{4,5}"
+            r")(?![0-9])"
+        ),
         _valid_card,
     ),
     _RegexRule(
         "builtin.ipv4",
         EntityType.IPV4,
         regex.compile(r"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9]|\.[0-9])"),
-        _valid_ipv4,
+        is_ipv4,
     ),
     # Ported from NeMo Anonymizer's nemo-anonymizer.ipv6.v1 rule. The start may follow a lone colon
-    # (``ip:2001:db8::1``) but not a hex digit or ``::``, and the alternation also matches IPv4-mapped
-    # addresses (``::ffff:192.0.2.1``) whole so the IPv4 rule cannot claim only their tail.
+    # (``ip:2001:db8::1``) but not a word character or ``::``, so ``std::vector`` is not an address, and the
+    # alternation also matches IPv4-mapped addresses (``::ffff:192.0.2.1``) whole so the IPv4 rule cannot
+    # claim only their tail.
     _RegexRule(
         "builtin.ipv6",
         EntityType.IPV6,
         regex.compile(
-            r"(?:(?<![0-9A-Fa-f:])|(?<=^:)|(?<=[^0-9A-Fa-f:]:))"
+            r"(?:(?<![\w:])|(?<=^:)|(?<=[^0-9A-Fa-f:]:))"
             r"(?!:(?!:))(?!:::)(?:"
             r"(?:[0-9A-Fa-f]{0,4}:){2,6}(?:[0-9]{1,3}\.){3}[0-9]{1,3}"
             r"|(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}"
-            r")(?![0-9A-Fa-f:]|\.[0-9])"
+            r")(?![\w:]|\.[0-9])"
         ),
-        _valid_ipv6,
+        is_ipv6,
     ),
 )

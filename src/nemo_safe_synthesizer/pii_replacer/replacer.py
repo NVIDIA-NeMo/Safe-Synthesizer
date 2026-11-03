@@ -21,7 +21,7 @@ from ..errors import InternalError
 from ..observability import get_logger
 from .planning import resolve_replacement_config
 from .replacement.detection import CompositeFreeTextDetector
-from .replacement.executor import ReplacementExecutor, resolve_base_seed
+from .replacement.executor import ReplacementExecutor
 from .replacement.generation import ReplacementGenerator
 from .transform_result import DetectionResult, TransformResult
 
@@ -98,6 +98,8 @@ class TabularPiiReplacer:
             self._time_series,
             check_pattern_coverage=check_pattern_coverage,
         )
+        if resolved_config.inline_plan is not None and not resolved_config.inline_plan.columns_to_replace:
+            logger.user.warning("The PII replacement plan lists no columns, so no values are replaced")
         executor = self._executor(resolved_config, capture_replacement_map=capture_replacement_map)
         execution = executor.execute(df)
         return TransformResult(
@@ -142,7 +144,7 @@ class TabularPiiReplacer:
         self, resolved_config: ReplacePiiConfig, *, capture_replacement_map: bool = False
     ) -> ReplacementExecutor:
         plan = resolved_config.inline_plan
-        if plan is None:
+        if plan is None or resolved_config.seed is None:
             raise InternalError("PII replacement configuration was not fully resolved")
         # Street-address columns also use the detector, to find the street inside a full address.
         free_text_detector = (
@@ -157,7 +159,7 @@ class TabularPiiReplacer:
             plan,
             self._replacement_generator(resolved_config.sampler, resolved_config.locale),
             group_column=self._data_config.group_training_examples_by,
-            base_seed=resolve_base_seed(resolved_config.seed),
+            base_seed=resolved_config.seed,
             free_text_detector=free_text_detector,
             capture_replacement_map=capture_replacement_map,
             find_and_replace=_find_and_replace_enabled(resolved_config, plan),
