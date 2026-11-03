@@ -1334,9 +1334,13 @@ class TestRunPreflight:
         metadata.max_seq_length = 2048
         metadata.instruction = "Generate: "
         metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
-        with patch("torch.cuda.is_available", return_value=True):
-            with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
-                report = run_preflight(sample_df, resolved_config, metadata)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            # Stands in for the vLLM install, GPU count, and GPU memory the managed local server needs.
+            patch("nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem", return_value=None),
+            patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}),
+        ):
+            report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
         by_name = {c.name: c for c in report.checks}
         assert "timeseries.timestamp" not in by_name
