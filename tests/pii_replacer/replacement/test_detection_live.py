@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Opt-in acceptance evaluation for the pinned GLiNER2 privacy checkpoint."""
+"""Acceptance checks for the pinned GLiNER2 privacy checkpoint, run on a GPU.
+
+The other detection tests use a stub model; these load the real checkpoint, downloading it on first run.
+"""
 
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -16,14 +17,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.detection import (
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import DetectionCell, DetectionCellId
 
-pytestmark = [
-    pytest.mark.slow,
-    pytest.mark.requires_gpu,
-    pytest.mark.skipif(
-        os.environ.get("NSS_RUN_LIVE_GLINER2") != "1",
-        reason="set NSS_RUN_LIVE_GLINER2=1 to evaluate the pinned local checkpoint",
-    ),
-]
+pytestmark = pytest.mark.requires_gpu
 
 
 def test_pinned_model_detects_representative_name_and_birth_date() -> None:
