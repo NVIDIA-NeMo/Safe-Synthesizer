@@ -29,7 +29,7 @@ endpoint settings, see [Environment Variables](environment.md).
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
-| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
+| Wrong columns replaced, or PII missed | Discovery misclassified a column | [Review and edit the plan](customize-pii-replacement.md#review-and-reuse-the-plan) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | `timestamp_interval_mismatch` error | Timestamps do not follow `timestamp_interval_seconds` | [Details](#interval-mismatch) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
@@ -601,7 +601,7 @@ with `-v` and report the date format without sharing the original value.
 
 Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. If the file is
 missing, first download the dataset for `replace_pii.locale`, as described under
-[Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas). Set
+[Nemotron-Personas](customize-pii-replacement.md#nemotron-personas). Set
 `replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
 stored elsewhere. When `replace_pii.sampler` is not set, Safe Synthesizer uses Faker if the locale file is
 missing, unless a discovered plan maps ethnicity values. When `replace_pii.sampler` names this

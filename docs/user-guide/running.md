@@ -224,7 +224,7 @@ optional.
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
-| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | -- (local vLLM server) | OpenAI-compatible endpoint for PII plan enhancement; a non-loopback URL sends planning data to that service ([details](../product-overview/pii_replacement.md#where-planning-requests-go)) |
+| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | -- (local vLLM server) | OpenAI-compatible endpoint for PII plan enhancement; a non-loopback URL sends planning data to that service ([details](environment.md#where-planning-requests-go)) |
 | `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the PII inference endpoint |
 | `--inference-timeout-seconds` | `NSS_INFERENCE_TIMEOUT` | local profile's timeout, else `60` | Per-request PII inference timeout, including model reasoning |
 | `--inference-request-options` | `NSS_INFERENCE_REQUEST_OPTIONS` | local profile's options, else none (server defaults) | JSON object of fields for each PII inference request; overrides a profile's options field by field |
@@ -310,8 +310,8 @@ Accepts the same common options and synthesis parameter override syntax as `run`
 
 ### `run replace-pii`
 
-Apply PII replacement to the complete input dataframe without running holdout,
-training, generation, or evaluation:
+Replace PII in the complete input without holdout, training, generation, or
+evaluation:
 
 ```bash
 safe-synthesizer run replace-pii \
@@ -320,57 +320,11 @@ safe-synthesizer run replace-pii \
   --output-file pii_replaced.csv
 ```
 
-The command also writes `safe-synthesizer-config.yaml` and `pii_replacement_plan.yaml` to the run
-directory. Without `--output-file`, replaced data is written there using the
-input name with a `_pii_replaced` suffix, such as
-`data_pii_replaced.csv` for `data.csv`.
-
-Add `--plan-only` to resolve a PII replacement plan and sampler-specific
-dependency mappings against the full input dataframe without replacing rows.
-This planning operation does not produce a train/test split or any replaced
-rows. It does not invoke holdout, model metadata, replacement, training,
-generation, or evaluation.
-
-```bash
-safe-synthesizer run replace-pii --plan-only \
-  --config config.yaml \
-  --data-source data.csv
-```
-
-The plan-only command writes two files in the standard timestamped run
-directory beneath `--artifact-path`: `pii_replacement_plan.yaml`, the resolved
-plan, and `safe-synthesizer-config.yaml`, a complete reusable Safe Synthesizer configuration
-that names it and records the sampler used.
-
-The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
-`output_path` writes the complete configuration there and
-`pii_replacement_plan.yaml` beside it; omitting it performs no write.
-
-```python
-from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-
-config = SafeSynthesizerParameters.from_yaml("config.yaml")
-resolved_pii = (
-    SafeSynthesizer(config)
-    .with_data_source("data.csv")
-    .plan_pii_replacement(output_path="safe-synthesizer-config.yaml")
-)
-```
-
-For standalone replacement, call `replace_pii()` instead. It returns a
-`TransformResult`; output files are optional:
-
-```python
-result = (
-    SafeSynthesizer(config)
-    .with_data_source("data.csv")
-    .replace_pii(
-        "pii_replaced.csv",
-        config_output_path="safe-synthesizer-config.yaml",
-    )
-)
-```
+Add `--plan-only` to write the replacement plan for review without replacing
+any rows. Both forms write `pii_replacement_plan.yaml` and
+`safe-synthesizer-config.yaml` to the run directory. See
+[Customizing PII Replacement](customize-pii-replacement.md#review-and-reuse-the-plan)
+for the review workflow and SDK equivalents.
 
 ### `run --validate`
 
@@ -634,29 +588,11 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-PII replacement v3 can run against the full input without entering the
-synthesis pipeline:
-
-```bash
-safe-synthesizer run replace-pii \
-  --config config.yaml \
-  --data-source data.csv \
-  --output-file pii_replaced.csv
-```
-
-Add `--plan-only` to resolve a reviewable configuration without replacing rows:
-
-```bash
-safe-synthesizer run replace-pii --plan-only \
-  --config config.yaml \
-  --data-source data.csv
-```
-
-During the normal synthesis pipeline, Safe Synthesizer resolves the plan against the full
-input and applies structured-column and free-text replacements only to the
-post-holdout training split. See
-[PII Replacement](../product-overview/pii_replacement.md) for Nemotron
-Personas setup and detector configuration.
+During a normal run, Safe Synthesizer builds the PII replacement plan from the
+full input and replaces PII only in the training split, so evaluation still
+sees the original data. To run replacement on its own, see
+[`run replace-pii`](#run-replace-pii). To review or customize the plan, see
+[Customizing PII Replacement](customize-pii-replacement.md).
 
 ---
 

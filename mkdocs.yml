@@ -182,6 +182,7 @@ nav:
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
+      - Customizing PII Replacement: user-guide/customize-pii-replacement.md
       - Docker: user-guide/docker.md
       - Kubernetes Job: user-guide/kubernetes.md
       - Private Workload Images: user-guide/private-workload-images.md
