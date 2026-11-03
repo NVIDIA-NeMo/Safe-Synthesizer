@@ -159,7 +159,7 @@ def test_window_group_mia_scores_fresh_synthetic_groups_high(points: int, holdou
     [
         pytest.param(lambda rng, training: [values.copy() for values in training], id="exact_copy"),
         pytest.param(lambda rng, training: [values[3:].copy() for values in training], id="copy_shifted_off_grid"),
-        pytest.param(lambda rng, training: _with_missing(rng, training), id="copy_with_missing_values"),
+        pytest.param(_with_missing, id="copy_with_missing_values"),
     ],
 )
 def test_window_group_mia_scores_copied_training_data_near_zero(make_synthetic):
