@@ -28,6 +28,7 @@ from pydantic import (
     SkipValidation,
     ValidationError,
     ValidationInfo,
+    field_serializer,
     field_validator,
     model_serializer,
     model_validator,
@@ -893,8 +894,9 @@ class FreeTextDetectionConfig(NSSBaseModel):
         description=(
             "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
             "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
-            "replaced, and find_and_replace does not replace text inside them. A value replaces the whole default set; use an empty mapping to turn exclusion off, which "
-            "finds more real names at the cost of more false names in clinical text."
+            "replaced, and find_and_replace does not replace text inside them. Labels you set are merged into the "
+            "defaults; set a label to null to drop it. Dropping every label turns exclusion off, which finds more "
+            "real names at the cost of more false names in clinical text."
         ),
     )
     find_and_replace: bool = Field(
@@ -948,6 +950,34 @@ class FreeTextDetectionConfig(NSSBaseModel):
                 f"unsupported: {unsupported}"
             )
         return value
+
+    @field_validator("name_exclusion_thresholds", mode="before")
+    @classmethod
+    def _merge_default_name_exclusion_thresholds(cls, value: object) -> object:
+        """Merge selected labels into the defaults; a label set to ``None`` is dropped.
+
+        Labels are matched after normalizing case and separators, so ``Medical Condition`` overrides the default
+        ``medical_condition`` instead of adding a second label.
+        """
+        if not isinstance(value, Mapping):
+            return value
+        overrides = {str(label): threshold for label, threshold in value.items()}
+        if len({_normalize_gliner_label(label) for label in overrides}) != len(overrides):
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
+        merged: dict[str, object] = {
+            label: threshold
+            for label, threshold in _default_name_exclusion_thresholds().items()
+            if _normalize_gliner_label(label) not in {_normalize_gliner_label(key) for key in overrides}
+        }
+        merged.update({label: threshold for label, threshold in overrides.items() if threshold is not None})
+        return merged
+
+    @field_serializer("name_exclusion_thresholds")
+    def _serialize_name_exclusion_thresholds(self, value: dict[str, float]) -> dict[str, float | None]:
+        """Write dropped default labels as ``None`` so a reloaded dump does not merge them back."""
+        kept = {_normalize_gliner_label(label) for label in value}
+        dropped = {label: None for label in _DEFAULT_NAME_EXCLUSION_THRESHOLDS if label not in kept}
+        return {**value, **dropped}
 
     @field_validator("name_exclusion_thresholds")
     @classmethod

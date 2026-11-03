@@ -28,7 +28,7 @@ request_options:
   top_k: 20
   thinking_token_budget: 1000
 environment:
-  # vLLM 0.27's V2 model runner ignores thinking_token_budget.
+  # vLLM's V2 model runner ignored thinking_token_budget when this profile was tested.
   VLLM_USE_V2_MODEL_RUNNER: "0"
 # A capped low-effort request takes under a minute on an A100.
 request_timeout_seconds: 300

@@ -304,10 +304,10 @@ setting up samplers, see [Customizing PII Replacement](customize-pii-replacement
 | `replace_pii.seed` | `null` | Seed for generated values; falls back to `PERSON_RANDOM_SEED` or `42` | Leave unset; runs are already reproducible |
 | `replace_pii.sampler.backend` | unset | `nemotron-personas` or `faker`; unset uses Nemotron-Personas when downloaded, else Faker | Set `faker` for locales without a Nemotron-Personas dataset |
 | `replace_pii.sampler.nemotron_personas_path` | `NSS_NEMOTRON_PERSONAS_PATH` or `~/.data-designer/managed-assets` | Directory containing `datasets/` | Leave at default |
-| `replace_pii.llm.model_id` | `null` | Planning model; without an endpoint, selects a bundled local model (default Nemotron 3.5 Lightning) | Required when `NSS_INFERENCE_ENDPOINT` is set |
+| `replace_pii.llm.model_id` | `null` | Planning model; without an endpoint, selects a bundled local model (default Nemotron 3.5 Lightning) | With `NSS_INFERENCE_ENDPOINT`, set this, `NSS_INFERENCE_MODEL`, or `--inference-model-id` |
 | `replace_pii.llm.max_workers` | `8` | Concurrent planning requests | Leave at default |
 | `replace_pii.free_text_detection.entity_thresholds` | tuned per type | Minimum GLiNER2 confidence per entity type | Lower one type to catch more of it |
-| `replace_pii.free_text_detection.name_exclusion_thresholds` | tuned labels | Terms often mistaken for names; overlapping names are kept | `{}` turns exclusion off |
+| `replace_pii.free_text_detection.name_exclusion_thresholds` | tuned labels | Labels for terms often mistaken for names; a name overlapping one is not replaced | Labels you set merge into the defaults; `null` drops a label |
 | `replace_pii.free_text_detection.find_and_replace` | `true` | Also replace known values the detector missed (`en_US` only) | Leave on |
 | `replace_pii.free_text_detection.batch_size` | `8` | GLiNER2 batch size | Reduce on GPU out-of-memory |
 

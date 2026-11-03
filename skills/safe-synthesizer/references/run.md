@@ -16,6 +16,9 @@ Read first:
 - `docs/user-guide/environment.md` or the
   [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
   for cache, endpoint, WandB, and offline environment variables.
+- `docs/user-guide/customize-pii-replacement.md` or the
+  [published PII customization guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/customize-pii-replacement/)
+  for reviewing the PII replacement plan, samplers, and the planning LLM.
 
 Before the first run with PII replacement (on by default), check whether the
 Nemotron-Personas dataset for `replace_pii.locale` exists under
@@ -24,7 +27,8 @@ If it is missing, NSS replaces names with Faker instead; tell the user and offer
 the download steps in the getting started guide's "Optional Nemotron-Personas
 Data" section, which need an NGC API key.
 
-Automatic PII planning and free-text PII detection need a CUDA GPU. If PyTorch
+Free-text PII detection, and automatic PII planning without
+`NSS_INFERENCE_ENDPOINT`, need a CUDA GPU. If PyTorch
 reports none from an agent sandbox, run the command where `nvidia-smi` lists the GPU rather than
 assuming the machine has none.
 

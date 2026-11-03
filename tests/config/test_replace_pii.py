@@ -682,10 +682,32 @@ class TestReplacePiiConfig:
         with pytest.raises(ValidationError, match=rf"unsupported: \['{entity_type.value}'\]"):
             FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
 
-    def test_free_text_detection_exclusion_mapping_replaces_the_defaults(self) -> None:
-        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"medical_condition": 0.2}})
+    def test_free_text_detection_exclusion_mapping_merges_into_the_defaults(self) -> None:
+        config = FreeTextDetectionConfig.model_validate(
+            {"name_exclusion_thresholds": {"Medical Condition": 0.2, "product": 0.4}}
+        )
 
-        assert config.name_exclusion_thresholds == {"medical_condition": 0.2}
+        assert config.name_exclusion_thresholds == {
+            "body_part": 0.053,
+            "family_relationship": 0.229,
+            "gender": 0.485,
+            "organism": 0.061,
+            "Medical Condition": 0.2,
+            "product": 0.4,
+        }
+
+    def test_free_text_detection_exclusion_label_set_to_none_is_dropped(self) -> None:
+        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"gender": None}})
+
+        assert "gender" not in config.name_exclusion_thresholds
+        assert "medical_condition" in config.name_exclusion_thresholds
+
+    def test_free_text_detection_exclusion_mapping_round_trips(self) -> None:
+        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"gender": None}})
+
+        reloaded = FreeTextDetectionConfig.model_validate(config.model_dump(mode="json"))
+
+        assert reloaded.name_exclusion_thresholds == config.name_exclusion_thresholds
 
     @pytest.mark.parametrize(
         ("labels", "match"),

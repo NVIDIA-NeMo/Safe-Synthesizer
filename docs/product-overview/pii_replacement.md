@@ -29,7 +29,7 @@ A few things to notice:
 - The fake values stay consistent. The email is built from the new name, and
   the "Ada" in the notes becomes "Grace", the same as the name column.
 - The fake name fits the rest of the record. Because the record says "F", the
-  new first name is one typically given to women.
+  new name is one typically given to women.
 - Dates of birth move by a few days or weeks rather than being replaced
   outright, so ages stay realistic.
 - Columns that describe a person but do not identify them on their own, such as
@@ -45,7 +45,8 @@ Replacement happens in three steps.
    belongs to the person named in another column). The result is a replacement
    plan: a short, readable file you can review and edit.
 2. Replace structured columns. For every column in the plan, Safe Synthesizer
-   generates a new value in the same format as the original. Names and
+   generates a realistic new value, usually in the same format as the
+   original. Names and
    addresses come from Nemotron-Personas, NVIDIA's datasets of synthetic
    people that follow real population statistics, or from the open-source
    Faker library.
@@ -78,10 +79,15 @@ gender, race or ethnicity, and dates other than birth dates.
 ## Where Your Data Goes
 
 The AI model that builds the plan runs on your own GPU by default, so your data
-never leaves your machine. You can point Safe Synthesizer at a hosted model
-service instead, for example if you have no suitable GPU. In that case, column
-samples are sent to that service, so use one that is approved to receive your
-data. See [Environment Variables -- Where planning requests go](../user-guide/environment.md#where-planning-requests-go).
+never leaves your machine. This needs a GPU with 80 GB of memory, such as an
+NVIDIA A100 or H100.
+
+Without such a GPU, you have two options. You can point Safe Synthesizer at a
+hosted model service, in which case column samples are sent to that service, so
+use one that is approved to receive your data. See
+[Environment Variables -- Where planning requests go](../user-guide/environment.md#where-planning-requests-go).
+Or you can write the plan yourself, which needs no AI model at all. See
+[Customizing PII Replacement](../user-guide/customize-pii-replacement.md#inline-plan).
 
 ## Reviewing the Plan
 
@@ -96,25 +102,26 @@ tutorial for a walkthrough.
 - Safe Synthesizer replaces only what it is confident is PII. Replacing values
   that are not PII would distort the data your model learns from, so some PII,
   especially in free text, can be missed.
-- Free-text detection works best in English. It also supports French, Spanish,
-  German, Italian, Portuguese, and Dutch, but finds little PII in Chinese,
-  Japanese, Korean, or Thai text.
+- Free-text detection works best in English. The detection model also covers
+  French, Spanish, German, Italian, Portuguese, and Dutch, but finds little
+  PII in Chinese, Japanese, Korean, or Thai text.
 - Nicknames and other informal references to a person are not linked to the
   person's real name.
-- When a street address column holds a full address, the street is replaced but
-  the city, state, and postal code are kept. Combined with other columns, a
-  postal code can help identify someone.
+- When a street address column holds a full address, Safe Synthesizer usually
+  replaces only the street and keeps the city, state, and postal code.
+  Combined with other columns, a postal code can help identify someone.
 
 Replacement is not the only protection. The synthetic output is made of new
 records written by the trained model, and the evaluation report's
-[PII replay](evaluation.md#pii-replay) check shows any original PII that still appears in
-the output.
+[PII replay](evaluation.md#pii-replay) check shows any original PII that
+still appears in the output.
 
 ## Next Steps
 
 - [Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb) --
   step-by-step tutorial
-- [Customizing PII Replacement](../user-guide/customize-pii-replacement.md) -- edit the
-  plan, choose where fake values come from, and tune free-text detection
+- [Customizing PII Replacement](../user-guide/customize-pii-replacement.md) --
+  edit the plan, choose where fake values come from, and tune free-text
+  detection
 - [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii) --
   every setting, including how to turn replacement off
