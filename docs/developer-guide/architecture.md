@@ -37,7 +37,7 @@ graph TB
     subgraph dataProcessing [Data Processing Pipeline]
         DataSource["Input Data"]
         Holdout["Holdout - Train/Test Split"]
-        PIIReplacer["PII Replacement v3 - Placeholder"]
+        PIIReplacer["PII Replacement"]
         DataActions["ActionExecutor"]
         Assembler["ExampleAssembler"]
     end

@@ -52,10 +52,11 @@ flowchart LR
 
 Before the model sees any data, Safe Synthesizer can detect sensitive values and replace them with realistic synthetic alternatives. A name stays a name and a phone number stays a phone number, but neither maps to a real person.
 
-In this context, data like addresses, phone numbers, emails, social security numbers, and credit card numbers are referred to as entities, and we include those by default as replacement targets. Dozens of additional entity types are supported, and custom entities are configurable. PII replacement is on by default and can be disabled when your data does not contain PII.
+In this context, data like addresses, phone numbers, emails, social security numbers, and credit card numbers are referred to as entities, and we include those by default as replacement targets. PII replacement is on by default and can be disabled when your data does not contain PII.
 
-PII replacement v3 supports plan-driven structured and free-text replacement
-before training. See [PII Replacement](../../product-overview/pii_replacement.md).
+Before training, Safe Synthesizer builds a replacement plan for your dataset
+and replaces PII in both structured columns and free text. See
+[PII Replacement](../../product-overview/pii_replacement.md).
 
 ### Stage 2: Fine-Tuning
 
