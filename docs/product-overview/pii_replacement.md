@@ -5,7 +5,7 @@
 
 Personally identifiable information (PII) is information that can identify a
 person, such as a name, email address, phone number, or ID number. Before
-training, Safe Synthesizer replaces the PII in your data with realistic fake
+training, Safe Synthesizer replaces the PII in your data with realistic synthetic
 values. The model then learns the shape of your data -- which columns hold
 names, how emails are written, how notes mention people -- without ever seeing
 the real values.
@@ -26,12 +26,12 @@ Here is one record before and after replacement:
 
 A few things to notice:
 
-- The fake values stay consistent. The email is built from the new name, and
+- The synthetic values stay consistent. The email is built from the new name, and
   the "Ada" in the notes becomes "Grace", the same as the name column.
-- The fake name fits the rest of the record. Because the record says "F", the
+- The synthetic name fits the rest of the record. Because the record says "F", the
   new name is one typically given to women.
 - Dates of birth move by a few days or weeks rather than being replaced
-  outright, so ages stay realistic.
+  with a random date, so ages stay realistic.
 - Columns that describe a person but do not identify them on their own, such as
   sex, are kept as they are.
 
@@ -54,7 +54,7 @@ Replacement happens in three steps.
    for names, phone numbers, email addresses, ID numbers, and other PII, and
    only those words are replaced. The rest of the text is unchanged.
 
-The same original value gets the same fake value everywhere within a record
+The same original value gets the same synthetic value everywhere within a record
 (or within a group of records, such as all visits by one patient), so
 relationships in your data survive replacement.
 
@@ -63,7 +63,7 @@ output with your original data.
 
 ## What Gets Replaced
 
-Safe Synthesizer replaces:
+The PII replacement step replaces:
 
 - Names: first, middle, last, and full names
 - Contact details: email addresses, phone numbers, and street addresses
@@ -82,7 +82,8 @@ The AI model that builds the plan runs on your own GPU by default, so your data
 never leaves your machine. This needs a GPU with 80 GB of memory, such as an
 NVIDIA A100 or H100.
 
-Without such a GPU, you have two options. You can point Safe Synthesizer at a
+If your GPU has less than 80 GB of memory, or you would rather not spend GPU
+time on planning, you have two options. You can point Safe Synthesizer at a
 hosted model service, in which case column samples are sent to that service, so
 use one that is approved to receive your data. See
 [Environment Variables -- Where planning requests go](../user-guide/environment.md#where-planning-requests-go).
@@ -99,29 +100,27 @@ tutorial for a walkthrough.
 
 ## Limitations
 
-- Safe Synthesizer replaces only what it is confident is PII. Replacing values
+- Safe Synthesizer replaces only what it is confident is PII. This is by
+  design: replacement is a first step, and most of the privacy protection
+  comes from synthesis, where the model writes new records. Replacing values
   that are not PII would distort the data your model learns from, so some PII,
   especially in free text, can be missed.
-- Free-text detection works best in English. The detection model also covers
-  French, Spanish, German, Italian, Portuguese, and Dutch, but finds little
-  PII in Chinese, Japanese, Korean, or Thai text.
+- Free-text detection works best in English and the other Latin-script
+  languages the detection model covers: French, Spanish, German, Italian,
+  Portuguese, and Dutch. It finds little PII in languages written in other
+  scripts, such as Chinese, Japanese, Korean, or Thai.
 - Nicknames and other informal references to a person are not linked to the
   person's real name.
-- When a street address column holds a full address, Safe Synthesizer usually
-  replaces only the street and keeps the city, state, and postal code.
-  Combined with other columns, a postal code can help identify someone.
 
-Replacement is not the only protection. The synthetic output is made of new
-records written by the trained model, and the evaluation report's
-[PII replay](evaluation.md#pii-replay) check shows any original PII that
-still appears in the output.
+The evaluation report's [PII replay](evaluation.md#pii-replay) check shows any
+original PII that still appears in the synthetic output.
 
-## Next Steps
+## Related Topics
 
 - [Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb) --
   step-by-step tutorial
 - [Customizing PII Replacement](../user-guide/customize-pii-replacement.md) --
-  edit the plan, choose where fake values come from, and tune free-text
+  edit the plan, choose where synthetic values come from, and tune free-text
   detection
 - [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii) --
   every setting, including how to turn replacement off
