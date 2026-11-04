@@ -142,7 +142,8 @@ Commands:
 PII replacement draws replacement names from the Nemotron-Personas dataset for
 `replace_pii.locale` when it is downloaded. Names then follow the locale's real
 population and can match a row's ethnic background. Without it, Safe Synthesizer uses Faker
-and logs a warning. Downloading requires an NGC API key and the
+and logs a warning. The exception is a plan that maps ethnicity values: that run
+stops with an error, because Faker has no ethnicity values. Downloading requires an NGC API key and the
 [NGC CLI](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling).
 For `en_US`:
 
