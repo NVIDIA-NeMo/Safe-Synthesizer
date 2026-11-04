@@ -14,11 +14,12 @@ Open `tutorials/safe-synthesizer-101.ipynb` and run the cells top to bottom.
 It takes about 15 minutes and walks through the full pipeline on a sample
 dataset.
 
-The other three notebooks go deeper:
+The other four notebooks go deeper:
 
 - `tutorials/differential-privacy.ipynb` -- formal privacy guarantees (~1 hour)
 - `tutorials/time-series-financial-transactions.ipynb` -- sequential data (~20 minutes)
 - `tutorials/healthcare-hospital-readmissions.ipynb` -- privacy-aware healthcare analytics (~1 hour)
+- `tutorials/pii-replacement-review.ipynb` -- review and edit the PII replacement plan before training (~1 hour)
 
 ## Using your own data
 
