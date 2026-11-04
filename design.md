@@ -352,8 +352,10 @@ Automatic discovery sends four kinds of LLM request, in this order:
 1. Columns and entity types. Each column's profile -- deterministic statistics
    and up to eight distinct cell samples truncated to 128 characters -- is sent
    with the entity catalog. Every column is sent, including the grouping column
-   and the protected ordering and timestamp columns, which are context only:
-   they are never planned for replacement.
+   and the protected ordering and timestamp columns. Ordering and timestamp
+   columns are context only: they are never planned for replacement. The
+   grouping column can be replaced; its original values still decide which rows
+   share a group.
 2. Patterns. For unprotected columns whose entity type has a pattern syntax,
    the model proposes a pattern from the profile, entity type, and grammar.
    Skipped when no column qualifies. Keeping pattern rules out of the type
