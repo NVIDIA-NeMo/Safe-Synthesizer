@@ -174,7 +174,7 @@ class TestDatasetInfo:
         assert file_extension(url) == extension
 
     def test_failed_read_does_not_log_url_credentials(self, monkeypatch: pytest.MonkeyPatch):
-        url = "https://user:secret@host.invalid/people.csv?token=abc"
+        url = "https://user:secret@host.invalid/people.csv?token=abc"  # pragma: allowlist secret
 
         def failing_read(path: str, **kwargs: object) -> None:
             raise OSError(f"could not open {path}")
