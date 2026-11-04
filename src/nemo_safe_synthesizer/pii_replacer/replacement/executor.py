@@ -85,6 +85,17 @@ class _CachedReplacement:
     """Dependencies of the group occurrence that generated the value, or ``None`` in record scope."""
 
 
+class _TakenInEither(Container[str]):
+    """Values taken in either of two containers."""
+
+    def __init__(self, first: Container[str], second: Container[str]) -> None:
+        self._first = first
+        self._second = second
+
+    def __contains__(self, value: object) -> bool:
+        return isinstance(value, str) and (value in self._first or value in self._second)
+
+
 class ReplacementExecutor:
     """Execute a replacement plan's structured and free-text columns in dependency order on a dataframe copy."""
 
@@ -466,9 +477,14 @@ class ReplacementExecutor:
             ``X`` in row 2. If row 2's ``parent_id`` equals its ``account_id``, it would share ``X`` and
             repeat it, so row 1 avoids ``X``.
         """
-        if self._taken_in_column(spec, original) is None:
+        taken_in_column = self._taken_in_column(spec, original)
+        if taken_in_column is None:
             return None
-        return self._owners_by_format[self._format_key(spec)].taken_for(original)
+        taken_in_format = self._owners_by_format[self._format_key(spec)].taken_for(original)
+        if spec.column_name == self._group_column:
+            # Groups such as "a" and "A" are separate, but the format's owners treat them as one original.
+            return _TakenInEither(taken_in_column, taken_in_format)
+        return taken_in_format
 
     def _format_key(self, spec: PiiColumnPlan) -> _FormatKey:
         allocator = self._identifier_allocators.get(spec.column_name)

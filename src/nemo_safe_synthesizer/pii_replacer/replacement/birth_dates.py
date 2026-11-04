@@ -80,7 +80,8 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random, *, locale:
     parsed = _parse_birth_date(original, pattern, locale)
     if parsed is None:
         return None
-    if not _EARLIEST_SHIFTABLE <= parsed.value <= _LATEST_SHIFTABLE:
+    # The bounds have no timezone, so compare the wall-clock value; the shift keeps any timezone.
+    if not _EARLIEST_SHIFTABLE <= parsed.value.replace(tzinfo=None) <= _LATEST_SHIFTABLE:
         return original
     shifted = parsed.value + timedelta(days=_shift_days(rng))
     if parsed.output_pattern is not None:
