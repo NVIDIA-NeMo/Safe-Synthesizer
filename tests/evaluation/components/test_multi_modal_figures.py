@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 import pytest
 
 from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
-    REPORT_MIN_TRAINING_COUNT,
     bar_chart,
     binned_percent_bars,
     combine_subplots,
@@ -157,15 +156,16 @@ class TestSafeBinEdges:
         assert np.allclose(edges / step, np.round(edges / step))
         assert not np.isin(np.round(edges, 6), np.round(training, 6)).any()
 
-    def test_end_bins_hold_at_least_min_count_training_records(self):
+    def test_range_covers_every_value_rounded_outward(self):
         training = _training_values()
-        training[0] = 1e6
-        edges = safe_bin_edges(training, _training_values(seed=1))
-        counts, _ = np.histogram(np.clip(training, edges[0], edges[-1]), bins=edges)
+        synthetic = _training_values(seed=1)
+        edges = safe_bin_edges(training, synthetic)
+        values = np.concatenate([training, synthetic])
 
-        assert counts[0] >= REPORT_MIN_TRAINING_COUNT
-        assert counts[-1] >= REPORT_MIN_TRAINING_COUNT
-        assert edges[-1] < 1e5
+        assert edges[0] < values.min()
+        assert edges[-1] > values.max()
+        assert edges[1] > values.min()
+        assert edges[-2] < values.max()
 
     def test_integer_training_values_get_whole_number_steps(self):
         rng = np.random.default_rng(0)
@@ -181,12 +181,12 @@ class TestSafeBinEdges:
         assert list(edges) == [0.5, 1.5, 2.5, 3.5]
         training_bar, _ = binned_percent_bars(counts, counts, edges)
         assert list(training_bar.x) == [1.0, 2.0, 3.0]
-        assert list(training_bar.customdata) == ["1 or less", "2", "3 or more"]
+        assert list(training_bar.customdata) == ["1", "2", "3"]
 
     def test_top_value_on_an_edge_gets_its_own_bin(self):
         values = np.concatenate([np.zeros(10), np.full(10, 10.0), np.linspace(1, 9, 50)])
         edges = safe_bin_edges(values, values)
-        counts, _ = np.histogram(np.clip(values, edges[0], edges[-1]), bins=edges)
+        counts, _ = np.histogram(values, bins=edges)
 
         assert counts[-1] == 10
 
@@ -227,13 +227,13 @@ class TestBinnedPercentBars:
 
         assert np.all(np.asarray(training_bar.width) < np.diff(edges))
 
-    def test_hides_training_bins_with_fewer_than_min_count_records(self):
-        training = np.concatenate([np.full(50, 1.0), np.full(3, 5.5), np.full(50, 9.0)])
+    def test_counts_every_bin_including_sparse_ones(self):
+        training = np.concatenate([np.full(50, 1.0), np.full(3, 5.5), np.full(47, 9.0)])
         edges = np.array([0.0, 2.0, 4.0, 6.0, 8.0, 10.0])
         training_bar, synthetic_bar = binned_percent_bars(training, np.full(10, 5.5), edges)
 
-        assert training_bar.y[2] == 0
-        assert "fewer than 5 records" in training_bar.customdata[2]
+        assert list(training_bar.y) == [50.0, 0.0, 3.0, 0.0, 47.0]
+        assert list(training_bar.customdata) == ["[0, 2)", "[2, 4)", "[4, 6)", "[6, 8)", "[8, 10)"]
         assert synthetic_bar.y[2] == pytest.approx(100.0)
 
     def test_carries_no_training_values(self):
@@ -629,7 +629,9 @@ class TestHistogramFigure:
         fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
-        assert [trace.type for trace in fig.data] == ["scatter"]
+        assert [(trace.type, tuple(trace.text)) for trace in fig.data] == [
+            ("scatter", ("No numeric training values to chart",))
+        ]
 
     def test_histogram_figure_same_values(self):
         training = pd.Series([5.0, 5.0, 5.0, 5.0])
@@ -639,17 +641,11 @@ class TestHistogramFigure:
 
         assert isinstance(fig, go.Figure)
 
-    @pytest.mark.parametrize(
-        "training",
-        [[41.0, 42.0, 43.0], [1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 7.0, 8.0, 9.0, 10.0]],
-    )
-    def test_too_few_training_values_show_only_a_note(self, training):
-        fig = histogram_figure(pd.Series(training), pd.Series(np.arange(20.0)))
+    def test_few_training_values_are_still_binned(self):
+        fig = histogram_figure(pd.Series([41.0, 42.0, 43.0]), pd.Series(np.arange(20.0)))
 
-        assert [(trace.type, tuple(trace.text)) for trace in fig.data] == [
-            ("scatter", ("Too few training values to chart",))
-        ]
-        assert list(fig.data[0].x) == [0.0]
+        assert [(trace.type, trace.name) for trace in fig.data] == [("bar", "Training"), ("bar", "Synthetic")]
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
 
     def test_non_numeric_synthetic_values_keep_the_training_bars_with_a_note(self):
         training = pd.Series(np.random.default_rng(0).normal(size=200))

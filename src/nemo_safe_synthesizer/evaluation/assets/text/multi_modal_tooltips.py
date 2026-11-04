@@ -45,8 +45,7 @@ tooltips = {
         The lower the JS Distance score is on average across all numeric and categorical columns, the higher the column Distribution Stability quality score will be.
         Note, highly unique strings (neither numeric nor categorical) will not have a distributional distance score.
         To aid in the comparison of training versus synthetic column, a bar chart or histogram is shown for each numeric and categorical column.
-        Bins with fewer than 5 training records are hidden, categories with fewer than 5 are grouped into "Other",
-        and the lowest and highest values are grouped into the first and last bins.
+        Numeric bin edges are rounded, and categories with fewer than 5 training records are grouped into "Other".
     """,
     "text_structure_similarity_info": """
         Text Structure Similarity is a measure of how well the synthetic data matches the training data in terms of the structure of the text for any free text columns that are present,

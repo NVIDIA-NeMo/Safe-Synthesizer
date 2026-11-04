@@ -30,8 +30,7 @@ _GRAPH_BARGROUPGAP = 0.1  # gap between bars of the same location coordinates
 GRAPH_BACKGROUND_COLOR = "#EBEAF0"
 
 REPORT_MIN_TRAINING_COUNT = 5
-"""Fewest training records a distribution chart bin or category may describe."""
-_MIN_CHARTED_TRAINING_VALUES = 3 * REPORT_MIN_TRAINING_COUNT
+"""Fewest training records a named category in a distribution chart may describe."""
 _MAX_DISPLAY_BINS = 100
 
 INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
@@ -188,46 +187,36 @@ def _nice_step(raw_step: float, integer: bool = False) -> float:
 
 
 def safe_bin_edges(training: pd.Series | np.ndarray, synthetic: pd.Series | np.ndarray) -> np.ndarray:
-    """Return display bin edges that keep individual training values out of the report.
+    """Return display bin edges that are rounded rather than exact data values.
 
-    The range runs from the ``REPORT_MIN_TRAINING_COUNT``-th smallest to the
-    ``REPORT_MIN_TRAINING_COUNT``-th largest training value, so each end bin,
-    which also collects everything beyond the range, holds at least that many
-    training records. The bin count matches the distribution score's bins for
-    the clipped data, the width is rounded to a round step, and the edges are
-    multiples of it, so no edge is an exact data value. Whole-number training
-    data with a step of 1 gets one bin per value, with edges halfway between
-    values.
+    The bins span every finite training and synthetic value, and the bin count
+    matches the distribution score's bins. The width is rounded to a round
+    step and the edges are multiples of it, so the range is rounded outward
+    instead of ending on the exact minimum and maximum. Whole-number data with
+    a step of 1 gets one bin per value, with edges halfway between values.
 
     Args:
         training: Training values; non-finite values are ignored.
-        synthetic: Synthetic values; they shape the bin count but not the range.
+        synthetic: Synthetic values; non-finite values are ignored.
 
     Returns:
-        Increasing bin edges, at least two. With fewer than three times
-        ``REPORT_MIN_TRAINING_COUNT`` finite training values, a placeholder bin
-        ``[0, 1]`` that does not depend on the data.
+        Increasing bin edges, at least two.
     """
-    training_values = np.sort(_finite_values(training))
+    training_values = _finite_values(training)
     synthetic_values = _finite_values(synthetic)
-    if training_values.size < _MIN_CHARTED_TRAINING_VALUES:
-        # Any bin built from so few values would sit on one of them.
+    values = np.concatenate([training_values, synthetic_values])
+    if values.size == 0:
         return np.array([0.0, 1.0])
-    integer = bool(np.all(training_values == np.round(training_values)))
-    low = float(training_values[REPORT_MIN_TRAINING_COUNT - 1])
-    high = float(training_values[-REPORT_MIN_TRAINING_COUNT])
+    integer = bool(np.all(values == np.round(values)))
+    low, high = float(values.min()), float(values.max())
     if high <= low:
-        # Every value between the two order statistics equals ``low``, and with
-        # at least three times the minimum count, that is more than the minimum.
         if integer:
-            return np.array([np.round(low) - 0.5, np.round(low) + 0.5])
+            return np.array([low - 0.5, low + 0.5])
         step = _nice_step(abs(low)) if low != 0 else 1.0
         start = np.floor(low / step) * step
         return np.array([start, start + step])
 
-    clipped_training = pd.Series(np.clip(training_values, low, high))
-    clipped_synthetic = pd.Series(np.clip(synthetic_values, low, high))
-    bins = len(get_numeric_distribution_bins(clipped_training, clipped_synthetic)) - 1
+    bins = len(get_numeric_distribution_bins(pd.Series(training_values), pd.Series(synthetic_values))) - 1
     bins = int(min(max(bins, 1), _MAX_DISPLAY_BINS))
     step = _nice_step((high - low) / bins, integer=integer)
     if integer and step == 1:
@@ -240,17 +229,11 @@ def safe_bin_edges(training: pd.Series | np.ndarray, synthetic: pd.Series | np.n
 
 
 def _bin_labels(edges: np.ndarray) -> list[str]:
-    """Describe each bin's range, with the end bins open toward the tails."""
-    if len(edges) == 2:
-        return ["all values"]
+    """Describe each bin: its whole number for one-value bins, else its range."""
     if np.allclose(np.diff(edges), 1.0) and np.isclose(edges[0] % 1, 0.5):
-        values = [f"{edge + 0.5:.0f}" for edge in edges[:-1]]
-        return [f"{values[0]} or less", *values[1:-1], f"{values[-1]} or more"]
+        return [f"{edge + 0.5:.0f}" for edge in edges[:-1]]
     formatted = [f"{edge:.6g}" for edge in edges]
-    labels = [f"[{formatted[i]}, {formatted[i + 1]})" for i in range(len(edges) - 1)]
-    labels[0] = f"below {formatted[1]}"
-    labels[-1] = f"{formatted[-2]} and above"
-    return labels
+    return [f"[{formatted[i]}, {formatted[i + 1]})" for i in range(len(edges) - 1)]
 
 
 def binned_percent_bars(
@@ -260,10 +243,8 @@ def binned_percent_bars(
 ) -> list[go.Bar]:
     """Return training and synthetic percentage bars over shared bins.
 
-    Values beyond the edges are counted in the end bins. Training bins holding
-    fewer than ``REPORT_MIN_TRAINING_COUNT`` records are drawn empty and say so
-    on hover. Synthetic bins are shown as they are. Both traces carry
-    ``meta="binned"`` so the report script overlays them like a histogram.
+    Both traces carry ``meta="binned"`` so the report script overlays them
+    like a histogram.
 
     Args:
         training: Training values; non-finite values are ignored.
@@ -282,16 +263,8 @@ def binned_percent_bars(
         (_finite_values(training), "Training", _REPORT_PALETTE[0]),
         (_finite_values(synthetic), "Synthetic", _REPORT_PALETTE[1]),
     ):
-        counts, _ = np.histogram(np.clip(values, edges[0], edges[-1]), bins=edges)
+        counts, _ = np.histogram(values, bins=edges)
         percent = counts / values.size * 100 if values.size else np.zeros(len(counts))
-        hover = labels
-        if name == "Training":
-            hidden = (counts > 0) & (counts < REPORT_MIN_TRAINING_COUNT)
-            percent = np.where(hidden, 0.0, percent)
-            hover = [
-                f"{label} (fewer than {REPORT_MIN_TRAINING_COUNT} records, hidden)" if flag else label
-                for label, flag in zip(labels, hidden)
-            ]
         traces.append(
             go.Bar(
                 x=centers,
@@ -302,7 +275,7 @@ def binned_percent_bars(
                 marker=dict(color=color, line=dict(width=0.5, color=color)),
                 opacity=0.7,
                 showlegend=False,
-                customdata=hover,
+                customdata=labels,
                 hovertemplate=f"%{{customdata}}: %{{y:.2f}}%<extra>{name}</extra>",
             )
         )
@@ -782,10 +755,10 @@ def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure:
         synthetic: Numeric synthetic series.
 
     Returns:
-        A Plotly ``Figure`` with overlaid training/synthetic bars. With too few
-        finite training values to bin safely, the figure holds only a note.
-        When the synthetic values are not numeric, the training bars are shown
-        with a note.
+        A Plotly ``Figure`` with overlaid training/synthetic bars. With no
+        finite training values, the figure holds only a note. When the
+        synthetic values are not numeric, the training bars are shown with a
+        note.
     """
     fig = go.Figure()
     fig.update_layout(
@@ -798,8 +771,8 @@ def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure:
 
     training_values = _finite_values(training)
     synthetic_values = _finite_values(synthetic)
-    if training_values.size < _MIN_CHARTED_TRAINING_VALUES:
-        return fig.add_trace(_chart_note("Too few training values to chart", x=0.0))
+    if training_values.size == 0:
+        return fig.add_trace(_chart_note("No numeric training values to chart", x=0.0))
 
     edges = safe_bin_edges(training_values, synthetic_values)
     fig.add_traces(binned_percent_bars(training_values, synthetic_values, edges))

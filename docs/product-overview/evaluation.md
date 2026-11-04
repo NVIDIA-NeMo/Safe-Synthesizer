@@ -117,7 +117,7 @@ Every Safe Synthesizer job automatically generates an HTML evaluation report sav
 - Detailed subscores for each metric
 - Visualizations comparing training and synthetic data
 
-Distribution charts show binned data, never individual training values. Bins with fewer than 5 training records are hidden, categories with fewer than 5 are grouped into an "Other" bar, and the lowest and highest values are grouped into the first and last bins. The Deep Structure Stability and Text Semantic Similarity charts plot one point per record on two principal components; these are projections, not column values.
+Distribution charts show binned counts rather than the training values themselves: numeric bins have rounded edges, and categories with fewer than 5 training records are grouped into an "Other" bar. The Deep Structure Stability and Text Semantic Similarity charts plot one point per record on two principal components; these are projections, not column values.
 
 ## Configuration
 
