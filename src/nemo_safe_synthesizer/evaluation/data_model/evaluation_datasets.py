@@ -191,7 +191,7 @@ class EvaluationDatasets(BaseModel):
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
-            test_shared_columns = shared_columns.intersection(set(test.columns))
+            test_shared_columns = [col for col in training.columns if col in test.columns]
             if len(test_shared_columns) == 0:
                 raise ValueError(
                     "Test dataframe has no columns in common with Training and Synthetic dataframes. Please check dataframes for mismatch."
