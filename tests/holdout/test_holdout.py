@@ -104,6 +104,33 @@ def test_does_group_by_holdout(df):
     assert len(test) == 100
 
 
+@pytest.mark.parametrize(
+    ("n_groups", "rows_per_group", "holdout", "expected_groups"),
+    [
+        (10, 200, 0.05, 1),
+        (10, 200, 0.2, 2),
+        (10, 200, 0.5, 5),
+        (20, 200, 0.2, 4),
+        (20, 200, 0.5, 10),
+        (128, 400, 0.2, 26),
+        (128, 400, 0.5, 64),
+        (500, 10, 0.05, 25),
+    ],
+)
+def test_group_by_holdout_respects_requested_size(n_groups, rows_per_group, holdout, expected_groups):
+    """The requested row count is converted into a number of groups, not read as a group count."""
+    n_rows = n_groups * rows_per_group
+    data = pd.DataFrame({"group": np.repeat(np.arange(n_groups), rows_per_group), "value": np.arange(n_rows)})
+    params = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="group", holdout=holdout, max_holdout=n_rows, random_state=0
+    )
+    train, test = Holdout(params).train_test_split(data)
+    assert test is not None
+    assert test["group"].nunique() == expected_groups
+    assert len(test) == expected_groups * rows_per_group
+    assert set(train["group"]).isdisjoint(set(test["group"]))
+
+
 def test_raises_on_group_by_holdout_with_bad_column(df):
     holdout = Holdout(SafeSynthesizerParameters.from_params(group_training_examples_by="dne"))
     with pytest.raises(ParameterError, match="Group by column 'dne' not found"):

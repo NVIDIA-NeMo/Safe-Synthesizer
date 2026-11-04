@@ -65,9 +65,11 @@ def grouped_train_test_split(
     """Split the input dataframe so that all rows sharing a group stay in the same fold.
 
     Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
-    whose test-set size is closest to the requested ``test_size``.  If
-    ``test_size`` exceeds the number of groups, equals 0, or equals 1, it
-    falls back to ``DEFAULT_HOLDOUT``.
+    whose test-set size is closest to the requested ``test_size``.  An integer
+    ``test_size`` greater than 1 is a number of rows and is converted into the
+    equivalent number of groups (at least one).  If that is not smaller than the
+    number of groups, or ``test_size`` equals 0 or 1, it falls back to
+    ``DEFAULT_HOLDOUT``.
 
     Args:
         input_df: Input dataframe to split.
@@ -85,18 +87,25 @@ def grouped_train_test_split(
     """
     check_groupby_column(input_df, group_by)
 
-    if test_size > input_df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
+    n_groups = input_df.groupby(group_by).ngroups
+    aim_num_records: int | float = 0
+    use_default = test_size == 1 or test_size == 0
+    if not use_default and test_size > 1:
+        # ``GroupShuffleSplit`` reads an integer ``test_size`` as a number of groups,
+        # so convert the requested number of rows into an equivalent number of groups.
+        aim_num_records = test_size
+        test_size = max(1, round(n_groups * test_size / len(input_df)))
+        use_default = test_size >= n_groups
+    if use_default:
         logger.info(
-            f"test_size ({test_size}) is greater than number of groups ({input_df.groupby(group_by).ngroups}) or equals to 0 or 1. Proceeding with default test_size ({DEFAULT_HOLDOUT})."
+            f"test_size ({test_size}) is not smaller than the number of groups ({n_groups}) or equals to 0 or 1. Proceeding with default test_size ({DEFAULT_HOLDOUT})."
         )
         test_size = DEFAULT_HOLDOUT
+    if test_size < 1:
+        aim_num_records = round(len(input_df) * test_size)
     splitter = GroupShuffleSplit(test_size=test_size, n_splits=20, random_state=random_state)
     split = splitter.split(input_df, groups=input_df[group_by])
     training_df, test_df = pd.DataFrame(), pd.DataFrame()
-    if test_size > 1:
-        aim_num_records = test_size
-    else:
-        aim_num_records = round(len(input_df) * test_size)
     for train_idx, test_idx in split:
         if len(training_df) == 0:
             training_df = input_df.iloc[train_idx]
