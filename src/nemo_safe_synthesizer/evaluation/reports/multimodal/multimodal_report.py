@@ -95,8 +95,10 @@ def _pii_column_groups(rows: list[dict], replay_data: list[dict]) -> list[dict]:
 
 
 def _pii_replay_note(config: SafeSynthesizerParameters | None, replay: dict) -> str | None:
-    """Return why PII replay results are missing, or ``None`` when replay ran."""
+    """Return why PII replay results are missing or partial, or ``None`` when replay ran in full."""
     if reason := replay.get("skipped_reason"):
+        if replay.get("pii_replay_data"):
+            return f"Only the columns in evaluation.pii_replay_columns were checked: {reason}."
         return f"PII replay was not run: {reason}."
     if config is not None and not config.get("pii_replay_enabled"):
         return "PII replay was turned off with evaluation.pii_replay_enabled."
@@ -339,6 +341,9 @@ class MultimodalReport(EvaluationReport):
                 ),
                 config=config,
             )
+            # Configured columns can run after automatic detection failed; keep the failure in the report.
+            if pii_replay_skipped_reason is not None:
+                pii_replay = pii_replay.model_copy(update={"skipped_reason": pii_replay_skipped_reason})
         components.append(pii_replay)
 
         dataset_statistics = DatasetStatistics.from_evaluation_datasets(evaluation_datasets)

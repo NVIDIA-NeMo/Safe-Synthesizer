@@ -543,6 +543,19 @@ class TestReplacePiiConfig:
         assert replace_pii.inline_plan is not None
         assert replace_pii.inline_plan.columns_to_replace[0].column_name == "email"
 
+    def test_plan_file_path_expands_the_home_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / "plan.yaml").write_text("columns_to_replace:\n- column_name: email\n  entity_type: email\n")
+        config_dir = tmp_path / "configs"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text("replace_pii:\n  replacement_plan: ~/plan.yaml\n")
+
+        replace_pii = SafeSynthesizerParameters.from_yaml(config_dir / "config.yaml").replace_pii
+
+        assert replace_pii is not None
+        assert replace_pii.inline_plan is not None
+        assert replace_pii.inline_plan.columns_to_replace[0].column_name == "email"
+
     def test_relative_personas_path_resolves_against_the_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

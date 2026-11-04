@@ -153,6 +153,25 @@ class TestDependencyMappings:
                 },
             )
 
+    def test_blank_dependency_values_need_no_mapping_entry(self) -> None:
+        # Replacement draws a row with a blank dependency cell without that dependency, so planning skips it.
+        dataframe = pd.DataFrame(
+            {"first_name": ["Ada", "Grace", "Alan"], "sex": ["Female", "", " "], "race": ["White"] * 3}
+        )
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(replacement_plan=_plan()),
+            DataParameters(),
+            sampler_value_catalog={
+                EntityType.GENDER: ("female", "male"),
+                EntityType.ETHNIC_BACKGROUND: ("white",),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
+
     def test_manual_mapping_is_authoritative_and_validated_by_dependency_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
         config = ReplacePiiConfig(replacement_plan=_plan({"sex": {"Woman": ["female"]}}))

@@ -282,7 +282,10 @@ def built_in_value_mappings(
 
 
 def distinct_source_values(values: pd.Series) -> tuple[str, ...]:
-    """Return distinct non-missing values in the form replacement uses to look up mapping keys.
+    """Return distinct values in the form replacement uses to look up mapping keys.
+
+    Missing values and blank strings are left out: replacement conditions on neither, so they need no
+    mapping entry.
 
     Raises:
         ParameterError: If the column has too many distinct values or values too long to map.
@@ -293,7 +296,7 @@ def distinct_source_values(values: pd.Series) -> tuple[str, ...]:
             "ethnic background must be categorical"
         )
     distinct: dict[str, str] = {}
-    for raw in values.dropna().unique().tolist():
+    for raw in _conditioning_values(values):
         value = readable_value(canonicalize_scalar(raw))
         distinct.setdefault(value.casefold(), value)
     return tuple(distinct.values())
@@ -301,9 +304,17 @@ def distinct_source_values(values: pd.Series) -> tuple[str, ...]:
 
 def _non_categorical_issue(values: pd.Series) -> str | None:
     """Return why ``values`` cannot condition the sampler, or ``None`` if they can."""
-    unique = values.dropna().unique()
+    unique = _conditioning_values(values)
     if len(unique) > MAX_CONDITIONER_DISTINCT_VALUES:
         return f"has more than {MAX_CONDITIONER_DISTINCT_VALUES} distinct values"
-    if any(len(readable_value(canonicalize_scalar(raw))) > MAX_MAPPING_SOURCE_VALUE_LENGTH for raw in unique.tolist()):
+    if any(len(readable_value(canonicalize_scalar(raw))) > MAX_MAPPING_SOURCE_VALUE_LENGTH for raw in unique):
         return f"has values longer than {MAX_MAPPING_SOURCE_VALUE_LENGTH} characters"
     return None
+
+
+def _conditioning_values(values: pd.Series) -> list[object]:
+    """Return the distinct values replacement conditions on, leaving out missing values and blank strings.
+
+    This matches the executor, which draws a row's replacement without the dependency when its cell is blank.
+    """
+    return [raw for raw in values.dropna().unique().tolist() if not (isinstance(raw, str) and not raw.strip())]

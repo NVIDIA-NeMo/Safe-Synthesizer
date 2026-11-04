@@ -378,6 +378,19 @@ class TestPathOptions:
         assert "NSS_INFERENCE_ENDPOINT" in result.output
         assert "NSS_INFERENCE_KEY" in result.output
 
+    @pytest.mark.parametrize("subcommand", [[], ["replace-pii"], ["train"], ["generate"]])
+    def test_invalid_inference_setting_is_a_usage_error(self, cli_runner: CliRunner, subcommand: list[str]):
+        """A bad inference value prints one line instead of a traceback that would echo the API key."""
+        result = cli_runner.invoke(
+            run,
+            [*subcommand, "--inference-api-key", "nvapi-secret", "--inference-timeout-seconds", "-5"],
+        )
+
+        assert result.exit_code == 2
+        assert "NSS_INFERENCE_TIMEOUT must be a positive number of seconds" in result.output
+        assert "nvapi" not in result.output
+        assert "Traceback" not in result.output
+
     def test_run_with_artifact_path_only(
         self,
         cli_runner: CliRunner,

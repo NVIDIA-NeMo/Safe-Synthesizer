@@ -1194,7 +1194,7 @@ class ReplacePiiConfig(Parameters):
         context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
         config_dir = Path(context_dir) if context_dir is not None else None
         if isinstance(value, str | Path):
-            path = Path(value)
+            path = Path(value).expanduser()
             if not path.is_absolute() and config_dir is not None:
                 path = config_dir / path
             value = _load_plan_file(path)

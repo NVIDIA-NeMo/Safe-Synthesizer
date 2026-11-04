@@ -384,6 +384,30 @@ def test_pii_card_says_why_replay_was_not_run() -> None:
     assert "No PII was found" not in html
 
 
+def test_pii_card_keeps_the_detection_failure_with_configured_replay_columns(
+    fixture_training_df, fixture_synthetic_df
+) -> None:
+    config = SafeSynthesizerParameters(
+        replace_pii=None,
+        evaluation=EvaluationParameters(
+            mia_enabled=False, aia_enabled=False, pii_replay_columns=[fixture_training_df.columns[0]]
+        ),
+    )
+
+    report = MultimodalReport.from_dataframes(
+        training=fixture_training_df,
+        synthetic=fixture_synthetic_df,
+        config=config,
+        pii_replay_skipped_reason="PII could not be detected (no GPU)",
+    )
+
+    pii = report.jinja_context["pii_replacement"]
+    assert pii["groups"]
+    assert pii["replay_note"] == (
+        "Only the columns in evaluation.pii_replay_columns were checked: PII could not be detected (no GPU)."
+    )
+
+
 def test_pii_card_says_no_pii_was_found_when_detection_found_none() -> None:
     report = _replacement_off_report({}, PIIReplay())
 
