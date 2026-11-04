@@ -85,16 +85,16 @@ class PIIReplay(Component):
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> PIIReplay:
         """Compute PII replay counts from classified entity metadata."""
-        if evaluation_datasets.column_statistics is None or len(evaluation_datasets.column_statistics) == 0:
+        pii_replay_entities = config.get("pii_replay_entities") if config else None
+        pii_replay_columns = config.get("pii_replay_columns") if config else None
+        statistics = evaluation_datasets.column_statistics or {}
+        if not statistics and not pii_replay_columns:
             logger.warning("No classified entities, skipping PII Replay.")
             return PIIReplay(score=EvaluationScore())
 
-        pii_replay_entities = config.get("pii_replay_entities") if config else None
-        pii_replay_columns = config.get("pii_replay_columns") if config else None
-
         # Build up a list of keys of tuple(col_name, entity_type)
         classified_entities: list[tuple[str, str, str]] = []
-        for col, column_statistics in evaluation_datasets.column_statistics.items():
+        for col, column_statistics in statistics.items():
             entity_names = column_statistics.detected_entity_counts.keys()
             entity_assigned_type = column_statistics.assigned_type or UNKNOWN_ENTITY
             # Scope down to user supplied set of entities if there is one
@@ -104,9 +104,7 @@ class PIIReplay(Component):
         # Add user-specified columns without detected PII, comparing the whole column. Columns missing from
         # either dataset are skipped.
         if pii_replay_columns:
-            for user_specified_col in sorted(
-                set(pii_replay_columns).difference(evaluation_datasets.column_statistics.keys())
-            ):
+            for user_specified_col in sorted(set(pii_replay_columns).difference(statistics.keys())):
                 if (
                     user_specified_col in evaluation_datasets.training.columns
                     and user_specified_col in evaluation_datasets.synthetic.columns
@@ -122,10 +120,8 @@ class PIIReplay(Component):
             if entity_name != UNKNOWN_ENTITY:
                 # Ideal case, use the count of detected entities in training for that (col, entity_type).
                 # Also get the set of unique values tagged with that entity type.
-                training_entity_count = evaluation_datasets.column_statistics[col].detected_entity_counts[entity_name]
-                training_entity_unique_values = evaluation_datasets.column_statistics[col].detected_entity_values[
-                    entity_name
-                ]
+                training_entity_count = statistics[col].detected_entity_counts[entity_name]
+                training_entity_unique_values = statistics[col].detected_entity_values[entity_name]
 
             # Values that differ only in letter case, or in how a number is written, count once.
             training_keys = {_replay_key(value) for value in training_entity_unique_values if not _is_missing(value)}
@@ -135,8 +131,7 @@ class PIIReplay(Component):
                 synthetic_col,
                 training_keys,
                 substring_match=(
-                    entity_name != UNKNOWN_ENTITY
-                    and evaluation_datasets.column_statistics[col].assigned_entity == EntityType.FREE_TEXT
+                    entity_name != UNKNOWN_ENTITY and statistics[col].assigned_entity == EntityType.FREE_TEXT
                 ),
             )
             replay_percentage = (
@@ -206,7 +201,13 @@ def _synthetic_replay_counts(
 
 def _is_missing(value: object) -> bool:
     """Return whether a scalar cell is empty: ``None``, ``NaN``, ``pd.NA``, or ``pd.NaT``."""
-    return value is None or value is pd.NA or value is pd.NaT or (isinstance(value, float) and math.isnan(value))
+    # ``numpy.float32`` is not a ``float`` subclass, so check any real number for NaN.
+    return (
+        value is None
+        or value is pd.NA
+        or value is pd.NaT
+        or (isinstance(value, Real) and not isinstance(value, Integral) and math.isnan(value))
+    )
 
 
 def _replay_key(value: object) -> str:
