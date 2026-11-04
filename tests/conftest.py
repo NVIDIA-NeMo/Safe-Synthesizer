@@ -116,7 +116,10 @@ def fixture_isolate_pii_inference(request: pytest.FixtureRequest, monkeypatch: p
     Only ``requires_gpu`` tests may launch one; other tests fake the launch.
     """
     for name in INFERENCE_ENV_VARS:
-        monkeypatch.delenv(name, raising=False)
+        # ``delenv`` restores only a variable that was set, so set it first: a value the test or the CLI
+        # writes later is then removed at teardown instead of leaking into later tests.
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
     if request.node.get_closest_marker("requires_gpu") is not None:
         return
 
