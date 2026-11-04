@@ -24,10 +24,10 @@ Pipeline entrypoints invoked from the prebuilt project virtualenv:
 ### Prerequisites
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
-- An API key for PII planning: `slurm_nss_matrix.sh` sets `NSS_INFERENCE_ENDPOINT` to the hosted NVIDIA service, so PII planning sends column samples from your data there. Set `NSS_INFERENCE_KEY` to a key from [build.nvidia.com](https://build.nvidia.com). To keep the data on the cluster, remove the `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` exports from the script; planning then runs a local vLLM server on the job's GPU.
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
+- We no longer need an LLM inference endpoint and API key as we now host the LLM locally by default.
 
 The instructions below assume that Safe-Synthesizer is cloned directly under
 `LUSTRE_DIR` and that commands after cloning are run from the repository root.
@@ -119,10 +119,9 @@ export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/us
 export USER_NAME=your_lustre_username
 ```
 
-2) Create your API token file and restrict permissions. `NSS_INFERENCE_KEY` and `WANDB_API_KEY` are required by default. `HF_TOKEN` is recommended to avoid throttling by HF Hub:
+2) Create your API token file and restrict permissions. Local PII planning runs on the job GPU, so this file holds `WANDB_API_KEY` (required by default) and `HF_TOKEN` (recommended, to avoid throttling by HF Hub):
 ```bash
 cat > /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}/.api_tokens.sh << 'TOKENS'
-export NSS_INFERENCE_KEY="<your_inference_api_key>"
 export WANDB_API_KEY="<your_wandb_api_key>"
 export HF_TOKEN="<your_hf_token>"
 TOKENS
@@ -282,7 +281,7 @@ W&B is enabled by default with `WANDB_MODE=online` in `env_variables.sh`. Make s
 ### Troubleshooting
 
 - "USER_NAME is not set": run `export USER_NAME=...` and retry.
-- Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NSS_INFERENCE_KEY` and `chmod 600`.
+- Missing token file: create `${LUSTRE_DIR}/.api_tokens.sh` with `WANDB_API_KEY` and `HF_TOKEN`, then `chmod 600` it.
 - Missing config files: verify `CONFIGS` in `env_variables.sh` and files in `CONFIG_DIR`.
 - Permission errors: confirm your `/lustre/.../${USER_NAME}` paths and file perms.
 - Virtualenv Python under `/home`: run `MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129`; the task recreates `.venv` with a Lustre-managed interpreter.
