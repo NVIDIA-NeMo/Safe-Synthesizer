@@ -30,10 +30,8 @@ from ...observability import get_logger
 from .dependency_mappings import (
     built_in_value_mappings,
     conditioner_columns,
-    entries_for_unmatched_values,
     mapping_inputs,
     unmatched_dependency_values,
-    usable_value_mapping,
     validate_data_to_sampler_value_mapping,
     without_non_categorical_dependencies,
 )
@@ -253,19 +251,18 @@ def resolve_replacement_config(
     The plan comes from ``config`` or, for ``auto_discovery``, from the
     discoverer and the LLM enhancer. When ``config.sampler`` is not set and
     the Nemotron-Personas data for ``config.locale`` is missing, the sampler
-    switches to Faker with a warning, unless a discovered plan maps ethnicity
+    switches to Faker with a warning, unless the plan maps ethnicity
     values, which only Nemotron-Personas has. The value
     mapping then combines built-in entries for common gender spellings, the
     plan's own entries, and, for ``auto_discovery``, discovered entries for any
     remaining conditioner values without a sampler match, and is checked
     against the sampler.
 
-    A plan the user supplied is not discovered, so mismatches that leave every
-    column replaceable are warnings instead of errors: a pattern covering less
-    than 99% of its column, mapping entries the sampler cannot use, which are
-    dropped, dataset values without a sampler match or entry, which then match
-    any sampler value, and a non-categorical dependency column, which is
-    ignored.
+    A plan the user supplied is not discovered, so two mismatches that leave
+    every column replaceable are warnings instead of errors: a pattern covering
+    less than 99% of its column, and a non-categorical dependency column, which
+    is ignored. Value mapping problems fail for every plan: mapping entries the
+    sampler cannot use, and dataset values without a sampler match or entry.
 
     Args:
         df: Data the plan is validated against and whose conditioner values are mapped.
@@ -354,7 +351,7 @@ def _resolve_replacement_config(
         enhancer=enhancer,
         check_pattern_coverage=check_pattern_coverage,
     )
-    config, sampler_name = _with_available_sampler(config, plan, strict=discover_plan)
+    config, sampler_name = _with_available_sampler(config, plan)
 
     if sampler_value_catalog is None and conditioner_columns(plan):
         from ..sampler_catalog import load_sampler_value_catalog
@@ -376,15 +373,6 @@ def _resolve_replacement_config(
         else:
             discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
         mappings = _merged_value_mappings(mappings, discovered)
-    if not discover_plan:
-        # A supplied plan keeps working when it does not fit the sampler or data: unusable entries are
-        # dropped and unmatched values match any sampler value, each with a warning.
-        mappings = usable_value_mapping(_with_value_mapping(plan, mappings), catalog, sampler_name=sampler_name)
-        unmatched = entries_for_unmatched_values(
-            df, _with_value_mapping(plan, mappings), catalog, sampler_name=sampler_name
-        )
-        mappings = _merged_value_mappings(mappings, unmatched)
-
     resolved_plan = _with_value_mapping(plan, mappings)
     validate_data_to_sampler_value_mapping(resolved_plan, catalog, sampler_name=sampler_name)
     if unmatched := unmatched_dependency_values(df, resolved_plan, catalog):
@@ -402,20 +390,17 @@ def _resolve_replacement_config(
     return resolved
 
 
-def _with_available_sampler(
-    config: ReplacePiiConfig, plan: PiiReplacementPlan, *, strict: bool
-) -> tuple[ReplacePiiConfig, str]:
+def _with_available_sampler(config: ReplacePiiConfig, plan: PiiReplacementPlan) -> tuple[ReplacePiiConfig, str]:
     """Return ``config`` using Faker when its unset sampler has no Nemotron-Personas data, and the sampler's name.
 
     When ``replace_pii.sampler`` is not set, a missing dataset switches it to
     Faker with a warning instead of failing, and the resolved configuration
-    records the switch. A discovered plan (``strict``) that maps ethnicity
-    values needs Nemotron-Personas, so it fails instead; a supplied plan
-    switches anyway and its ethnicity entries are dropped later with a warning.
-    A sampler that is set is kept and fails later if its data is missing.
+    records the switch. A plan that maps ethnicity values needs
+    Nemotron-Personas, so it fails instead. A sampler that is set is kept and
+    fails later if its data is missing.
 
     Raises:
-        ParameterError: If ``strict``, the plan maps ethnicity values, and the Nemotron-Personas data is missing.
+        ParameterError: If the plan maps ethnicity values and the Nemotron-Personas data is missing.
     """
     from ..sampler_catalog import nemotron_personas_dataset_path
 
@@ -427,7 +412,7 @@ def _with_available_sampler(
     path = nemotron_personas_dataset_path(sampler, locale)
     if path.is_file():
         return config, name
-    if strict and (ethnicity_columns := _ethnicity_mapping_columns(plan)):
+    if ethnicity_columns := _ethnicity_mapping_columns(plan):
         raise ParameterError(
             f"data_to_sampler_value_mapping maps ethnicity values for {', '.join(map(repr, ethnicity_columns))}, "
             f"which need Nemotron-Personas, but no Nemotron-Personas data for locale {locale!r} was found at "

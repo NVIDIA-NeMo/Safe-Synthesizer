@@ -551,19 +551,14 @@ class TestSamplerFallback:
         with pytest.raises(ParameterError, match="maps ethnicity values for 'race', which need Nemotron-Personas"):
             resolve_replacement_config(_PEOPLE, ReplacePiiConfig(), DataParameters(), enhancer=enhancer)
 
-    def test_a_written_plan_mapping_ethnicity_switches_to_faker_and_drops_those_entries(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    def test_a_written_plan_mapping_ethnicity_does_not_switch_to_faker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        caplog.set_level(logging.WARNING)
         monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
         config = ReplacePiiConfig(replacement_plan=_name_plan({"race": {"Latino": ["hispanic"]}}))
 
-        resolved = resolve_replacement_config(_PEOPLE, config, DataParameters())
-
-        assert resolved.sampler.backend is PiiSamplerBackend.FAKER
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
-        assert "column 'race' maps ethnic_background values, which this sampler does not have" in caplog.text
+        with pytest.raises(ParameterError, match="maps ethnicity values for 'race', which need Nemotron-Personas"):
+            resolve_replacement_config(_PEOPLE, config, DataParameters())
 
 
 @pytest.mark.unit

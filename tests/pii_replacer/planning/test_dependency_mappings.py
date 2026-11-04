@@ -139,13 +139,11 @@ class TestDependencyMappings:
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.data_to_sampler_value_mapping == {}
 
-    def test_explicit_plan_lets_unmatched_values_match_any_sampler_value(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_explicit_plan_rejects_unmatched_values(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": ["X", "Female"], "race": ["White"] * 2})
 
-        with caplog.at_level(logging.WARNING):
-            resolved = resolve_replacement_config(
+        with pytest.raises(ParameterError, match=r"counted by depends_on column: 'sex' \(1\)"):
+            resolve_replacement_config(
                 dataframe,
                 ReplacePiiConfig(replacement_plan=_plan()),
                 DataParameters(),
@@ -154,10 +152,6 @@ class TestDependencyMappings:
                     EntityType.ETHNIC_BACKGROUND: ("white",),
                 },
             )
-
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"X": ["female", "male"]}}
-        assert "counted by depends_on column: 'sex' (1)" in caplog.text
 
     def test_manual_mapping_is_authoritative_and_validated_by_dependency_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
@@ -177,46 +171,32 @@ class TestDependencyMappings:
         assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"Woman": ["female"]}}
 
     @pytest.mark.parametrize(
-        ("mappings", "warning", "kept"),
+        ("mappings", "error"),
         [
-            ({"unknown": {"Woman": ["female"]}}, "not used as a dependency", {}),
-            (
-                {"sex": {"Woman": ["woman", "female"]}},
-                "maps to woman, which this sampler does not accept",
-                {"Woman": ["female"]},
-            ),
+            ({"unknown": {"Woman": ["female"]}}, "not used as a dependency"),
+            ({"sex": {"Woman": ["woman", "female"]}}, "maps to woman, which this sampler does not accept"),
         ],
     )
-    def test_manual_mapping_drops_entries_the_sampler_cannot_use(
-        self,
-        mappings: DataToSamplerValueMapping,
-        warning: str,
-        kept: dict[str, list[str]],
-        caplog: pytest.LogCaptureFixture,
+    def test_manual_mapping_rejects_entries_the_sampler_cannot_use(
+        self, mappings: DataToSamplerValueMapping, error: str
     ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["White"]})
         config = ReplacePiiConfig(replacement_plan=_plan(mappings))
 
-        with caplog.at_level(logging.WARNING):
-            resolved = resolve_replacement_config(
+        with pytest.raises(ParameterError, match=error):
+            resolve_replacement_config(
                 dataframe,
                 config,
                 DataParameters(),
                 sampler_value_catalog={EntityType.GENDER: ("female", "male")},
             )
 
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == ({"sex": kept} if kept else {})
-        assert warning in caplog.text
-
-    def test_mapping_for_a_column_the_sampler_cannot_condition_on_is_dropped(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_mapping_for_a_column_the_sampler_cannot_condition_on_is_rejected(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["Asian"]})
         mappings: DataToSamplerValueMapping = {"race": {"Asian": ["east asian"]}}
 
-        with caplog.at_level(logging.WARNING):
-            resolved = resolve_replacement_config(
+        with pytest.raises(ParameterError, match="column 'race' maps ethnic_background values"):
+            resolve_replacement_config(
                 dataframe,
                 ReplacePiiConfig(
                     sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), replacement_plan=_plan(mappings)
@@ -224,10 +204,6 @@ class TestDependencyMappings:
                 DataParameters(),
                 sampler_value_catalog={EntityType.GENDER: ("female", "male")},
             )
-
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
-        assert "column 'race' maps ethnic_background values, which this sampler does not have" in caplog.text
 
     def test_explicit_plan_ignores_a_non_categorical_dependency(self, caplog: pytest.LogCaptureFixture) -> None:
         dataframe = pd.DataFrame(
