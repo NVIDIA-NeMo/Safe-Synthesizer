@@ -418,7 +418,7 @@ Several defaults may not match your expectations:
 |-----------|---------|-------|
 | `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) |
 | `training.validation_ratio` | `0.0` | No validation split by default |
-| `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
+| `data.holdout` | `0.05` | 5% of records held out for evaluation, with no upper cap. Large datasets get large holdouts, so lower this value if you want to train on more of your data |
 | `data.random_state` | `None` | Auto-generates a random seed -- set this value explicitly if you need reproducibility |
 | `generation.num_records` | `1000` | May be too small for production use |
 

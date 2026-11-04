@@ -338,8 +338,7 @@ for the full field list. For DP error diagnostics, see
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `data.holdout` | `0.05` | Fraction (0--1) or absolute count (>1) for the holdout test set for evaluation | 0.05--0.15 typical |
-| `data.max_holdout` | `2000` | Upper cap on holdout size | Leave at default for most datasets |
+| `data.holdout` | `0.05` | Fraction of records held out as the test set for evaluation. Must be in [0, 1). Set to 0 to turn off the holdout. With `group_training_examples_by`, the same fraction of groups is held out, rounded up to whole groups | 0.05--0.15 typical |
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
 | `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | In time-series mode, prefer `time_series.timestamp_column`; if both are set they must match |

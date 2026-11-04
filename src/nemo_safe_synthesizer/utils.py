@@ -234,7 +234,7 @@ def grouped_train_test_split(
 
     Args:
         dataset: The HuggingFace ``Dataset`` to split.
-        test_size: Fraction or absolute number of test rows.
+        test_size: Fraction of groups to hold out, in ``(0, 1)``.
         group_by: Column name defining groups.
         seed: Random state for reproducibility.
 
