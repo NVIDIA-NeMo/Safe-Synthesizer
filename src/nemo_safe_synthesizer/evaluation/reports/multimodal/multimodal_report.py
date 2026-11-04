@@ -320,7 +320,11 @@ class MultimodalReport(EvaluationReport):
         components.append(data_privacy_score)
 
         pii_replay = PIIReplay(skipped_reason=pii_replay_skipped_reason)
-        if column_statistics and config is not None and config.get("pii_replay_enabled"):
+        if (
+            config is not None
+            and config.get("pii_replay_enabled")
+            and (column_statistics or config.get("pii_replay_columns"))
+        ):
             # PII Replay requires full df's. Make a one-off dataset for that call.
             pii_replay = PIIReplay.from_evaluation_datasets(
                 EvaluationDatasets.from_dataframes(
