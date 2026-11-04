@@ -195,10 +195,11 @@ def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str
     values = df[spec.column_name].dropna().astype(str).tolist()
     if not all_distinct(values):
         return None
-    if (size := MaskSpace.from_pattern(pattern).size) > len(values):
+    # Replacements must differ ignoring letter case, so count the values that still differ without it.
+    if (size := MaskSpace.from_pattern(pattern).folded_size) > len(values):
         return None
     return (
-        f"column {spec.column_name!r}: pattern {pattern!r} has {size} possible values, too few to give each of "
+        f"column {spec.column_name!r}: pattern {pattern!r} has {size} values that differ ignoring case, too few to give each of "
         f"the column's {len(values)} distinct values its own replacement"
     )
 

@@ -614,6 +614,15 @@ class TestReplacementGenerator:
         for seed in range(20):
             assert birth_dates.shift_birth_date(original, "%Y-%m-%d", Random(seed), locale="en_US") == original
 
+    @pytest.mark.parametrize(
+        ("original", "pattern"), [("1990-02-14T00:00:00+02:00", None), ("1990-04-05 +0000", "%Y-%m-%d %z")]
+    )
+    def test_birth_date_with_a_timezone_is_shifted(self, original: str, pattern: str | None) -> None:
+        replacement = birth_dates.shift_birth_date(original, pattern, Random(0), locale="en_US")
+
+        assert replacement is not None
+        assert replacement != original
+
     @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
     def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
         replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="en_US")
