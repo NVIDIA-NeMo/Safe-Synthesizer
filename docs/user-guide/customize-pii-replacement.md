@@ -129,9 +129,9 @@ working directory.
     Safe Synthesizer validates every plan against the data, but a plan you
     write is allowed to run where a discovered plan would not. For example, a
     pattern that fits fewer than 99% of a column's values is dropped from a
-    discovered plan but kept, with a warning, in a plan you write. A dependency
-    value the sampler cannot use stops a discovered plan with an error, but in
-    a plan you write it logs a warning and that value or entry is ignored.
+    discovered plan but kept, with a warning, in a plan you write. Value
+    mapping problems stop every plan with an error: a mapping entry the sampler
+    cannot use, or a dependency value with no mapping entry and no sampler match.
 
 ## Entity Types
 

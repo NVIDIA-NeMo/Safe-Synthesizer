@@ -143,7 +143,7 @@ def validate_data_to_sampler_value_mapping(
                 f"data_to_sampler_value_mapping column {column_name!r} is not used as a dependency "
                 "in the replacement plan"
             )
-    _, problems = _usable_value_mapping(plan, catalog)
+    problems = _mapping_problems(plan, catalog)
     if problems:
         raise ParameterError(
             f"data_to_sampler_value_mapping does not match the {sampler_name} sampler: {'; '.join(problems)}. "
@@ -153,35 +153,9 @@ def validate_data_to_sampler_value_mapping(
         )
 
 
-def usable_value_mapping(
-    plan: PiiReplacementPlan, catalog: SamplerValueCatalog, *, sampler_name: str
-) -> DataToSamplerValueMapping:
-    """Return the plan's value mapping without the entries the sampler cannot use, warning about them.
-
-    This is the lenient form of ``validate_data_to_sampler_value_mapping`` for a plan the user supplied:
-    entries for a column that is not a dependency, for an entity type the sampler has no values for, and
-    targets the sampler does not accept are dropped. A dataset value left without targets is then
-    unmatched; see ``entries_for_unmatched_values``.
-
-    Example:
-        With the catalog ``{GENDER: ("female", "male")}``, ``{"sex": {"Woman": ["woman", "female"]}}``
-        becomes ``{"sex": {"Woman": ["female"]}}``.
-    """
-    usable, problems = _usable_value_mapping(plan, catalog)
-    if problems:
-        logger.user.warning(
-            f"Ignoring data_to_sampler_value_mapping entries the {sampler_name} sampler cannot use: "
-            f"{'; '.join(problems)}."
-        )
-    return usable
-
-
-def _usable_value_mapping(
-    plan: PiiReplacementPlan, catalog: SamplerValueCatalog
-) -> tuple[DataToSamplerValueMapping, list[str]]:
-    """Return the plan's value mapping restricted to what the sampler can use, and what was left out."""
+def _mapping_problems(plan: PiiReplacementPlan, catalog: SamplerValueCatalog) -> list[str]:
+    """Return a description of each value mapping entry the sampler cannot use."""
     columns = conditioner_columns(plan)
-    usable: DataToSamplerValueMapping = {}
     problems: list[str] = []
     for column_name, value_mappings in plan.data_to_sampler_value_mapping.items():
         entity_type = columns.get(column_name)
@@ -206,36 +180,7 @@ def _usable_value_mapping(
                 f"column {column_name!r} maps to {', '.join(unknown)}, which this sampler does not accept "
                 f"(it accepts {', '.join(supported)})"
             )
-        kept = {
-            source: [target for target in targets if target.casefold() in supported_keys]
-            for source, targets in value_mappings.items()
-        }
-        if kept := {source: targets for source, targets in kept.items() if targets}:
-            usable[column_name] = kept
-    return usable, problems
-
-
-def entries_for_unmatched_values(
-    dataframe: pd.DataFrame, plan: PiiReplacementPlan, catalog: SamplerValueCatalog, *, sampler_name: str
-) -> DataToSamplerValueMapping:
-    """Return entries that let each unmatched dataset value match any sampler value, warning about them.
-
-    This is the lenient form of the unmatched-value check for a plan the user supplied: a dataset value
-    with neither a sampler match nor a mapping entry no longer conditions the replacement.
-
-    Example:
-        With the catalog ``{GENDER: ("female", "male")}`` and a ``sex`` value ``"X"`` without an entry,
-        the result is ``{"sex": {"X": ["female", "male"]}}``.
-    """
-    inputs = mapping_inputs(dataframe, plan, catalog)
-    if not inputs:
-        return {}
-    counts = ", ".join(f"{item.column_name!r} ({len(item.source_values)})" for item in inputs)
-    logger.user.warning(
-        f"data_to_sampler_value_mapping has no entry for dataset values that match no value of the {sampler_name} "
-        f"sampler, counted by depends_on column: {counts}. Rows with these values are not conditioned on them."
-    )
-    return {item.column_name: {value: list(item.sampler_values) for value in item.source_values} for item in inputs}
+    return problems
 
 
 def without_non_categorical_dependencies(

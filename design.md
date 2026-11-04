@@ -394,15 +394,17 @@ all fail, only the pattern is dropped, with a warning.
 ### Discovered vs. written plans
 
 Discovered plans are validated strictly; plans a user writes are validated
-leniently so a hand-edited plan still runs:
+leniently for pattern coverage and conditioning columns so a hand-edited plan
+still runs. Value mapping problems fail for both, so a mapping written for
+another sampler or locale is not silently weakened:
 
 | Problem | Discovered plan | Written plan |
 |---------|-----------------|--------------|
 | Pattern covers < 99% of values | Pattern dropped | Warning, pattern kept |
-| Dependency value with no mapping and no sampler match | Error naming the column | Warning; value matches any sampler value |
+| Dependency value with no mapping and no sampler match | Error naming the column | Error naming the column |
 | Conditioning column with > 1,000 distinct values or values > 128 chars | Error | Warning; dependency dropped |
-| Mapping entry the sampler cannot use (e.g. `femme` or any ethnicity with Faker) | One error listing every entry | One warning; entries dropped |
-| Ethnicity mapping when Nemotron-Personas is unavailable and `sampler` is unset | Error | Falls back to Faker; ethnicity entries dropped |
+| Mapping entry the sampler cannot use (e.g. `femme` or any ethnicity with Faker) | One error listing every entry | One error listing every entry |
+| Ethnicity mapping when Nemotron-Personas is unavailable and `sampler` is unset | Error | Error |
 
 An inline plan never runs a mapping-discovery pass; an omitted mapping is `{}`.
 There is no separate mapping file and no merging of discovery with manual
