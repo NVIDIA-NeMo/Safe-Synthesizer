@@ -152,16 +152,20 @@ class DatasetInfo(BaseModel):
                 default_load_args = {}
             case _:
                 if not extension:
-                    extension = f"<no extension found on url '{url}'>"
+                    extension = f"<no extension found on url '{_loggable_url(url)}'>"
                 raise ValueError(f"Unsupported file extension: {extension}")
 
         # Merge load args: user-provided args override defaults
         final_load_args = {**default_load_args, **(self.load_args or {})}
 
+        loggable_url = _loggable_url(url)
         try:
-            return _require_dataframe(reader(url, **final_load_args), url=url)
+            return _require_dataframe(reader(url, **final_load_args), url=loggable_url)
         except Exception as e:
-            logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
+            # The error is raised again for the caller to report. The logged copy leaves out the traceback and
+            # replaces the URL, since either can carry a signed URL's access token.
+            message = str(e).replace(url, loggable_url)
+            logger.error(f"Error reading dataset from {loggable_url}: {type(e).__name__}: {message}")
             raise
 
     def fetch_csv_source(self) -> CsvSource | None:

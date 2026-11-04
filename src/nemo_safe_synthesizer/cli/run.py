@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
+from pydantic import ValidationError
 
 from ..config import SafeSynthesizerParameters
 from ..configurator.pydantic_click_options import (
@@ -288,10 +289,22 @@ def _settings_from_run_kwargs(kwargs: dict[str, Any]) -> CLISettings:
 
     ``kwargs`` is mutated: matched settings keys are popped before the remainder
     is parsed into overrides.
+
+    Raises:
+        click.UsageError: If a setting is invalid, such as a negative
+            ``--inference-timeout-seconds``. Click prints the message without a
+            traceback, which would also echo the other settings, API key included.
     """
     settings_kwargs = {name: kwargs.pop(name) for name in _CLI_SETTINGS_FIELDS if name in kwargs}
     settings_kwargs["synthesis_overrides"] = _parse_run_overrides(kwargs)
-    return CLISettings.from_cli_kwargs(**settings_kwargs)
+    try:
+        return CLISettings.from_cli_kwargs(**settings_kwargs)
+    except ValidationError as exc:
+        messages = [
+            ": ".join(filter(None, (".".join(map(str, error["loc"])), error["msg"].removeprefix("Value error, "))))
+            for error in exc.errors()
+        ]
+        raise click.UsageError("; ".join(messages)) from None
 
 
 def _set_cli_deployment_type_default() -> None:

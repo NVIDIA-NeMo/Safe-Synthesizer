@@ -629,7 +629,7 @@ class FreeTextReplacementExecutor:
         cached = self._cache.get(key)
         if cached is not None:
             return cached
-        chooser = CandidateChooser(key.entity_type, key.original_value)
+        chooser = CandidateChooser(key.entity_type, key.original_value, locale=self._locale)
         replacement: str | None = None
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(

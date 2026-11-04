@@ -799,6 +799,26 @@ class TestReplacementExecutor:
         assert email.detection_source == "regex"
         assert email.score is None
 
+    def test_free_text_full_name_is_read_in_the_locale_name_order(self) -> None:
+        # The nickname makes a word-by-word split a guess, so the name is generated whole and checked for kept
+        # parts. Read in en_US order, the unspaced name is one word, and the kept family name 欧阳 goes unnoticed.
+        dataframe = pd.DataFrame({"notes": ["欧阳小明 (Tom)来了"]})
+        detector = _StaticDetector(
+            [DetectedSpan(DetectionCellId(0, "notes"), 0, 10, EntityType.FULL_NAME, DetectionSource.GLINER, 0.9)]
+        )
+        generator = _ScriptedNameGenerator("欧阳大伟", "王小红")
+
+        result = ReplacementExecutor(
+            _plan(_target("notes", EntityType.FREE_TEXT)),
+            generator,
+            group_column=None,
+            base_seed=42,
+            free_text_detector=detector,
+            locale="zh_CN",
+        ).execute(dataframe)
+
+        assert result.dataframe["notes"].tolist() == ["王小红来了"]
+
     def test_equal_detected_values_reuse_one_replacement_across_free_text_columns(self) -> None:
         dataframe = pd.DataFrame({"primary": ["Ada"], "secondary": ["Call Ada"]})
         plan = _plan(

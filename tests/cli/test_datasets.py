@@ -6,10 +6,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer.cli import datasets as datasets_module
 from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry, file_extension
 
 
@@ -170,6 +172,24 @@ class TestDatasetInfo:
     )
     def test_file_extension_ignores_case_and_query_strings(self, url: str, extension: str):
         assert file_extension(url) == extension
+
+    def test_failed_read_does_not_log_url_credentials(self, monkeypatch: pytest.MonkeyPatch):
+        url = "https://user:secret@host.invalid/people.csv?token=abc"
+
+        def failing_read(path: str, **kwargs: object) -> None:
+            raise OSError(f"could not open {path}")
+
+        logged = MagicMock()
+        monkeypatch.setattr(datasets_module.pd, "read_csv", failing_read)
+        monkeypatch.setattr(datasets_module.logger, "error", logged)
+
+        with pytest.raises(OSError):
+            DatasetInfo(name="test", url=url).fetch()
+
+        message = logged.call_args.args[0]
+        assert "https://host.invalid/people.csv" in message
+        assert "secret" not in message
+        assert "token" not in message
 
     def test_fetch_unsupported_extension(self, tmp_path: Path):
         """Test fetch raises ValueError for unsupported file extension."""
