@@ -32,6 +32,18 @@ def file_extension(url: str) -> str:
     return PurePosixPath(urlparse(url).path.replace("\\", "/")).suffix.lower().lstrip(".")
 
 
+def _loggable_url(url: str) -> str:
+    """Return ``url`` without credentials, query string, or fragment, which can hold an access token.
+
+    Example:
+        ``"https://host/people.parquet?token=abc"`` returns ``"https://host/people.parquet"``.
+    """
+    if "://" not in url:
+        return url
+    parsed = urlparse(url)
+    return parsed._replace(netloc=parsed.netloc.rpartition("@")[2], query="", fragment="").geturl()
+
+
 def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
     if isinstance(value, pd.DataFrame):
         return value
@@ -120,7 +132,7 @@ class DatasetInfo(BaseModel):
         """
         url = self.get_url()
 
-        logger.info(f"Reading dataset from {url}")
+        logger.info(f"Reading dataset from {_loggable_url(url)}")
 
         # Determine the file extension and appropriate reader
         reader: Any
@@ -168,7 +180,7 @@ class DatasetInfo(BaseModel):
         url = self.get_url()
         if file_extension(url) not in {"csv", "txt"}:
             return None
-        logger.info(f"Reading dataset from {url}")
+        logger.info(f"Reading dataset from {_loggable_url(url)}")
         return CsvSource.load(url, self.load_args)
 
 
