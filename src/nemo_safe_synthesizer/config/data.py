@@ -17,7 +17,6 @@ from ..configurator.parameters import (
 )
 from ..configurator.validators import (
     DependsOnValidator,
-    ValueValidator,
 )
 from .types import (
     AUTO_STR,
@@ -30,7 +29,6 @@ __all__ = [
 
 # Holdout constants
 DEFAULT_HOLDOUT = 0.05
-DEFAULT_MAX_HOLDOUT = 2000
 MIN_HOLDOUT = 10
 
 
@@ -81,25 +79,13 @@ class DataParameters(Parameters):
         ),
     ] = AUTO_STR
 
-    holdout: Annotated[
-        float,
-        ValueValidator(value_func=lambda v: v >= 0),
-        Field(
-            description=(
-                "Amount of records to hold out for evaluation. If this is a float between 0 and 1, that ratio of "
-                "records is held out. If an integer greater than 1, that number of records is held out. "
-                "If the value is equal to zero, no holdout will be performed. Must be >= 0."
-            ),
+    holdout: float = Field(
+        default=DEFAULT_HOLDOUT,
+        description=(
+            "Fraction of records to hold out for evaluation. With grouped data, the same fraction of groups is "
+            "held out, rounded up to whole groups. Set to 0 to turn off the holdout. Must be in [0, 1)."
         ),
-    ] = DEFAULT_HOLDOUT
-
-    max_holdout: Annotated[
-        int,
-        ValueValidator(value_func=lambda v: v >= 0),
-        Field(
-            description="Maximum number of records to hold out. Overrides any behavior set by ``holdout``. Must be >= 0.",
-        ),
-    ] = DEFAULT_MAX_HOLDOUT
+    )
 
     random_state: Annotated[
         int | None,
@@ -107,6 +93,17 @@ class DataParameters(Parameters):
             description="Random state for holdout split to ensure reproducibility.",
         ),
     ] = None
+
+    @field_validator("holdout", mode="after")
+    @classmethod
+    def check_holdout_fraction(cls, v: float) -> float:
+        """Require a holdout fraction in [0, 1)."""
+        if not 0 <= v < 1:
+            raise ValueError(
+                f"data.holdout must be a fraction in [0, 1), got {v}. Holdout row counts are no longer supported. "
+                "Use a fraction such as 0.05, or 0 to turn off the holdout."
+            )
+        return v
 
     @field_validator("random_state", mode="after", check_fields=False)
     def set_random_state_if_none(cls, v: int | int | None) -> int | None:

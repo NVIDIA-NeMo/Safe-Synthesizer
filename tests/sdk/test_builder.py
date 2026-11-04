@@ -313,7 +313,6 @@ def test_builder_with_data_config():
         .with_data_source(pd.DataFrame({"col": range(100)}))
         .with_data(
             holdout=0.1,
-            max_holdout=1000,
             random_state=42,
             group_training_examples_by="col",
         )
@@ -323,7 +322,6 @@ def test_builder_with_data_config():
     assert builder._nss_config is not None
     config = builder._nss_config
     assert config.data.holdout == 0.1
-    assert config.data.max_holdout == 1000
     assert config.data.random_state == 42
     assert config.data.group_training_examples_by == "col"
 
