@@ -208,6 +208,7 @@ def _signal_group(process_group: int, signum: signal.Signals) -> None:
     try:
         os.killpg(process_group, signum)
     except ProcessLookupError:
+        # Every process in the group has already exited, so there is nothing left to signal.
         pass
 
 
