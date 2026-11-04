@@ -21,6 +21,17 @@ from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 
+# Training values and value-level distributions are not needed to render the
+# report, and anything in its context is one template edit away from the HTML.
+_COLUMN_STATISTICS_REPORT_EXCLUDE = {"detected_entity_values"}
+_EVALUATION_FIELD_REPORT_EXCLUDE = {
+    "training_distribution": True,
+    "synthetic_distribution": True,
+    "training_field_features": {"unique_values_list"},
+    "synthetic_field_features": {"unique_values_list"},
+    "column_statistics": _COLUMN_STATISTICS_REPORT_EXCLUDE,
+}
+
 
 class ColumnDistributionPlotRow(BaseModel):
     """A pair of side-by-side column distribution plots for the HTML report."""
@@ -33,14 +44,13 @@ class ColumnDistributionPlotRow(BaseModel):
     def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
         if f is None:
             return None
-        if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
-            if f.training_distribution is not None and f.synthetic_distribution is not None:
-                figure = figures.bar_chart(f.training_distribution, f.synthetic_distribution)
-            else:
-                figure = None
-        else:
-            figure = figures.histogram_figure(training, synthetic)
-        return figure
+        # A numeric training column always gets binned bars: a bar per distinct
+        # numeric value would name individual training values.
+        if f.training_field_features.type == FieldType.NUMERIC:
+            return figures.histogram_figure(training, synthetic)
+        if f.training_distribution is not None and f.synthetic_distribution is not None:
+            return figures.bar_chart(f.training_distribution, f.synthetic_distribution, len(training))
+        return None
 
     @staticmethod
     def _from_fields(
@@ -113,9 +123,13 @@ class ColumnDistribution(Component):
         d = super().jinja_context
         d["anchor_link"] = "#distribution-stability"
         if self.evaluation_fields:
-            d["evaluation_fields"] = [f.model_dump(mode="json") for f in self.evaluation_fields]
+            d["evaluation_fields"] = [
+                f.model_dump(mode="json", exclude=_EVALUATION_FIELD_REPORT_EXCLUDE) for f in self.evaluation_fields
+            ]
         if self.column_statistics:
-            d["column_statistics"] = {k: v.model_dump() for k, v in self.column_statistics.items()}
+            d["column_statistics"] = {
+                k: v.model_dump(exclude=_COLUMN_STATISTICS_REPORT_EXCLUDE) for k, v in self.column_statistics.items()
+            }
         # Figures are set up with ColumnDistributionPlotRow. It requires an EvaluateDataset so needs
         # to be done out of band as separate call from enclosing report class.
         return d
