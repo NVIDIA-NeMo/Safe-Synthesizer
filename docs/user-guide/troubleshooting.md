@@ -548,6 +548,41 @@ first run or pre-populate the model cache before using
 `--disable-huggingface-remote`. A model-load or inference failure stops the run
 instead of silently continuing with regex detection only.
 
+### Automatic Plan Discovery Fails
+
+Automatic discovery needs a planning model. By default it runs on a local vLLM
+server on your GPU; with `NSS_INFERENCE_ENDPOINT` set, it uses that service
+instead. Common failures:
+
+- `The local vLLM server exited with code ... before it became ready`: the
+  default planning model needs one GPU with 80 GB of memory. Use a GPU that
+  size with no other jobs on it, or use one of the options below. The message
+  ends with the server's last output lines, which usually name the cause, such
+  as running out of GPU memory.
+- `Cannot start the local PII inference server on ... because the address is in use`:
+  another process is listening on the planning port. Stop it, or follow the
+  message to use that server or choose another port.
+- `PII inference authentication or authorization failed`: the hosted service
+  rejected `NSS_INFERENCE_KEY`.
+- `NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too`: set
+  `NSS_INFERENCE_MODEL` or `replace_pii.llm.model_id` to the model the service
+  serves.
+- `... failed after 3 attempts`: requests to the planning model kept failing,
+  for example because the service is unreachable or overloaded. Check the
+  endpoint URL and try again later.
+- `... returned invalid structured output after 3 attempts`: the model kept
+  giving answers that do not fit the plan format. Use the default planning
+  model or a larger one.
+
+If discovery cannot run where you train, you have two other options:
+
+- Send planning to a hosted model service. Column samples then leave your
+  machine; see
+  [Where planning requests go](environment.md#where-planning-requests-go).
+- Write the plan yourself, or discover it once on a machine with a large
+  enough GPU and reuse the saved plan. See
+  [Customizing PII Replacement](customize-pii-replacement.md#review-and-reuse-the-plan).
+
 ### GLiNER2 Device and Throughput
 
 Safe Synthesizer loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text

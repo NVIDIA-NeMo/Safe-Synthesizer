@@ -4,7 +4,7 @@
 # Customizing PII Replacement
 
 This guide shows how to review and edit the PII replacement plan, choose where
-fake values come from, tune free-text detection, and choose the model that
+synthetic values come from, tune free-text detection, and choose the model that
 builds the plan. For what PII replacement does and why, see
 [PII Replacement](../product-overview/pii_replacement.md). For a list of every
 setting, see [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
@@ -166,7 +166,7 @@ such as `{First} {Last}` or `{f}.{last}@{domain}`:
   it in title case and `{FIRST}` in uppercase, and likewise for middle and last.
 - `{f}`, `{m}`, `{l}`: the part's lowercase initial; `{F}`, `{M}`, `{L}` write
   it in uppercase.
-- `{domain}`, `{organization}`: email only. The original email's domain (a fake
+- `{domain}`, `{organization}`: email only. The original email's domain (a synthetic
   one when the original has none), and the value of an organization dependency
   written as a domain label. An email pattern must contain `@`, and `#` writes
   one random digit.

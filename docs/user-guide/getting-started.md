@@ -245,7 +245,7 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 ### 2. PII Replacement
 
 Before training, Safe Synthesizer replaces names, contact details, IDs, and
-other PII in the training data with realistic fake values. See
+other PII in the training data with realistic synthetic values. See
 [PII Replacement](../product-overview/pii_replacement.md) for how it works and
 [Customizing PII Replacement](customize-pii-replacement.md) to review or change the plan.
 
