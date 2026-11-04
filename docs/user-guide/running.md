@@ -1220,6 +1220,22 @@ results = synthesizer.results
 synthesizer.save_results()
 ```
 
+For PII replacement without synthesis, call `process_data(pii_only=True)`
+with your PII replacement configuration:
+
+```python
+synthesizer = SafeSynthesizer(config=config).with_data_source(df)
+synthesizer.process_data(pii_only=True)
+```
+
+This disables holdout and the 200-row training minimum, keeping every input row
+available for replacement. Other preflight checks still apply. The overrides
+survive automatic configuration resolution and preserve existing disabled checks.
+Use this mode only when you will not call `train()`; PII replacement in a normal
+synthesis workflow still uses holdout and enforces the training minimum.
+`check_only=True` can be combined with `pii_only=True` to validate without running
+PII replacement.
+
 ---
 
 ## Artifacts and Output

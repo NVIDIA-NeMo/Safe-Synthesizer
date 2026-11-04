@@ -365,7 +365,7 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
-    def process_data(self, check_only: bool = False) -> SafeSynthesizer:
+    def process_data(self, check_only: bool = False, *, pii_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
 
         Validates configured grouping/ordering columns against the input
@@ -385,6 +385,10 @@ class SafeSynthesizer(ConfigBuilder):
 
         Args:
             check_only: If ``True``, run preflight checks only (validation mode).
+            pii_only: If ``True``, disable evaluation holdout and the training-size
+                preflight check so PII replacement can process small tables without
+                dropping rows. Use only for workflows that will not train a model;
+                enabling PII replacement alone does not imply this mode.
 
         Returns:
             Self for method chaining.
@@ -405,6 +409,20 @@ class SafeSynthesizer(ConfigBuilder):
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
+
+        if pii_only:
+            # Patch explicitly rather than mutating default sections: auto-config
+            # resolution rebuilds from exclude_unset=True and would lose overrides
+            # on sections that were not supplied by the caller.
+            disabled_checks = list(self._nss_config.preflight.disabled_checks)
+            if "dataset.size" not in disabled_checks:
+                disabled_checks.append("dataset.size")
+            self._nss_config = self._nss_config.with_config_patch(
+                {
+                    "data": {"holdout": 0, "max_holdout": 0},
+                    "preflight": {"disabled_checks": disabled_checks},
+                }
+            )
 
         # Run the config/dataframe stages before holdout so invalid column
         # settings produce structured preflight issues instead of downstream

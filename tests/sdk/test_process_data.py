@@ -25,6 +25,7 @@ from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import (
     PreflightReport,
     PreflightStage,
@@ -227,6 +228,71 @@ def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixtu
         builder.process_data()
 
     assert preflight_issue_codes == [[], []]
+
+
+@pytest.mark.parametrize("disabled_checks", [None, ["columns.constant", "dataset.size"]])
+def test_process_data_pii_only_preserves_small_table(
+    fixture_workdir: Workdir, disabled_checks: list[str] | None
+) -> None:
+    """PII-only overrides survive real auto-resolution and both preflight passes."""
+    config = SafeSynthesizerParameters()
+    assert "data" not in config.model_fields_set
+    assert "preflight" not in config.model_fields_set
+    if disabled_checks is not None:
+        config = config.with_config_patch({"preflight": {"disabled_checks": disabled_checks}})
+    original_config = config.model_dump()
+    source = pd.DataFrame({"name": [f"Name{i}" for i in range(8)], "value": range(8)})
+    transformed = source.assign(name="redacted")
+    builder = SafeSynthesizer(config=config, workdir=fixture_workdir).with_data_source(source)
+    replacer = MagicMock()
+    replacer.result.transformed_df = transformed
+    replacer.elapsed_time = 0.1
+    # Keep the real data checks and orchestrator; exclude environment/model
+    # checks so this regression test needs neither CUDA nor model downloads.
+    registry = build_registry(tuple(check for check in get_registry() if check.stage == PreflightStage.DATAFRAME))
+
+    def data_preflight(data, current_config, metadata, **kwargs):
+        return run_actual_preflight(data, current_config, metadata, registry=registry, **kwargs)
+
+    with (
+        patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=data_preflight),
+        patch(
+            "nemo_safe_synthesizer.sdk.library_builder.ModelMetadata.from_config",
+            return_value=ModelMetadata.stub(config),
+        ),
+        patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII", return_value=replacer),
+    ):
+        builder.process_data(pii_only=True)
+
+    assert builder._test_df is None
+    pd.testing.assert_frame_equal(builder._original_training_df, source)
+    assert builder._nss_config is not None
+    round_tripped = builder._nss_config.with_config_patch({})
+    assert round_tripped.data.holdout == 0
+    assert round_tripped.data.max_holdout == 0
+    assert round_tripped.preflight.disabled_checks == [
+        *(check for check in disabled_checks or [] if check != "dataset.size"),
+        "dataset.size",
+    ]
+    assert config.model_dump() == original_config
+    assert builder.preflight_report is not None
+    assert not builder.preflight_report.errors
+
+
+def test_process_data_default_still_enforces_training_size(fixture_workdir: Workdir) -> None:
+    """Enabling PII replacement alone must not bypass the training minimum."""
+    source = pd.DataFrame({"name": [f"Name{i}" for i in range(8)]})
+    builder = SafeSynthesizer(workdir=fixture_workdir).with_data_source(source)
+    registry = build_registry((get_registry()["dataset.size"],))
+
+    def size_preflight(data, config, metadata, **kwargs):
+        return run_actual_preflight(data, config, metadata, registry=registry, **kwargs)
+
+    with (
+        patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=size_preflight),
+        pytest.raises(ParameterError, match="dataset_too_small"),
+    ):
+        builder.process_data()
 
 
 class TestProcessDataPiiSeparation:
