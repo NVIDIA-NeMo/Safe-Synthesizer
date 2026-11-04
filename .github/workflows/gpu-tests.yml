@@ -281,6 +281,8 @@ jobs:
 
       - name: Run GPU smoke tests - local inference
         timeout-minutes: 15
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:local-inference
 
       - name: Run GPU smoke tests - SmolLM2
