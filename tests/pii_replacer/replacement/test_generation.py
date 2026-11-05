@@ -534,6 +534,20 @@ class TestReplacementGenerator:
             shape = shape if shape.startswith("Dr") else r"Dr\. " + shape
         assert re.fullmatch(shape, replacement), replacement
 
+    @pytest.mark.parametrize(
+        ("original", "pattern", "shape"),
+        [
+            ("Prof. Dr. Hans Müller", "Dr. {First} {Last}", r"Prof\. Dr\. \S+ \S+"),
+            ("Ada Lovelace Jr., PhD", "{First} {Last} Jr.", r"\S+ \S+ Jr\., PhD"),
+        ],
+    )
+    def test_faker_full_name_adds_only_the_titles_and_suffixes_its_pattern_lacks(
+        self, original: str, pattern: str, shape: str
+    ) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original, pattern=pattern))
+
+        assert re.fullmatch(shape, replacement), replacement
+
     def test_nemotron_personas_full_name_keeps_the_originals_title_and_suffix(self, tmp_path: Path) -> None:
         people = pd.DataFrame({"first_name": ["Grace"], "last_name": ["Hopper"]})
         generator = _nemotron_personas_generator(tmp_path, people)
