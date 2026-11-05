@@ -11,7 +11,7 @@ Everything is installed and ready. Nothing to set up.
 ## Start here
 
 Open `tutorials/safe-synthesizer-101.ipynb` and run the cells top to bottom.
-It takes about 15 minutes and walks through the full pipeline on a sample
+It takes about 25 minutes and walks through the full pipeline on a sample
 dataset.
 
 The other four notebooks go deeper:

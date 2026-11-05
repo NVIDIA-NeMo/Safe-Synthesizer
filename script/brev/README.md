@@ -180,7 +180,7 @@ to switch kernels. If it reports a 3.12 path instead, kernel registration landed
 directory the server does not consult; check the `registered kernel at ...` lines in the
 log against `jupyter kernelspec list`.
 
-Then run `tutorials/safe-synthesizer-101.ipynb` end to end -- roughly 15 minutes on
+Then run `tutorials/safe-synthesizer-101.ipynb` end to end -- roughly 25 minutes on
 an A100 or H100.
 
 ### Tested configurations
