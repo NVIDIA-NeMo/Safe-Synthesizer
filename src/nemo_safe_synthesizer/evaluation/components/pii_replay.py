@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import cached_property
 from numbers import Integral, Real
 
@@ -18,6 +18,7 @@ from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
+from ...pii_replacer.phone_numbers import phone_identity, phone_region
 
 logger = get_logger(__name__)
 
@@ -87,6 +88,8 @@ class PIIReplay(Component):
         """Compute PII replay counts from classified entity metadata."""
         pii_replay_entities = config.get("pii_replay_entities") if config else None
         pii_replay_columns = config.get("pii_replay_columns") if config else None
+        locale = config.get("replace_pii.locale") if config else None
+        region = phone_region(locale) if isinstance(locale, str) else None
         statistics = evaluation_datasets.column_statistics or {}
         if not statistics and not pii_replay_columns:
             logger.warning("No classified entities, skipping PII Replay.")
@@ -123,16 +126,22 @@ class PIIReplay(Component):
                 training_entity_count = statistics[col].detected_entity_counts[entity_name]
                 training_entity_unique_values = statistics[col].detected_entity_values[entity_name]
 
-            # Values that differ only in letter case, or in how a number is written, count once.
-            training_keys = {_replay_key(value) for value in training_entity_unique_values if not _is_missing(value)}
+            substring_match = entity_name != UNKNOWN_ENTITY and statistics[col].assigned_entity == EntityType.FREE_TEXT
+            # Values that differ only in letter case, or in how a number is written, count once. So does one
+            # phone number written in several ways, in a column of whole phone numbers.
+            key_of = (
+                _phone_replay_key(region)
+                if entity_name == EntityType.PHONE_NUMBER.value and not substring_match
+                else _replay_key
+            )
+            training_keys = {key_of(value) for value in training_entity_unique_values if not _is_missing(value)}
             training_entity_unique_count = len(training_keys)
             synthetic_col = evaluation_datasets.synthetic[col]
             synthetic_entity_count, synthetic_entity_unique_count = _synthetic_replay_counts(
                 synthetic_col,
                 training_keys,
-                substring_match=(
-                    entity_name != UNKNOWN_ENTITY and statistics[col].assigned_entity == EntityType.FREE_TEXT
-                ),
+                substring_match=substring_match,
+                key_of=key_of,
             )
             replay_percentage = (
                 synthetic_entity_unique_count / training_entity_unique_count * 100
@@ -174,15 +183,18 @@ def _synthetic_replay_counts(
     training_keys: set[str],
     *,
     substring_match: bool,
+    key_of: Callable[[object], str] | None = None,
 ) -> tuple[int, int]:
     """Count synthetic rows and distinct training PII values that are replayed.
 
-    ``training_keys`` come from ``_replay_key``. Values are compared ignoring letter case and as text, so an
-    SSN detected as ``"123456789"`` matches a synthetic column that reads it back as the integer
-    ``123456789`` or the float ``123456789.0``, and ``KENNETH`` matches ``Kenneth``.
+    ``training_keys`` come from ``key_of``, which defaults to ``_replay_key``. Values are compared ignoring
+    letter case and as text, so an SSN detected as ``"123456789"`` matches a synthetic column that reads it
+    back as the integer ``123456789`` or the float ``123456789.0``, and ``KENNETH`` matches ``Kenneth``.
+    Embedded values in free text are always compared by ``_replay_key``.
     """
     if not substring_match:
-        synthetic_keys = synthetic.map(lambda value: None if _is_missing(value) else _replay_key(value))
+        key = key_of or _replay_key
+        synthetic_keys = synthetic.map(lambda value: None if _is_missing(value) else key(value))
         matches = synthetic_keys[synthetic_keys.isin(training_keys)]
         return len(matches), len(matches.unique())
 
@@ -213,6 +225,21 @@ def _is_missing(value: object) -> bool:
 def _replay_key(value: object) -> str:
     """Return the key a PII value is compared by: its replay text in case-folded form."""
     return _replay_text(value).casefold()
+
+
+def _phone_replay_key(region: str | None) -> Callable[[object], str]:
+    """Return a key function that compares phone numbers by their E.164 form, and other values by ``_replay_key``.
+
+    Example:
+        With region ``"US"``, ``"(555) 123-4567"``, ``"555.123.4567"``, and ``5551234567`` all have the key
+        ``"+15551234567"``.
+    """
+
+    def key_of(value: object) -> str:
+        text = _replay_text(value)
+        return phone_identity(text, region) or text.casefold()
+
+    return key_of
 
 
 def _replay_text(value: object) -> str:

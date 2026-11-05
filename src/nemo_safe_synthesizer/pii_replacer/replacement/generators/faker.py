@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
@@ -14,6 +15,7 @@ from faker import Faker
 from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
+from ...phone_numbers import country_code_prefix
 from ...planning.patterns import render_character_mask, render_name_pattern
 from ...sampler_catalog import PERSONA_SEX_VALUES
 from ..birth_dates import random_birth_date, shift_birth_date
@@ -96,7 +98,7 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.EMAIL:
             return self._generate_email(request, fake, rng, dependencies)
         if entity_type is EntityType.PHONE_NUMBER:
-            return fake.phone_number()
+            return _phone_number(request.original_value, fake, rng)
         if entity_type is EntityType.STREET_ADDRESS:
             # Some locales, such as en_GB, put a flat or unit on its own line.
             return fake.street_address().replace("\n", ", ")
@@ -177,6 +179,30 @@ def _faker_name_values(fake: Faker, gender: str | None) -> dict[str, str]:
         "middle": _faker_first_name(fake, gender),
         "last": fake.last_name(),
     }
+
+
+_PHONE_EXTENSION = re.compile(r"\s*(?:x|ext\.?)\s*\d+$", re.IGNORECASE)
+"""A trailing extension, such as ``"x5938"`` or ``" ext. 12"``, which many Faker locales add to phone numbers."""
+
+
+def _phone_number(original: str, fake: Faker, rng: Random) -> str:
+    """Return ``original`` with its digits replaced at random, or a Faker phone number if that changes nothing.
+
+    A leading country code, such as ``+44`` or ``001``, is kept. Letters and punctuation are kept too, so
+    the replacement is written like the original, including any extension. Faker is used only for an
+    original without other digits, and its extension is dropped, since most Faker formats used for
+    ``en_US`` and the many locales without their own phone formats end in one.
+
+    Example:
+        ``"(555) 123-4567"`` becomes a value such as ``"(812) 904-3321"``, and ``"+44 20 7946 0958"`` one
+        such as ``"+44 81 2604 9135"``.
+    """
+    country_code = country_code_prefix(original)
+    rest = original[len(country_code) :]
+    shaped = country_code + "".join(str(rng.randrange(10)) if character.isdigit() else character for character in rest)
+    if shaped != original:
+        return shaped
+    return _PHONE_EXTENSION.sub("", fake.phone_number())
 
 
 def _select_dependency_value(sampler_values: tuple[str, ...] | None, seed: int) -> str | None:

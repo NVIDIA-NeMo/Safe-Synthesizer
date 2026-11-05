@@ -14,6 +14,7 @@ import pandas as pd
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColumnPlan, PiiReplacementPlan
 from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
+from ..phone_numbers import phone_identity, phone_in_layout, phone_region
 from ..planning.validation import value_matches_pattern
 from ..transform_result import (
     ColumnStatistics,
@@ -116,6 +117,7 @@ class ReplacementExecutor:
         self._group_column = group_column
         self._base_seed = base_seed
         self._locale = locale
+        self._phone_region = phone_region(locale)
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._full_name_patterns = _full_name_patterns(plan)
         self._capture_replacement_map = capture_replacement_map
@@ -401,10 +403,23 @@ class ReplacementExecutor:
         group_identities: tuple[CanonicalValue, ...] | None,
     ) -> StructuredMappingKey:
         # Values that differ only in letter case share a mapping; each occurrence is written in its own case.
-        identity = case_insensitive_identity(original)
+        # So do the ways of writing one phone number; each occurrence keeps its own layout.
+        identity = self._phone_identity(spec, original) or case_insensitive_identity(original)
         if group_identities is None:
             return RecordMappingKey(spec.column_name, row_position, identity)
         return GroupMappingKey(spec.column_name, group_identities[row_position], identity)
+
+    def _phone_identity(self, spec: PiiColumnPlan, original: CanonicalValue) -> CanonicalValue | None:
+        """Return the mapping identity of a phone number: its E.164 form, or ``None`` for other values.
+
+        Example:
+            ``"(555) 123-4567"`` and ``"555.123.4567"`` in ``en_US`` both have identity
+            ``CanonicalValue("phone_number", "+15551234567")``.
+        """
+        if spec.entity_type is not EntityType.PHONE_NUMBER or original.type_tag not in {"string", "integer"}:
+            return None
+        identity = phone_identity(original.normalized_value, self._phone_region)
+        return None if identity is None else CanonicalValue("phone_number", identity)
 
     def _replacement_for(
         self,
@@ -417,8 +432,9 @@ class ReplacementExecutor:
         cached = self._cache.get(key)
         if cached is not None:
             self._record_dependency_drift(key, cached, dependencies)
-            self._free_text.register_structured_mapping(key, spec, original_text, cached.value, address_parts)
-            return cached.value
+            value = _in_occurrence_layout(spec, original_text, cached.value)
+            self._free_text.register_structured_mapping(key, spec, original_text, value, address_parts)
+            return value
 
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
         shared_key = self._shared_key(key, spec)
@@ -429,9 +445,10 @@ class ReplacementExecutor:
         taken = self._taken_in_column(spec, original_text)
         if shared is not None and (taken is None or shared.casefold() not in taken):
             self._cache[key] = _CachedReplacement(shared, provenance)
-            self._record_used(spec, shared, original_text)
-            self._free_text.register_structured_mapping(key, spec, original_text, shared, address_parts)
-            return shared
+            value = _in_occurrence_layout(spec, original_text, shared)
+            self._record_used(spec, value, original_text)
+            self._free_text.register_structured_mapping(key, spec, original_text, value, address_parts)
+            return value
         if address_parts is None:
             replacement = self._generate_fresh(key, spec, original_text, dependencies)
         else:
@@ -642,6 +659,17 @@ class ReplacementExecutor:
                 key=lambda item: (item[0][0], sorted(entity.value for entity in item[0][1])),
             )
         )
+
+
+def _in_occurrence_layout(spec: PiiColumnPlan, occurrence: str, replacement: str) -> str:
+    """Write a reused phone replacement in the layout of the occurrence it replaces; return others unchanged.
+
+    Example:
+        A replacement ``"(812) 904-3321"`` reused for ``"555.123.4567"`` is written ``"812.904.3321"``.
+    """
+    if spec.entity_type is not EntityType.PHONE_NUMBER or spec.pattern is not None:
+        return replacement
+    return phone_in_layout(occurrence, replacement)
 
 
 def _in_occurrence_case(spec: PiiColumnPlan, occurrence: str, replacement: str) -> str:

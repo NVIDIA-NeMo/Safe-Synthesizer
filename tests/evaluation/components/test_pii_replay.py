@@ -78,6 +78,34 @@ def test_pii_replay_column_name_with_apostrophe():
     assert datum.unique_synthetic_data_percentage == 100.0
 
 
+def test_pii_replay_matches_a_phone_number_written_another_way():
+    training_phones = ["(555) 123-4567", "555.123.4567", "202-555-0101"]
+    training = pd.DataFrame({"phone": training_phones})
+    synthetic = pd.DataFrame({"phone": ["555-123-4567", 5551234567, "+1 202 555 0199", "(555) 123-4567"]})
+    column_statistics = {
+        "phone": ColumnStatistics(
+            assigned_type="structured",
+            assigned_entity="phone_number",
+            detected_entity_counts={"phone_number": 3},
+            detected_entity_values={"phone_number": set(training_phones)},
+            is_transformed=True,
+            transform_functions={"faker"},
+        )
+    }
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training, synthetic, column_statistics=column_statistics, enable_sampling=False
+    )
+
+    pii_replay = PIIReplay.from_evaluation_datasets(evaluation_datasets, SafeSynthesizerParameters())
+
+    datum = pii_replay.pii_replay_data[0]
+    # (555) 123-4567 and 555.123.4567 are one number, written two ways.
+    assert datum.unique_training_data == 2
+    assert datum.total_synthetic_data == 3
+    assert datum.unique_synthetic_data == 1
+    assert datum.unique_synthetic_data_percentage == 50.0
+
+
 def test_pii_replay_percentage_rounds_up_to_one_decimal_place():
     training = pd.DataFrame({"name": ["Ada", "Grace", "Katherine"]})
     synthetic = pd.DataFrame({"name": ["Ada", "Margaret"]})
