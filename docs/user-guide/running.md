@@ -1228,13 +1228,11 @@ synthesizer = SafeSynthesizer(config=config).with_data_source(df)
 synthesizer.process_data(pii_only=True)
 ```
 
-This disables holdout and the 200-row training minimum, keeping every input row
-available for replacement. Other preflight checks still apply. The overrides
-survive automatic configuration resolution and preserve existing disabled checks.
-Use this mode only when you will not call `train()`; PII replacement in a normal
-synthesis workflow still uses holdout and enforces the training minimum.
-`check_only=True` can be combined with `pii_only=True` to validate without running
-PII replacement.
+PII-only mode keeps all rows and skips the training-size check for this call,
+without changing holdout or preflight settings in the saved configuration.
+PII replacement must be configured; subsequent `train()` calls are rejected.
+Other preflight checks still apply. Add `check_only=True` to validate without
+running replacement.
 
 ---
 

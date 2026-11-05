@@ -1359,6 +1359,28 @@ class TestRunPreflight:
         # Passed: pseudo-column check runs cleanly on this data.
         assert by_name["columns.pseudo"].status == "passed"
 
+    def test_skip_checks_is_call_scoped_and_gates_dependents(self):
+        from nemo_safe_synthesizer.preflight import build_registry
+
+        data = pd.DataFrame({"val": range(8)})
+        config = SafeSynthesizerParameters().with_config_patch({"preflight": {"disabled_checks": ["columns.pseudo"]}})
+        config_before = config.model_dump()
+        metadata = ModelMetadata.stub(config)
+        registry = build_registry(
+            tuple(get_registry()[name] for name in ("dataset.size", "dataset.row_count", "columns.pseudo"))
+        )
+
+        report = run_preflight(data, config, metadata, registry=registry, skip_checks=frozenset({"dataset.size"}))
+        assert not report.errors
+        by_name = {check.name: check for check in report.checks}
+        assert "dataset.size" not in by_name
+        assert "columns.pseudo" not in by_name
+        assert by_name["dataset.row_count"].status == "skipped"
+        assert config.model_dump() == config_before
+
+        report = run_preflight(data, config, metadata, registry=registry)
+        assert any(issue.code == "dataset_too_small" for issue in report.errors)
+
     def test_token_budget_runs_when_columns_groupby_errors(self):
         # Regression for H2: ``TokenBudgetCheck`` used to declare
         # ``requires=("columns.groupby",)`` and so was skipped whenever

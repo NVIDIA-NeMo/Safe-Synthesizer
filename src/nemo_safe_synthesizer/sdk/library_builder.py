@@ -241,6 +241,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._loaded_from_save_path: bool = False
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
+        self._pii_only: bool = False
         self._preflight_config_path: Path | None = None
         self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
         self._deployment_type: DeploymentTypeEnum = (
@@ -388,7 +389,8 @@ class SafeSynthesizer(ConfigBuilder):
             pii_only: If ``True``, disable evaluation holdout and the training-size
                 preflight check so PII replacement can process small tables without
                 dropping rows. Use only for workflows that will not train a model;
-                enabling PII replacement alone does not imply this mode.
+                enabling PII replacement alone does not imply this mode. The
+                bypass is call-scoped and does not modify saved settings.
 
         Returns:
             Self for method chaining.
@@ -410,19 +412,12 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        if pii_only:
-            # Patch explicitly rather than mutating default sections: auto-config
-            # resolution rebuilds from exclude_unset=True and would lose overrides
-            # on sections that were not supplied by the caller.
-            disabled_checks = list(self._nss_config.preflight.disabled_checks)
-            if "dataset.size" not in disabled_checks:
-                disabled_checks.append("dataset.size")
-            self._nss_config = self._nss_config.with_config_patch(
-                {
-                    "data": {"holdout": 0, "max_holdout": 0},
-                    "preflight": {"disabled_checks": disabled_checks},
-                }
+        if pii_only and self._nss_config.replace_pii is None:
+            raise ParameterError(
+                "pii_only=True requires PII replacement to be configured (replace_pii must not be None)."
             )
+        # Runtime-only bypass: never persist relaxed training checks in the config.
+        skip_checks = frozenset({"dataset.size"}) if pii_only else frozenset()
 
         # Run the config/dataframe stages before holdout so invalid column
         # settings produce structured preflight issues instead of downstream
@@ -433,14 +428,18 @@ class SafeSynthesizer(ConfigBuilder):
             self._nss_config,
             ModelMetadata.stub(self._nss_config),
             stages=frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME}),
+            skip_checks=skip_checks,
         )
         self.preflight_report = preflight
         if preflight.errors:
             summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
             raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
-        holdout = Holdout(self._nss_config)
-        original_training_df, self._test_df = holdout.train_test_split(self._data_source)
+        if pii_only:
+            original_training_df, self._test_df = self._data_source.reset_index(drop=True), None
+        else:
+            holdout = Holdout(self._nss_config)
+            original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
         self._original_training_df = (
             original_training_df  # The original training df that we use for evaluation at the end
@@ -496,13 +495,15 @@ class SafeSynthesizer(ConfigBuilder):
             self._nss_config.to_yaml(config_path, exclude_unset=False)
             self._preflight_config_path = config_path
 
-        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
+        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight, skip_checks=skip_checks)
         self.preflight_report = preflight
         for issue in preflight.warnings:
             logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})
         if preflight.errors:
             summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
             raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
+
+        self._pii_only = pii_only
 
         # If we're in check-only mode, we don't need to process the data further and we'll end the program.
         # ``_data_processed`` is intentionally *not* set here: the validate →
@@ -545,7 +546,12 @@ class SafeSynthesizer(ConfigBuilder):
         Raises:
             RuntimeError: If called after ``load_from_save_path()`` or
                 before ``process_data()``.
+            ParameterError: If the data was processed in PII-only mode.
         """
+        if self._pii_only:
+            raise ParameterError(
+                "Cannot train after PII-only processing. Use a new builder with process_data(pii_only=False)."
+            )
         if self._loaded_from_save_path:
             raise RuntimeError(
                 "train() cannot be called after load_from_save_path(). "

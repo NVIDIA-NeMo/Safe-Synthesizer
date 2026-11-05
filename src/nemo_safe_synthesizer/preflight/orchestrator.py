@@ -88,6 +88,7 @@ def _run_registry(
     ctx: PreflightContext,
     registry: PreflightRegistry,
     stages: frozenset[PreflightStage] | None = None,
+    skip_checks: frozenset[str] = frozenset(),
 ) -> list[PreflightCheckResult]:
     """Execute the registry; return one ``PreflightCheckResult`` per considered check.
 
@@ -109,7 +110,7 @@ def _run_registry(
     """
     results: list[PreflightCheckResult] = []
     errored_checks: set[str] = set()
-    disabled_checks: set[str] = set()
+    disabled_checks = set(skip_checks)
 
     for check in registry:
         # Some callers run an early preflight subset before all downstream
@@ -117,6 +118,8 @@ def _run_registry(
         # the training split). Filter at execution time so registry ordering
         # and dependency semantics remain centralized here.
         if stages is not None and check.stage not in stages:
+            continue
+        if check.name in skip_checks:
             continue
         if any(dep in errored_checks or dep in disabled_checks for dep in check.requires):
             results.append(PreflightCheckResult(name=check.name, status="skipped"))
@@ -166,6 +169,7 @@ def run_preflight(
     *,
     registry: PreflightRegistry | None = None,
     stages: frozenset[PreflightStage] | None = None,
+    skip_checks: frozenset[str] = frozenset(),
 ) -> PreflightReport:
     """Execute all pre-flight checks against the training split.
 
@@ -180,6 +184,9 @@ def run_preflight(
         stages: Optional subset of stages to execute. Used when callers
             need early DataFrame validation before later processing has
             produced the final training split.
+        skip_checks: Check names to disable for this call only, in addition to
+            ``config.preflight.disabled_checks``. Dependents of these checks are
+            skipped as well. Does not modify the configuration.
 
     Returns:
         A structured ``PreflightReport``.
@@ -188,7 +195,7 @@ def run_preflight(
     _warn_unknown_disabled_checks(config, effective_registry)
 
     ctx = PreflightContext(data=data, config=config, metadata=metadata)
-    report = PreflightReport(checks=_run_registry(ctx, effective_registry, stages=stages))
+    report = PreflightReport(checks=_run_registry(ctx, effective_registry, stages=stages, skip_checks=skip_checks))
     n_checks = len(report.checks)
     n_skipped = sum(1 for c in report.checks if c.status == "skipped")
     n_errors = len(report.errors)

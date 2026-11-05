@@ -230,11 +230,11 @@ def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixtu
     assert preflight_issue_codes == [[], []]
 
 
-@pytest.mark.parametrize("disabled_checks", [None, ["columns.constant", "dataset.size"]])
+@pytest.mark.parametrize("disabled_checks", [None, ["columns.constant"]])
 def test_process_data_pii_only_preserves_small_table(
     fixture_workdir: Workdir, disabled_checks: list[str] | None
 ) -> None:
-    """PII-only overrides survive real auto-resolution and both preflight passes."""
+    """PII-only bypasses holdout and size checks without relaxing the saved config."""
     config = SafeSynthesizerParameters()
     assert "data" not in config.model_fields_set
     assert "preflight" not in config.model_fields_set
@@ -265,18 +265,25 @@ def test_process_data_pii_only_preserves_small_table(
         builder.process_data(pii_only=True)
 
     assert builder._test_df is None
+    assert builder._original_training_df is not None
     pd.testing.assert_frame_equal(builder._original_training_df, source)
     assert builder._nss_config is not None
     round_tripped = builder._nss_config.with_config_patch({})
-    assert round_tripped.data.holdout == 0
-    assert round_tripped.data.max_holdout == 0
-    assert round_tripped.preflight.disabled_checks == [
-        *(check for check in disabled_checks or [] if check != "dataset.size"),
-        "dataset.size",
-    ]
+    assert round_tripped.data.holdout == config.data.holdout
+    assert round_tripped.data.max_holdout == config.data.max_holdout
+    assert round_tripped.preflight.disabled_checks == config.preflight.disabled_checks
     assert config.model_dump() == original_config
     assert builder.preflight_report is not None
     assert not builder.preflight_report.errors
+    with pytest.raises(ParameterError, match="Cannot train after PII-only processing"):
+        builder.train()
+
+
+def test_process_data_pii_only_requires_replacement(fixture_workdir: Workdir) -> None:
+    config = SafeSynthesizerParameters(replace_pii=None)
+    builder = SafeSynthesizer(config=config, workdir=fixture_workdir).with_data_source(pd.DataFrame({"name": ["Name"]}))
+    with pytest.raises(ParameterError, match="pii_only=True requires PII replacement"):
+        builder.process_data(pii_only=True)
 
 
 def test_process_data_default_still_enforces_training_size(fixture_workdir: Workdir) -> None:
