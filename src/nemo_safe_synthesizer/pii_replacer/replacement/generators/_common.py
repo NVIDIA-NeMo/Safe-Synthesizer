@@ -15,7 +15,7 @@ from anyascii import anyascii
 from ....config.replace_pii import EntityType
 from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
-from ..person_names import read_full_name, write_full_name
+from ..person_names import name_affixes, read_full_name, write_full_name
 from ..types import EffectiveDependencyTuple
 from ..value_checks import is_luhn_valid
 
@@ -34,6 +34,7 @@ __all__ = [
     "required_pattern_values",
     "resolve_dependency_values",
     "shape_preserving_value",
+    "with_name_affixes",
 ]
 
 NAME_ENTITY_TYPES = frozenset(
@@ -120,6 +121,25 @@ def render_name(
         EntityType.LAST_NAME: values["last"],
         EntityType.FULL_NAME: write_full_name(values["first"], values["last"], locale),
     }[entity_type]
+
+
+def with_name_affixes(original: str, rendered: str, *, locale: str, pattern: str | None = None) -> str:
+    """Return a rendered full name with ``original``'s kept titles and suffixes around it.
+
+    Titles such as ``Dr.`` and suffixes such as ``Jr.`` are kept as written; ``Mr.`` and ``Mrs.`` are not (see
+    :func:`name_affixes`). A title or suffix that ``rendered`` already has, from a pattern such as
+    ``Dr. {First} {Last}``, is not added again.
+
+    Example:
+        ``with_name_affixes("Dr. Ada Lovelace, PhD", "Grace Hopper", locale="en_US")`` is
+        ``"Dr. Grace Hopper, PhD"``.
+    """
+    leading, trailing = name_affixes(original, locale=locale, pattern=pattern)
+    if leading and not rendered.casefold().startswith(leading.casefold()):
+        rendered = leading + rendered
+    if trailing and not rendered.casefold().endswith(trailing.casefold()):
+        rendered += trailing
+    return rendered
 
 
 def required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[str]:
