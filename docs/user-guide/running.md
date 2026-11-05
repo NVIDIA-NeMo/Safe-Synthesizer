@@ -502,12 +502,6 @@ Data source options:
 - CSV path (SDK): `.with_data_source("data.csv")` -- loaded via `pd.read_csv`; for non-CSV formats, load into a DataFrame first
 - Dataset registry name: `--data-source my_dataset` (with `--dataset-registry registry.yaml`)
 
-Leading and trailing spaces are removed from column names when the data is
-loaded, so a CSV header written as `id, name, email` gives the columns `id`,
-`name`, and `email`. Name columns without the spaces in your configuration;
-outputs use the trimmed names. Data whose column names become identical after
-trimming, such as `a` and ` a`, is rejected.
-
 ### Grouping and Ordering
 
 Use `data.group_training_examples_by` to group records by a column (e.g.,

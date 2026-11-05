@@ -185,37 +185,6 @@ def _email_replacement_config() -> SafeSynthesizerParameters:
     )
 
 
-@pytest.mark.filterwarnings("ignore:Support for nested sequences for 'parse_dates':FutureWarning")
-def test_replace_pii_keeps_a_combined_date_column_whose_source_field_trims_to_its_name(tmp_path: Path) -> None:
-    source = tmp_path / "input.csv"
-    source.write_text("email, date, time\nada@example.com,2024-01-05,09:30\n")
-    data_output = tmp_path / "pii_replaced.csv"
-    csv_source = CsvSource.load(str(source), {"parse_dates": {"date": [" date", " time"]}})
-    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
-        csv_source
-    )
-
-    nss.replace_pii(data_output)
-
-    written = pd.read_csv(data_output, dtype=str, na_filter=False)
-    assert written["date"].tolist() == ["2024-01-05 09:30:00"]
-
-
-def test_replace_pii_writes_source_cells_under_trimmed_column_names(tmp_path: Path) -> None:
-    source = tmp_path / "input.csv"
-    source.write_text("email, zip\nada@example.com,02054\n")
-    data_output = tmp_path / "pii_replaced.csv"
-    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
-        str(source)
-    )
-
-    nss.replace_pii(data_output)
-
-    written = pd.read_csv(data_output, dtype=str, na_filter=False)
-    assert written.columns.tolist() == ["email", "zip"]
-    assert written["zip"].tolist() == ["02054"]
-
-
 def test_replace_pii_takes_unchanged_cells_from_the_bytes_it_replaced(tmp_path: Path) -> None:
     source = tmp_path / "input.csv"
     source.write_text("email,zip\nada@example.com,02054\n")

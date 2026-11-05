@@ -9,7 +9,7 @@ import json
 import random
 import time
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Literal, TypeVar
@@ -270,6 +270,27 @@ def _usable_pattern(
             logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": column_name})
         return None
     return pattern
+
+
+def _submitted_names(submitted: Iterable[str], returned: Sequence[str]) -> list[str]:
+    """Return ``returned`` with each name spelled as the submitted column it names.
+
+    Models drop or add spaces around column names: a CSV header written as ``url, shares`` names a
+    column ``" shares"``, which a model may return as ``"shares"``. A returned name that differs from
+    exactly one submitted name only in leading and trailing spaces is replaced by that name. Every
+    other name is kept as written, so coverage checks still report it.
+
+    Example:
+        With submitted ``["url", " shares"]``, returned ``["url ", "shares"]`` becomes ``["url", " shares"]``.
+    """
+    exact = set(submitted)
+    by_trimmed: dict[str, list[str]] = {}
+    for name in exact:
+        by_trimmed.setdefault(name.strip(), []).append(name)
+    return [
+        name if name in exact or len(matches := by_trimmed.get(name.strip(), [])) != 1 else matches[0]
+        for name in returned
+    ]
 
 
 def _classification_coverage_issue(
@@ -764,13 +785,16 @@ class LLMPlanEnhancer(PlanEnhancer):
                 expected[(item.column_name, source_value.casefold())] = (source_value, item)
 
         def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
-            actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
+            columns = _submitted_names(
+                {item.column_name for item in inputs}, [item.column_name for item in response.mappings]
+            )
+            actual = [(column, item.source_value.casefold()) for column, item in zip(columns, response.mappings)]
             if issue := _mapping_coverage_issue(list(expected), actual):
                 raise _RejectedResponseError(issue)
             result: DataToSamplerValueMapping = {}
-            for item in response.mappings:
-                source_value, mapping_input = expected[(item.column_name, item.source_value.casefold())]
-                result.setdefault(item.column_name, {})[source_value] = _resolved_sampler_values(
+            for (column, _), item in zip(actual, response.mappings):
+                source_value, mapping_input = expected[(column, item.source_value.casefold())]
+                result.setdefault(column, {})[source_value] = _resolved_sampler_values(
                     item.sampler_values, mapping_input.sampler_values
                 )
             return result
@@ -811,10 +835,10 @@ class LLMPlanEnhancer(PlanEnhancer):
         protected = discovery_input.protected_columns.intersection(expected)
 
         def parse_types(response: _ClassificationResponse) -> dict[str, EntityType | None]:
-            actual = [classification.column_name for classification in response.classifications]
+            actual = _submitted_names(expected, [item.column_name for item in response.classifications])
             if issue := _classification_coverage_issue(expected, actual):
                 raise _RejectedResponseError(issue)
-            return {item.column_name: item.entity_type for item in response.classifications}
+            return {name: item.entity_type for name, item in zip(actual, response.classifications)}
 
         entity_types = self._request_structured(
             purpose="PII column classification",
@@ -854,10 +878,10 @@ class LLMPlanEnhancer(PlanEnhancer):
         eligible = [str(column["column_name"]) for column in columns]
 
         def parse(response: _PatternResponse) -> dict[str, str | None]:
-            actual = [item.column_name for item in response.patterns]
+            actual = _submitted_names(eligible, [item.column_name for item in response.patterns])
             if issue := _classification_coverage_issue(eligible, actual, key="patterns"):
                 raise _RejectedResponseError(issue)
-            return {item.column_name: item.pattern for item in response.patterns}
+            return {name: item.pattern for name, item in zip(actual, response.patterns)}
 
         return self._request_structured(
             purpose="PII column patterns",

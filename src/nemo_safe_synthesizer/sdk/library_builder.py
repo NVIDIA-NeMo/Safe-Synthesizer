@@ -487,7 +487,6 @@ class SafeSynthesizer(ConfigBuilder):
                 instead of as ``2054`` and an empty cell. Defaults to a text
                 parse of the same bytes the input was read from when
                 ``with_data_source`` was given a CSV path, URL, or ``CsvSource``.
-                Its columns are renamed as the input's were when their spaces were trimmed.
 
         Returns:
             The replacement result, including aggregate statistics and the
@@ -523,8 +522,6 @@ class SafeSynthesizer(ConfigBuilder):
         dataframe = self._data_source
         if config is None or not isinstance(dataframe, pd.DataFrame):
             raise InternalError("PII replacement planning finished without a dataframe data source")
-        if source_text is not None:
-            source_text = source_text.rename(columns=self._column_renames)
         if source_text is not None and not _has_input_shape(dataframe, source_text):
             raise ParameterError("source_text must have the same columns and row count as the data source")
         from ..pii_replacer import TabularPiiReplacer
@@ -550,9 +547,7 @@ class SafeSynthesizer(ConfigBuilder):
             # The text form is parsed only now, from the bytes the input was read from, so it costs no
             # memory during planning and cannot disagree with the input if the file has since changed.
             if source_text is None and self._data_source_csv is not None:
-                # Rename only what the typed read renamed: a raw field such as " date" that parse_dates
-                # combined into a "date" column must not take that column's name.
-                source_text = self._data_source_csv.read_text().rename(columns=self._column_renames)
+                source_text = self._data_source_csv.read_text()
                 # The text read can lack columns the typed read derived, such as combined dates, but has every row.
                 if len(source_text) != len(dataframe):
                     raise InternalError("the text read of the CSV data source has a different row count")

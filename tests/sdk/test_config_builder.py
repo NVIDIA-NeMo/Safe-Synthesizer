@@ -308,24 +308,3 @@ def test_typed_file_extensions_ignore_letter_case(tmp_path):
 
     assert isinstance(builder._data_source, pd.DataFrame)
     assert builder._data_source["zip"].tolist() == ["02054"]
-
-
-def test_csv_column_names_are_trimmed(tmp_path):
-    path = tmp_path / "news.csv"
-    path.write_text(" timedelta, shares,weekday\n423.0,608,0\n")
-    builder = ConfigBuilder().with_data_source(str(path))
-
-    builder._resolve_datasource()
-
-    assert isinstance(builder._data_source, pd.DataFrame)
-    assert builder._data_source.columns.tolist() == ["timedelta", "shares", "weekday"]
-    assert builder._data_source["shares"].tolist() == [608]
-
-
-def test_dataframe_column_names_are_trimmed():
-    builder = ConfigBuilder().with_data_source(pd.DataFrame({" a": [1], "b ": [2]}))
-
-    builder._resolve_datasource()
-
-    assert isinstance(builder._data_source, pd.DataFrame)
-    assert builder._data_source.columns.tolist() == ["a", "b"]
