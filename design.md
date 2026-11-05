@@ -362,9 +362,14 @@ Automatic discovery sends four kinds of LLM request, in this order:
    request leaves the model's reasoning for the types.
 3. Dependencies. Safe Synthesizer derives the replacement columns and every
    permitted dependency candidate from the classifications. This request sees
-   only column names, entity types, and proposed patterns, not cell values. For
-   each replacement column and permitted source entity type, the model chooses
-   at most one candidate column describing the same person or record, or none.
+   column names, entity types, proposed patterns, and, for each replacement
+   column, up to three sample rows of that column and its candidate columns,
+   each value limited to 64 characters. Each row shows a different value of the
+   replacement column, chosen by content hash and read from the row with the
+   most candidates filled in, so the model can see whether values describe the
+   same person. For each replacement column and permitted source entity type,
+   the model chooses at most one candidate column describing the same person or
+   record, or none.
    The response schema lists only the candidates, so the model cannot name
    another column or pick two sources of one type (for example, a person's and
    a spouse's gender).
@@ -374,9 +379,8 @@ Automatic discovery sends four kinds of LLM request, in this order:
    request would exceed its size limit, planning fails and asks for a manual
    mapping.
 
-The first three are split into batches of at most 48 KiB. Type and pattern
-requests take at most 8 columns per batch, so a reasoning model's thinking
-budget reaches every column; dependency requests take up to 32 columns.
+The first three are split into batches of at most 48 KiB and at most 8
+columns, so a reasoning model's thinking budget reaches every column.
 
 Each prompt describes the expected JSON, and decoding is constrained to the
 response's strict schema. Each request gets up to three attempts for transient
