@@ -8,7 +8,6 @@ from nemo_safe_synthesizer.data_processing.validation import (
     check_groupby_column,
     check_orderby_column,
     check_timestamp_column,
-    strip_column_names,
 )
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 
@@ -88,23 +87,3 @@ def test_multiindex_columns_are_rejected_with_actionable_message() -> None:
         check_groupby_column(df, "ts")
     with pytest.raises(ParameterError, match="MultiIndex"):
         check_timestamp_column(df, "ts")
-
-
-def test_strip_column_names_trims_surrounding_spaces() -> None:
-    data = pd.DataFrame({" timedelta": [1], "shares ": [2], "weekday": [3], " ": [4]})
-
-    assert strip_column_names(data).columns.tolist() == ["timedelta", "shares", "weekday", " "]
-
-
-def test_strip_column_names_returns_data_unchanged_without_spaces() -> None:
-    data = pd.DataFrame({"a": [1]})
-
-    assert strip_column_names(data) is data
-
-
-@pytest.mark.parametrize("columns", [["a", " a"], ["a", "a", " a"]])
-def test_strip_column_names_rejects_names_that_collide_after_trimming(columns: list[str]) -> None:
-    data = pd.DataFrame([range(len(columns))], columns=columns)
-
-    with pytest.raises(DataError, match="'a'"):
-        strip_column_names(data)

@@ -42,6 +42,7 @@ from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     _bounded_batches,
     _json_bytes,
     _profile_batches,
+    _submitted_names,
 )
 
 
@@ -311,6 +312,26 @@ class TestLLMPlanEnhancer:
                 "sampler_values": ["east asian", "south asian", "white"],
             },
         ]
+
+    def test_mapping_column_names_differing_only_in_surrounding_spaces_match(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], " sex": ["Woman"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="first_name",
+                    entity_type=EntityType.FIRST_NAME,
+                    depends_on=[ConditioningColumn(column_name=" sex", entity_type=EntityType.GENDER)],
+                )
+            ]
+        )
+        enhancer, transport = _enhancer([_dependency_mappings(("sex", "Woman", ["female"]))])
+
+        mappings = enhancer.discover_data_to_sampler_value_mapping(
+            dataframe, plan, {EntityType.GENDER: ("female", "male")}
+        )
+
+        assert mappings == {" sex": {"Woman": ["female"]}}
+        assert len(transport.calls) == 1
 
     def test_mapping_discovery_retries_empty_target_lists(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
@@ -709,6 +730,31 @@ class TestLLMPlanEnhancer:
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["email"]
         assert len(transport.calls) == 1
+
+    def test_column_names_differing_only_in_surrounding_spaces_match(self) -> None:
+        dataframe = pd.DataFrame({" phone": ["555-0100"], "visits ": [3]})
+        patterns = json.dumps({"patterns": [{"column_name": "phone ", "pattern": "###-####"}]})
+        enhancer, transport = _enhancer(
+            [_classifications({"phone": "phone_number", "visits": None}, pattern_responses=[patterns])]
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert {spec.column_name: spec.pattern for spec in plan.columns_to_replace} == {" phone": "###-####"}
+        assert len(transport.calls) == 1
+        assert len(transport.pattern_calls) == 1
+
+    @pytest.mark.parametrize(
+        ("submitted", "returned", "expected"),
+        [
+            (["url", " shares"], ["url ", "shares"], ["url", " shares"]),
+            # An exact match wins, and a trimmed name matching two submitted names stays as written.
+            (["a", " a"], [" a", "a", "a "], [" a", "a", "a "]),
+            (["a"], ["b"], ["b"]),
+        ],
+    )
+    def test_submitted_names(self, submitted: list[str], returned: list[str], expected: list[str]) -> None:
+        assert _submitted_names(submitted, returned) == expected
 
     def test_missing_classification_retries_with_validation_feedback(self) -> None:
         dataframe = pd.DataFrame({"name": ["Ada"], "email": ["ada@example.com"]})

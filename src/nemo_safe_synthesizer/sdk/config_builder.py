@@ -29,11 +29,7 @@ from ..config.unknown_fields import (
 )
 from ..configurator.parameters import Parameters
 from ..data_processing.csv_source import CsvSource
-from ..data_processing.validation import strip_column_names
-from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
-
-logger = get_logger(__name__)
 
 DataSource = pd.DataFrame | str | CsvSource
 # File formats read with their own pandas reader instead of as CSV.
@@ -95,8 +91,6 @@ class ConfigBuilder:
 
         self._data_source: DataSource | None = None
         self._data_source_csv: CsvSource | None = None
-        # Column names trimmed by ``_resolve_datasource``, from original to trimmed name.
-        self._column_renames: dict[str, str] = {}
         self._hf_token_secret: str | None = None
 
     @property
@@ -142,7 +136,6 @@ class ConfigBuilder:
         """
         self._data_source = df_source
         self._data_source_csv = None
-        self._column_renames = {}
         return self
 
     def with_data(self, config: DataParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -307,8 +300,7 @@ class ConfigBuilder:
         """Convert the data source into a ``pandas.DataFrame``.
 
         If ``_data_source`` is already a DataFrame it is kept, with non-string column names converted to
-        strings. Leading and trailing spaces are removed from every source's column names (see
-        ``strip_column_names``), so a CSV header written as ``a, b`` gives columns ``a`` and ``b``. A string
+        strings. A string
         ending in ``.parquet``, ``.json``, or ``.jsonl`` is read with the
         matching pandas reader, as the CLI does. Any other string is treated as
         a CSV path or URL and read once into a ``CsvSource``, which is kept so
@@ -320,7 +312,6 @@ class ConfigBuilder:
 
         Raises:
             ValueError: If ``_data_source`` is not a DataFrame, string, or ``CsvSource``.
-            DataError: If two column names are the same after removing their spaces.
         """
         match self._data_source:
             case pd.DataFrame():
@@ -338,18 +329,3 @@ class ConfigBuilder:
         if not all(isinstance(column, str) for column in self._data_source.columns):
             # Configurations and PII plans name columns as text, so a column named 0 would never match "0".
             self._data_source = self._data_source.rename(columns=str)
-        trimmed = strip_column_names(self._data_source)
-        renames = {
-            before: after
-            for before, after in zip(self._data_source.columns, trimmed.columns, strict=True)
-            if before != after
-        }
-        if renames:
-            examples = ", ".join(f"{before!r} -> {after!r}" for before, after in list(renames.items())[:3])
-            logger.user.warning(
-                f"Removed leading and trailing spaces from {len(renames)} column names, such as "
-                f"{examples}; outputs use the trimmed names."
-            )
-            self._data_source = trimmed
-            # Kept until the next with_data_source: resolving again finds the names already trimmed.
-            self._column_renames = renames
