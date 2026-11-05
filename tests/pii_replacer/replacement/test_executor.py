@@ -467,6 +467,30 @@ class TestReplacementExecutor:
         assert replaced[0] == replaced[1]
         assert replaced[0] != replaced[2]
 
+    def test_one_phone_number_written_two_ways_shares_a_replacement_in_each_layout(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient": ["A", "A", "B"],
+                "phone": ["(555) 123-4567", "555.123.4567", "(555) 123-4567"],
+                "work_phone": ["555-123-4567", "+1 555 123 4567", "555-123-4567"],
+            }
+        )
+        plan = _plan(_target("phone", EntityType.PHONE_NUMBER), _target("work_phone", EntityType.PHONE_NUMBER))
+        generator = FakerReplacementGenerator(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), locale="en_US")
+
+        replaced = (
+            ReplacementExecutor(plan, generator, group_column="patient", base_seed=42).execute(dataframe).dataframe
+        )
+
+        phone, work_phone = replaced["phone"].tolist(), replaced["work_phone"].tolist()
+        assert re.fullmatch(r"\([0-9]{3}\) [0-9]{3}-[0-9]{4}", phone[0])
+        assert re.fullmatch(r"[0-9]{3}\.[0-9]{3}\.[0-9]{4}", phone[1])
+        assert re.fullmatch(r"[0-9]{3}-[0-9]{3}-[0-9]{4}", work_phone[0])
+        assert work_phone[1].startswith("+1 ")
+        group_a_numbers = {re.sub(r"[^0-9]", "", value)[-10:] for value in [*phone[:2], *work_phone[:2]]}
+        assert len(group_a_numbers) == 1
+        assert re.sub(r"[^0-9]", "", phone[2]) not in group_a_numbers
+
     def test_column_statistics_report_per_column_fallbacks_without_serializing_originals(self) -> None:
         dataframe = pd.DataFrame(
             {

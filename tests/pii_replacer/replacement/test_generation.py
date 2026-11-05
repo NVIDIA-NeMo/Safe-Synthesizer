@@ -219,6 +219,36 @@ class TestReplacementGenerator:
             assert re.fullmatch(shape, replacement), replacement
             assert replacement != original
 
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("(555) 123-4567", r"\([0-9]{3}\) [0-9]{3}-[0-9]{4}"),
+            ("555.123.4567", r"[0-9]{3}\.[0-9]{3}\.[0-9]{4}"),
+            ("+44 20 7946 0958", r"\+44 [0-9]{2} [0-9]{4} [0-9]{4}"),
+            ("+14155550123", r"\+1[0-9]{10}"),
+            ("+353 1 234 5678", r"\+353 [0-9] [0-9]{3} [0-9]{4}"),
+            ("001-555-123-4567", r"001-[0-9]{3}-[0-9]{3}-[0-9]{4}"),
+            ("555-123-4567 ext. 89", r"[0-9]{3}-[0-9]{3}-[0-9]{4} ext\. [0-9]{2}"),
+        ],
+    )
+    def test_unpatterned_phone_number_keeps_the_original_shape(self, original: str, shape: str) -> None:
+        generator = _faker_generator()
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, original, seed=seed))
+
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
+
+    def test_phone_number_without_digits_gets_a_faker_number_without_an_extension(self) -> None:
+        generator = _faker_generator()
+
+        for seed in range(50):
+            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, "unlisted", seed=seed))
+
+            assert re.search(r"[0-9]$", replacement), replacement
+            assert not re.search(r"x|ext", replacement, re.IGNORECASE), replacement
+
     def test_request_is_immutable_and_hides_sensitive_inputs_from_repr(self) -> None:
         request = _request(
             EntityType.FULL_NAME,
