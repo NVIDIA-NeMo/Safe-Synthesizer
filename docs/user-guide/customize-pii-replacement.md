@@ -95,8 +95,6 @@ request, so this is how to replace PII without an LLM:
 
 ```yaml
 replace_pii:
-  sampler:
-    backend: faker
   replacement_plan:
     columns_to_replace:
       - column_name: full_name
@@ -156,8 +154,8 @@ are only recognized by discovery so it does not mistake them for PII.
 
 A column's optional `pattern` sets the format of its replacement values. It
 should match at least 99% of the column's non-null values. Values the pattern
-does not fit still get replacements written in the pattern. To use the entity's
-default format, leave `pattern` out; an empty pattern is rejected.
+does not fit still get replacements written in the pattern. If `pattern` is
+left out, the entity's default format is used; an empty pattern is rejected.
 
 Name templates, for names and `email`, combine literal text with placeholders,
 such as `{First} {Last}` or `{f}.{last}@{domain}`:
@@ -308,7 +306,7 @@ ethnic background.
 ## Free-Text Detection
 
 Columns planned as `free_text` are scanned with the GLiNER2 model
-`fastino/gliner2-privacy-filter-PII-multi` plus built-in checks for email
+`fastino/gliner2-privacy-filter-PII-multi` plus regex checks for email
 addresses, payment cards, and IP addresses. Only the detected PII is replaced.
 GLiNER2 needs a CUDA GPU; see
 [GLiNER2 Device and Throughput](troubleshooting.md#gliner2-device-and-throughput)
@@ -378,32 +376,32 @@ see [Environment Variables -- Where planning requests go](environment.md#where-p
 
 ### Local inference server
 
-Each bundled model needs one GPU with at least 75 GiB of memory, such as an
-80 GB A100 or H100. Without vLLM or a large enough GPU, planning fails with an
-error before downloading anything, rather than sending data elsewhere.
+Safe Synthesizer can run two planning models locally. Each needs one GPU with
+at least 75 GiB of memory, such as an 80 GB A100 or H100. Without vLLM or a
+large enough GPU, planning fails with an error before downloading anything,
+rather than sending data elsewhere.
 
-Choose a bundled model with `replace_pii.llm.model_id`, `--inference-model-id`,
+Choose a planning model with `replace_pii.llm.model_id`, `--inference-model-id`,
 or `NSS_INFERENCE_MODEL`:
 
 | Model ID | Request timeout | Notes |
 |----------|-----------------|-------|
 | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | 300 s | Performed well in our evaluation |
 | `openai/gpt-oss-120b` | 120 s | Performed well in our evaluation; fastest |
-| `Qwen/Qwen3.8-27B` | 300 s | Less consistent on held-out data; slowest |
 
 Override the request timeout for very large tables with `NSS_INFERENCE_TIMEOUT`
 or `--inference-timeout-seconds`. Override request fields, such as the thinking
 budget, with `NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options`,
 for example `{"thinking_token_budget": 500}`.
 
-To run a model without a bundled profile, point `NSS_INFERENCE_LOCAL_PROFILE` or
+To run another model locally, point `NSS_INFERENCE_LOCAL_PROFILE` or
 `--inference-local-profile` at your own profile YAML. If you also set
 `replace_pii.llm.model_id` or `NSS_INFERENCE_MODEL`, it must match the
 profile's served model name, which defaults to its `model_id`. A profile has
 `model_id` and `revision`, plus optional vLLM settings such as
 `gpu_memory_utilization`, `max_model_len`, `tensor_parallel_size`,
 `min_gpu_memory_gib`, `extra_args`, `request_options`, `environment`, and the
-request, startup, and shutdown timeouts. The bundled profiles in
+request, startup, and shutdown timeouts. The built-in profiles in
 `src/nemo_safe_synthesizer/pii_replacer/local_inference/profiles/` are good
 starting points; if you set `thinking_token_budget`, copy their `environment`
 settings too. Avoid `extra_args` that make vLLM compile kernels at startup, such as
@@ -420,6 +418,12 @@ at once.
 
 Replace PII in a complete dataset without holdout, training, generation, or
 evaluation:
+
+!!! note "Use standalone replacement to check the plan"
+    Standalone replacement is for reviewing and refining PII replacement
+    before a full run, not a privacy step on its own. It replaces only the
+    kinds of PII it knows and can miss PII in free text, so its output can
+    still identify people. Run the full pipeline to produce data you share.
 
 ```bash
 safe-synthesizer run replace-pii \

@@ -174,7 +174,7 @@ for the full pre-cache checklist.
 Automatic PII plan discovery uses an LLM. By default, Safe Synthesizer runs
 `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a temporary local vLLM
 server on the GPU, so no endpoint or key is needed. To choose a different
-bundled model or your own serving profile, see
+planning model or your own serving profile, see
 [Customizing PII Replacement -- Planning LLM](customize-pii-replacement.md#planning-llm).
 
 ### Where planning requests go

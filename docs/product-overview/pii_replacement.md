@@ -39,20 +39,23 @@ A few things to notice:
 
 Replacement happens in three steps.
 
-1. Find the PII. An AI model reads each column's name, some simple statistics,
+1. Find the PII columns. An LLM reads each column's name, some simple statistics,
    and a handful of sample values, and decides which columns hold PII, what
    kind of PII each holds, and how columns relate (for example, that an email
    belongs to the person named in another column). The result is a replacement
-   plan: a short, readable file you can review and edit.
-2. Replace structured columns. For every column in the plan, Safe Synthesizer
-   generates a realistic new value, usually in the same format as the
-   original. Names and
-   addresses come from Nemotron-Personas, NVIDIA's datasets of synthetic
+   plan: a YAML file with one entry per PII column, giving its kind of PII and
+   the format of its values, that you can review and edit.
+2. Replace structured PII columns. For every column in the plan with an
+   identified entity type, Safe Synthesizer generates a realistic new value,
+   usually in the same format as the original. Names and addresses come from
+   Nemotron-Personas, NVIDIA's datasets of synthetic
    people that follow real population statistics, or from the open-source
    Faker library.
 3. Replace PII inside free text. Columns such as notes or comments are scanned
-   for names, phone numbers, email addresses, ID numbers, and other PII, and
-   only those words are replaced. The rest of the text is unchanged.
+   for names, phone numbers, email addresses, ID numbers, and other PII by
+   GLiNER2, an open-source model that finds PII in text, plus regex checks for
+   email addresses, payment cards, and IP addresses. Only those words are
+   replaced. The rest of the text is unchanged.
 
 The same original value gets the same synthetic value everywhere within a record
 (or within a group of records, such as all visits by one patient), so
