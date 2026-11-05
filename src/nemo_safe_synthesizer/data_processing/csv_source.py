@@ -15,6 +15,8 @@ from urllib.request import url2pathname
 
 import pandas as pd
 
+from ..errors import DataError
+
 __all__ = ["TEXT_READ_EXCLUDED_LOAD_ARGS", "CsvSource"]
 
 TEXT_READ_EXCLUDED_LOAD_ARGS = frozenset(
@@ -83,7 +85,8 @@ class CsvSource:
 
         Raises:
             FileNotFoundError: If a local ``location`` does not exist.
-            httpx.HTTPError: If an HTTP(S) request fails or returns an error status.
+            DataError: If an HTTP(S) request fails or returns an error status. The message names the
+                URL without its credentials or query string (see ``redact_url``).
         """
         args = dict(load_args or {})
         return cls(location, _read_bytes(location, args.get("storage_options")), args)
@@ -112,6 +115,18 @@ class CsvSource:
         return pd.read_csv(BytesIO(self.content), compression=compression, **args)
 
 
+def redact_url(url: str) -> str:
+    """Return ``url`` without credentials, query string, or fragment, which can hold an access token.
+
+    Example:
+        ``"https://host/people.parquet?token=abc"`` returns ``"https://host/people.parquet"``.
+    """
+    if "://" not in url:
+        return url
+    parsed = urlparse(url)
+    return parsed._replace(netloc=parsed.netloc.rpartition("@")[2], query="", fragment="").geturl()
+
+
 def _read_bytes(location: str, storage_options: object) -> bytes | None:
     """Return the bytes at a local path or HTTP(S) URL, or ``None`` for locations pandas must open itself."""
     parsed = urlparse(location)
@@ -123,9 +138,20 @@ def _read_bytes(location: str, storage_options: object) -> bytes | None:
             if isinstance(storage_options, Mapping)
             else None
         )
-        # Like pandas, set no read timeout: large files over slow links must not fail midway.
-        response = httpx.get(location, headers=headers, follow_redirects=True, timeout=httpx.Timeout(None, connect=30))
-        response.raise_for_status()
+        redacted = redact_url(location)
+        try:
+            # Like pandas, set no read timeout: large files over slow links must not fail midway.
+            response = httpx.get(
+                location, headers=headers, follow_redirects=True, timeout=httpx.Timeout(None, connect=30)
+            )
+            response.raise_for_status()
+        # httpx puts the request URL, which a signed URL's token is part of, in its error messages, so they
+        # are replaced without chaining.
+        except httpx.HTTPStatusError as exc:
+            status = f"{exc.response.status_code} {exc.response.reason_phrase}".strip()
+            raise DataError(f"Could not read dataset from {redacted}: HTTP {status}") from None
+        except httpx.HTTPError as exc:
+            raise DataError(f"Could not read dataset from {redacted}: {type(exc).__name__}") from None
         return response.content
     if parsed.scheme == "file":
         return Path(url2pathname(parsed.path)).read_bytes()

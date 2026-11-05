@@ -102,8 +102,9 @@ def test_strip_column_names_returns_data_unchanged_without_spaces() -> None:
     assert strip_column_names(data) is data
 
 
-def test_strip_column_names_rejects_names_that_collide_after_trimming() -> None:
-    data = pd.DataFrame([[1, 2]], columns=["a", " a"])
+@pytest.mark.parametrize("columns", [["a", " a"], ["a", "a", " a"]])
+def test_strip_column_names_rejects_names_that_collide_after_trimming(columns: list[str]) -> None:
+    data = pd.DataFrame([range(len(columns))], columns=columns)
 
     with pytest.raises(DataError, match="'a'"):
         strip_column_names(data)

@@ -438,6 +438,7 @@ class TestServeCommand:
         assert json.loads(result.stdout) == ["-c", "x"]
 
     @pytest.mark.skipif(sys.platform != "linux", reason="parent-death signal is Linux-only")
+    @pytest.mark.skipif(os.getpid() == 1, reason="PID 1 is the launcher's real parent when pytest runs as PID 1")
     def test_launcher_exits_when_its_parent_already_changed(self) -> None:
         launcher = build_serve_command(PROFILE, host="127.0.0.1", port=1, parent_pid=1)[:4]
         result = subprocess.run([*launcher, "-c", "print('ran')"], capture_output=True, text=True)

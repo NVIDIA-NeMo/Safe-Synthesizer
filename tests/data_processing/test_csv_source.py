@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
+from nemo_safe_synthesizer.errors import DataError
 
 _CSV = "zip,note\n02054,N/A\n10001,\n"
 
@@ -68,6 +69,29 @@ class TestCsvSource:
         assert source.read()["zip"].tolist() == [2054, 10001]
         assert source.read_text()["zip"].tolist() == ["02054", "10001"]
         assert [request.headers["Authorization"] for request in requests] == ["token"]
+
+    @pytest.mark.parametrize("status", [403, None])
+    def test_failed_http_fetch_does_not_expose_url_credentials(
+        self, monkeypatch: pytest.MonkeyPatch, status: int | None
+    ) -> None:
+        url = "https://user:secret@example.test/data/input.csv?token=abc"  # pragma: allowlist secret
+
+        def fake_get(url: str, **kwargs: object) -> httpx.Response:
+            request = httpx.Request("GET", url)
+            if status is None:
+                raise httpx.ConnectError(f"cannot connect to {url}", request=request)
+            return httpx.Response(status, request=request)
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        with pytest.raises(DataError) as raised:
+            CsvSource.load(url)
+
+        assert "https://example.test/data/input.csv" in str(raised.value)
+        assert "secret" not in str(raised.value)
+        assert "token" not in str(raised.value)
+        assert raised.value.__cause__ is None
+        assert raised.value.__suppress_context__
 
     def test_other_url_schemes_are_left_to_pandas(self) -> None:
         source = CsvSource.load("s3://bucket/input.csv")
