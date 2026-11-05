@@ -95,6 +95,8 @@ class ConfigBuilder:
 
         self._data_source: DataSource | None = None
         self._data_source_csv: CsvSource | None = None
+        # Column names trimmed by ``_resolve_datasource``, from original to trimmed name.
+        self._column_renames: dict[str, str] = {}
         self._hf_token_secret: str | None = None
 
     @property
@@ -140,6 +142,7 @@ class ConfigBuilder:
         """
         self._data_source = df_source
         self._data_source_csv = None
+        self._column_renames = {}
         return self
 
     def with_data(self, config: DataParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -336,14 +339,17 @@ class ConfigBuilder:
             # Configurations and PII plans name columns as text, so a column named 0 would never match "0".
             self._data_source = self._data_source.rename(columns=str)
         trimmed = strip_column_names(self._data_source)
-        if trimmed is not self._data_source:
-            renamed = [
-                f"{before!r} -> {after!r}"
-                for before, after in zip(self._data_source.columns, trimmed.columns, strict=True)
-                if before != after
-            ]
+        renames = {
+            before: after
+            for before, after in zip(self._data_source.columns, trimmed.columns, strict=True)
+            if before != after
+        }
+        if renames:
+            examples = ", ".join(f"{before!r} -> {after!r}" for before, after in list(renames.items())[:3])
             logger.user.warning(
-                f"Removed leading and trailing spaces from {len(renamed)} column names, such as "
-                f"{', '.join(renamed[:3])}; outputs use the trimmed names."
+                f"Removed leading and trailing spaces from {len(renames)} column names, such as "
+                f"{examples}; outputs use the trimmed names."
             )
             self._data_source = trimmed
+            # Kept until the next with_data_source: resolving again finds the names already trimmed.
+            self._column_renames = renames

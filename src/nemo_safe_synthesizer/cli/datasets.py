@@ -17,7 +17,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, Field
 
-from ..data_processing.csv_source import CsvSource
+from ..data_processing.csv_source import CsvSource, redact_url
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -30,18 +30,6 @@ def file_extension(url: str) -> str:
         ``"people.PARQUET"`` and ``"https://host/people.parquet?token=abc"`` both return ``"parquet"``.
     """
     return PurePosixPath(urlparse(url).path.replace("\\", "/")).suffix.lower().lstrip(".")
-
-
-def _loggable_url(url: str) -> str:
-    """Return ``url`` without credentials, query string, or fragment, which can hold an access token.
-
-    Example:
-        ``"https://host/people.parquet?token=abc"`` returns ``"https://host/people.parquet"``.
-    """
-    if "://" not in url:
-        return url
-    parsed = urlparse(url)
-    return parsed._replace(netloc=parsed.netloc.rpartition("@")[2], query="", fragment="").geturl()
 
 
 def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
@@ -132,7 +120,7 @@ class DatasetInfo(BaseModel):
         """
         url = self.get_url()
 
-        logger.info(f"Reading dataset from {_loggable_url(url)}")
+        logger.info(f"Reading dataset from {redact_url(url)}")
 
         # Determine the file extension and appropriate reader
         reader: Any
@@ -152,13 +140,13 @@ class DatasetInfo(BaseModel):
                 default_load_args = {}
             case _:
                 if not extension:
-                    extension = f"<no extension found on url '{_loggable_url(url)}'>"
+                    extension = f"<no extension found on url '{redact_url(url)}'>"
                 raise ValueError(f"Unsupported file extension: {extension}")
 
         # Merge load args: user-provided args override defaults
         final_load_args = {**default_load_args, **(self.load_args or {})}
 
-        loggable_url = _loggable_url(url)
+        loggable_url = redact_url(url)
         try:
             return _require_dataframe(reader(url, **final_load_args), url=loggable_url)
         except Exception as e:
@@ -184,7 +172,7 @@ class DatasetInfo(BaseModel):
         url = self.get_url()
         if file_extension(url) not in {"csv", "txt"}:
             return None
-        logger.info(f"Reading dataset from {_loggable_url(url)}")
+        logger.info(f"Reading dataset from {redact_url(url)}")
         return CsvSource.load(url, self.load_args)
 
 

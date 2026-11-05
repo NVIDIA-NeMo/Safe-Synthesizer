@@ -124,7 +124,8 @@ def strip_column_names(data: pd.DataFrame) -> pd.DataFrame:
     trimmed = [name.strip() or name if isinstance(name, str) else name for name in original]
     if trimmed == original:
         return data
-    collisions = sorted({str(name) for name in trimmed if trimmed.count(name) > 1 and original.count(name) <= 1})
+    # A name already repeated in the input is left alone, but trimming must not repeat any name further.
+    collisions = sorted({str(name) for name in trimmed if trimmed.count(name) > max(1, original.count(name))})
     if collisions:
         raise DataError(
             "Column names must stay distinct after removing leading and trailing spaces; these names "
