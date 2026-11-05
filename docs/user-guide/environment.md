@@ -188,7 +188,9 @@ need mapping to the sampler's values. Where they go depends only on
   data stays here. This is the default.
 - A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on this
   machine. Safe Synthesizer calls the server you run at that address, or, with
-  `NSS_INFERENCE_LOCAL_PROFILE`, starts its own server there.
+  `NSS_INFERENCE_LOCAL_PROFILE`, starts its own server there. To start that
+  server yourself and reuse it across runs, see
+  [Reuse one server across runs](customize-pii-replacement.md#reuse-one-server-across-runs).
 - Any other URL: Safe Synthesizer sends the data to that service over HTTPS,
   for example `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA
   service. Only use a service that is approved to receive the input data,

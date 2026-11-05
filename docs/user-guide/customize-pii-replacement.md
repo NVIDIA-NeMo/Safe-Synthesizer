@@ -407,12 +407,56 @@ starting points; if you set `thinking_token_budget`, copy their `environment`
 settings too. Avoid `extra_args` that make vLLM compile kernels at startup, such as
 `--mamba-backend=flashinfer`: a Safe Synthesizer install has no CUDA compiler.
 
-Each run loads the model again. To reuse one server across many runs, start
-`vllm serve` yourself and set `NSS_INFERENCE_ENDPOINT` and
-`NSS_INFERENCE_MODEL`.
-
 `replace_pii.llm.max_workers` (default 8) sets how many planning requests run
 at once.
+
+### Reuse one server across runs
+
+Each run starts the planning model again, which takes about a minute and a half
+even after the first download. When you plan or replace PII many times, for
+example while refining a plan, start the server once yourself and point Safe
+Synthesizer at it. This command starts the same server as the default profile,
+`nemotron-3.5-lightning-30b-a3b.yaml` in
+`src/nemo_safe_synthesizer/pii_replacer/local_inference/profiles/`; if the
+two ever differ, follow the profile.
+
+```bash title="Start the planning server"
+# The V1 model runner keeps the thinking budget working.
+VLLM_USE_V2_MODEL_RUNNER=0 vllm serve nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16 \
+  --revision a9904d24bcc1d289a1950fa9d2b978c47cf903b9 \
+  --host 127.0.0.1 --port 8000 \
+  --gpu-memory-utilization 0.95 \
+  --max-model-len 32768 \
+  --max-num-seqs 8 \
+  --mamba-ssm-cache-dtype=float16 \
+  --reasoning-parser=nemotron_v3 \
+  --default-chat-template-kwargs='{"enable_thinking": true}'
+```
+
+Run it in the Python environment where Safe Synthesizer is installed, which
+includes vLLM. The server is ready when
+`curl -s http://127.0.0.1:8000/v1/models` lists the model. Then set these
+variables where you run Safe Synthesizer:
+
+```bash title="Use the planning server"
+export NSS_INFERENCE_ENDPOINT=http://127.0.0.1:8000/v1
+export NSS_INFERENCE_MODEL=nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+export NSS_INFERENCE_TIMEOUT=300
+export NSS_INFERENCE_REQUEST_OPTIONS='{"temperature": 1.0, "top_p": 0.95, "thinking_token_budget": 2000}'
+```
+
+Keep the last two lines. With an endpoint, Safe Synthesizer applies none of the
+profile's settings, so without them each request times out after 60 seconds
+and the model reasons without a token budget. In a notebook, set the same
+values in `os.environ` before planning starts.
+
+- The server holds 95% of the GPU's memory until you stop it with Ctrl-C, so
+  use it for `plan_pii_replacement()`, `replace_pii()`, and
+  `safe-synthesizer run replace-pii`. Stop it, and unset
+  `NSS_INFERENCE_ENDPOINT`, before training or generating on the same GPU.
+- Binding to `127.0.0.1` keeps the data on this machine, but any user of the
+  machine can call the server. To require a key, start the server with
+  `VLLM_API_KEY` set and set `NSS_INFERENCE_KEY` to the same value.
 
 ## Standalone Replacement
 
