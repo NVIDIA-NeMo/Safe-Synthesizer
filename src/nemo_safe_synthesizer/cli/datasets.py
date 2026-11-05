@@ -23,22 +23,22 @@ from ..observability import get_logger
 logger = get_logger(__name__)
 
 
-# Compression suffixes pandas recognizes in a file name and undoes while reading.
-_COMPRESSION_EXTENSIONS = frozenset({"gz", "bz2", "xz", "zst", "zip"})
+# Compression and archive suffixes pandas recognizes in a file name and undoes while reading.
+_ARCHIVE_EXTENSIONS = frozenset({"gz", "bz2", "xz", "zst", "zip", "tar"})
 
 
 def file_extension(url: str) -> str:
     """Return the lowercase extension of a path or URL, without the dot, ignoring any query string.
 
-    A compression suffix is skipped, so the result names the format inside the compressed file.
+    Compression and ``tar`` suffixes are skipped, so the result names the format inside the archive.
 
     Example:
         ``"people.PARQUET"`` and ``"https://host/people.parquet?token=abc"`` both return ``"parquet"``,
-        and ``"people.csv.gz"`` returns ``"csv"``.
+        and ``"people.csv.gz"`` and ``"people.csv.tar.gz"`` return ``"csv"``.
     """
     suffixes = [suffix.lower().lstrip(".") for suffix in PurePosixPath(urlparse(url).path.replace("\\", "/")).suffixes]
-    if len(suffixes) > 1 and suffixes[-1] in _COMPRESSION_EXTENSIONS:
-        return suffixes[-2]
+    while len(suffixes) > 1 and suffixes[-1] in _ARCHIVE_EXTENSIONS:
+        suffixes.pop()
     return suffixes[-1] if suffixes else ""
 
 
