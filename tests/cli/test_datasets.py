@@ -168,6 +168,9 @@ class TestDatasetInfo:
             ("file:///data/people.csv", "csv"),
             ("C:\\data\\people.JSONL", "jsonl"),
             ("data/no_extension", ""),
+            ("https://host/people.CSV.GZ?token=abc", "csv"),
+            ("people.jsonl.zst", "jsonl"),
+            ("archive.gz", "gz"),
         ],
     )
     def test_file_extension_ignores_case_and_query_strings(self, url: str, extension: str):
@@ -190,6 +193,17 @@ class TestDatasetInfo:
         assert "https://host.invalid/people.csv" in message
         assert "secret" not in message
         assert "token" not in message
+
+    def test_fetch_reads_a_gzipped_csv(self, tmp_path: Path):
+        csv_file = tmp_path / "people.csv.gz"
+        pd.DataFrame({"zip": ["02054"]}).to_csv(csv_file, index=False)
+
+        info = DatasetInfo(name="test", url=str(csv_file))
+
+        assert info.fetch()["zip"].tolist() == [2054]
+        source = info.fetch_csv_source()
+        assert source is not None
+        assert source.read_text()["zip"].tolist() == ["02054"]
 
     def test_fetch_unsupported_extension(self, tmp_path: Path):
         """Test fetch raises ValueError for unsupported file extension."""
