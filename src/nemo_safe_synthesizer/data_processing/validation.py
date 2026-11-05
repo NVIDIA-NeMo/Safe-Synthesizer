@@ -99,6 +99,40 @@ def check_column_has_no_nulls(
         raise DataError(f"{role} column '{column}' has missing values. Please remove/replace them.")
 
 
+def strip_column_names(data: pd.DataFrame) -> pd.DataFrame:
+    """Return ``data`` with leading and trailing whitespace removed from its column names.
+
+    A CSV header written as ``a, b`` names its second column ``" b"``. The PII planning model drops
+    or adds such spaces when it names columns in its replies, so the reply cannot be matched to the
+    data. A name that is only whitespace is kept, since trimming would leave it empty.
+
+    Args:
+        data: Input data with flat column names.
+
+    Returns:
+        ``data`` itself when no name changes, otherwise a copy with the trimmed names.
+
+    Raises:
+        DataError: If trimming gives two columns the same name, such as ``"a"`` and ``" a"``.
+
+    Example:
+        Columns ``[" timedelta", "shares "]`` become ``["timedelta", "shares"]``.
+    """
+    if isinstance(data.columns, pd.MultiIndex):
+        return data
+    original = data.columns.tolist()
+    trimmed = [name.strip() or name if isinstance(name, str) else name for name in original]
+    if trimmed == original:
+        return data
+    collisions = sorted({str(name) for name in trimmed if trimmed.count(name) > 1 and original.count(name) <= 1})
+    if collisions:
+        raise DataError(
+            "Column names must stay distinct after removing leading and trailing spaces; these names "
+            f"would repeat: {', '.join(repr(name) for name in collisions)}. Rename the columns in your data."
+        )
+    return data.set_axis(trimmed, axis=1)
+
+
 def check_no_pseudo_column_collision(data: pd.DataFrame) -> None:
     """Validate that the reserved pseudo-group column name is not already in use.
 
