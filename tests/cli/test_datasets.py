@@ -170,6 +170,7 @@ class TestDatasetInfo:
             ("data/no_extension", ""),
             ("https://host/people.CSV.GZ?token=abc", "csv"),
             ("people.jsonl.zst", "jsonl"),
+            ("people.csv.tar.gz", "csv"),
             ("archive.gz", "gz"),
         ],
     )
