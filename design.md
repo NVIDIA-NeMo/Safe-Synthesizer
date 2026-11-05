@@ -586,7 +586,7 @@ one 80 GB GPU (`min_gpu_memory_gib` 75, since an 80 GB GPU reports about
 79 GiB). vLLM reserves `gpu_memory_utilization` of the GPU regardless of model
 size. Safe Synthesizer sends no sampling settings of its own, so vLLM uses each
 model's `generation_config.json`; profiles also state them in
-`request_options`, and the Qwen and Nemotron profiles add a
+`request_options`, and the Nemotron profile adds a
 `thinking_token_budget`. Explicit endpoints default to a 60-second timeout.
 
 Isolation:
