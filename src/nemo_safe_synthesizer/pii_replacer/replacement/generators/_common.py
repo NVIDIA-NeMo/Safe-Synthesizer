@@ -15,7 +15,7 @@ from anyascii import anyascii
 from ....config.replace_pii import EntityType
 from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
-from ..person_names import name_affixes, read_full_name, write_full_name
+from ..person_names import name_affixes, parse_full_name, read_full_name, write_full_name
 from ..types import EffectiveDependencyTuple
 from ..value_checks import is_luhn_valid
 
@@ -123,23 +123,39 @@ def render_name(
     }[entity_type]
 
 
+# One leading title with the spaces after it, and one trailing suffix with the commas and spaces before it.
+_TITLE_PIECE = re.compile(r"\S+\s*")
+_SUFFIX_PIECE = re.compile(r"[,\s]*[^,\s]+")
+
+
 def with_name_affixes(original: str, rendered: str, *, locale: str, pattern: str | None = None) -> str:
     """Return a rendered full name with ``original``'s kept titles and suffixes around it.
 
     Titles such as ``Dr.`` and suffixes such as ``Jr.`` are kept as written; ``Mr.`` and ``Mrs.`` are not (see
-    :func:`name_affixes`). A title or suffix that ``rendered`` already has, from a pattern such as
-    ``Dr. {First} {Last}``, is not added again.
+    :func:`name_affixes`). Each title and suffix is added on its own, unless ``rendered`` already has it, from a
+    pattern such as ``Dr. {First} {Last}``.
 
     Example:
         ``with_name_affixes("Dr. Ada Lovelace, PhD", "Grace Hopper", locale="en_US")`` is
-        ``"Dr. Grace Hopper, PhD"``.
+        ``"Dr. Grace Hopper, PhD"``, and ``with_name_affixes("Prof. Dr. Hans Müller", "Dr. Grace Hopper",
+        locale="en_US")`` is ``"Prof. Dr. Grace Hopper"``.
     """
     leading, trailing = name_affixes(original, locale=locale, pattern=pattern)
-    if leading and not rendered.casefold().startswith(leading.casefold()):
-        rendered = leading + rendered
-    if trailing and not rendered.casefold().endswith(trailing.casefold()):
-        rendered += trailing
-    return rendered
+    if not leading and not trailing:
+        return rendered
+    present = {
+        (token.role.value, _affix_key(token.text))
+        for token in parse_full_name(rendered, locale=locale, pattern=pattern).tokens
+        if token.role is not None and token.role.value in {"title", "suffix"}
+    }
+    titles = [piece for piece in _TITLE_PIECE.findall(leading) if ("title", _affix_key(piece)) not in present]
+    suffixes = [piece for piece in _SUFFIX_PIECE.findall(trailing) if ("suffix", _affix_key(piece)) not in present]
+    return "".join(titles) + rendered + "".join(suffixes)
+
+
+def _affix_key(text: str) -> str:
+    """Return how a title or suffix is compared: without spaces, commas, or a trailing period, case-folded."""
+    return text.strip(" ,\t\n").rstrip(".").casefold()
 
 
 def required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[str]:
