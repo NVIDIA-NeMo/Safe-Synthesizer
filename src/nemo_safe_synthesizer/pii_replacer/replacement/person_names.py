@@ -19,13 +19,22 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from faker import Faker
-from nameparser import FAMILY_FIRST, GIVEN_FIRST, ParsedName, Parser, Policy, locales, parser_for
+from nameparser import FAMILY_FIRST, GIVEN_FIRST, Lexicon, ParsedName, Parser, Policy, locales, parser_for
 
 from ...config.replace_pii import EntityType
 from ...errors import GenerationError
 from ..planning.patterns import parse_name_pattern
 
-__all__ = ["FullNameLayout", "full_name_layout", "parse_full_name", "read_full_name", "write_full_name"]
+__all__ = [
+    "FullNameLayout",
+    "full_name_layout",
+    "is_kept_title",
+    "name_affixes",
+    "parse_full_name",
+    "read_full_name",
+    "titles_before",
+    "write_full_name",
+]
 
 _FAKER_NAME_TOKEN = re.compile(r"\{\{(first|last)_name\w*\}\}")
 
@@ -111,6 +120,144 @@ def parse_full_name(full_name: str, *, locale: str, pattern: str | None = None) 
     if family_first is None:
         family_first = full_name_layout(locale).family_first
     return _parse(full_name, locale.split("_", 1)[0].casefold(), family_first)
+
+
+_KEPT_TITLES = frozenset(
+    (
+        # Academic and medical
+        "dr",
+        "doctor",
+        "dra",
+        "prof",
+        "professor",
+        # Religious
+        "rev",
+        "reverend",
+        "pastor",
+        "rabbi",
+        "imam",
+        "bishop",
+        "fr",
+        "father",
+        # Military and police
+        "capt",
+        "captain",
+        "col",
+        "colonel",
+        "gen",
+        "general",
+        "lt",
+        "lieutenant",
+        "maj",
+        "major",
+        "sgt",
+        "sergeant",
+        "adm",
+        "admiral",
+        "cmdr",
+        "cdr",
+        "commander",
+        "det",
+        "detective",
+        "officer",
+        # Judicial and government
+        "hon",
+        "honorable",
+        "honourable",
+        "judge",
+        "justice",
+        "sen",
+        "senator",
+        "rep",
+        "representative",
+        "gov",
+        "governor",
+        "amb",
+        "ambassador",
+        "mayor",
+    )
+)
+"""Titles of a profession or office, without any trailing period and case-folded, which replacement keeps.
+
+Other titles, such as ``Mr.``, ``Mrs.``, ``Herr``, and ``Sir``, only say how to address someone and are dropped.
+"""
+
+_TITLES = Lexicon.default().titles
+"""Every title nameparser knows, case-folded and without a trailing period, such as ``mr``, ``dr``, and ``herr``."""
+
+# One capitalized word, with an optional period, and the spaces after it, at the end of some text.
+_TRAILING_WORD = re.compile(r"(?<![\w.])([^\W\d_][\w'\u2019-]*\.?)(\s+)$")
+_MAX_TITLES_BEFORE = 3
+
+
+def is_kept_title(word: str) -> bool:
+    """Return whether replacement keeps the title ``word``: one of a profession or office, such as ``Dr.``.
+
+    Structured and free-text replacement both keep a title only when this is true, and drop every other title.
+
+    Example:
+        ``is_kept_title("Dr.")`` and ``is_kept_title("Capt")`` are true; ``is_kept_title("Mrs.")`` is false.
+    """
+    return word.rstrip(".").casefold() in _KEPT_TITLES
+
+
+def titles_before(text: str, name_start: int, *, floor: int = 0) -> tuple[int, str]:
+    """Find titles written just before a name in ``text`` and return where they start and the ones to keep.
+
+    Up to three capitalized words that nameparser knows as titles, each followed by spaces, are read back from
+    ``name_start`` but not before ``floor``. The kept text has only the titles :func:`is_kept_title` keeps, each
+    with the spaces after it, so writing it in place of ``text[start:name_start]`` drops the others.
+
+    Example:
+        ``titles_before("Seen by Mr. Dr. Ada", 16)`` is ``(8, "Dr. ")``, and ``titles_before("Seen by Ada", 8)`` is
+        ``(8, "")``.
+    """
+    start = name_start
+    kept: list[str] = []
+    for _ in range(_MAX_TITLES_BEFORE):
+        match = _TRAILING_WORD.search(text, floor, start)
+        if match is None:
+            break
+        word = match.group(1)
+        if not word[0].isupper() or word.rstrip(".").casefold() not in _TITLES:
+            break
+        start = match.start()
+        if is_kept_title(word):
+            kept.insert(0, match.group(0))
+    return start, "".join(kept)
+
+
+def name_affixes(full_name: str, *, locale: str, pattern: str | None = None) -> tuple[str, str]:
+    """Return ``full_name``'s leading titles and trailing suffixes as written, or ``""`` for each it lacks.
+
+    Titles of a profession or office, such as ``Dr.`` and ``Capt.``, and suffixes such as ``Jr.`` and ``PhD`` are
+    kept, each with the spaces and commas that follow or precede it. Other titles, such as ``Mr.`` and ``Mrs.``,
+    are left out. Names whose titles or suffixes sit between name words return
+    ``("", "")``.
+
+    Example:
+        ``name_affixes("Dr. Ada Lovelace, PhD", locale="en_US")`` is ``("Dr. ", ", PhD")``, and
+        ``name_affixes("Mrs. Grace Hopper", locale="en_US")`` is ``("", "")``.
+    """
+    tokens = parse_full_name(full_name, locale=locale, pattern=pattern).tokens
+    roles = [token.role.value if token.role is not None else None for token in tokens]
+    named = [position for position, role in enumerate(roles) if role not in {"title", "suffix"}]
+    spans = [token.span for token in tokens]
+    if not named or any(span is None for span in spans):
+        return "", ""
+    first, last = named[0], named[-1]
+    if any(role != "title" for role in roles[:first]) or any(role != "suffix" for role in roles[last + 1 :]):
+        return "", ""
+    starts = [span.start for span in spans if span is not None]
+    ends = [span.end for span in spans if span is not None]
+    # Each kept title runs up to the next word, so the space or other text after it stays.
+    leading = "".join(
+        full_name[starts[position] : starts[position + 1]]
+        for position in range(first)
+        if is_kept_title(tokens[position].text)
+    )
+    trailing = full_name[ends[last] :] if last < len(tokens) - 1 else ""
+    return leading, trailing
 
 
 def _pattern_family_first(pattern: str | None) -> bool | None:

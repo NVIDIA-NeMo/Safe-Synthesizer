@@ -1020,6 +1020,26 @@ class TestReplacementExecutor:
         full, last = result.replacement_map.free_text
         assert full.replacement_value.split(" ")[1] == last.replacement_value
 
+    def test_free_text_keeps_and_drops_titles_like_structured_columns(self) -> None:
+        text = "Seen by Mr. Ada Lovelace and Dr. Grace Hopper, then Mrs Smith and Prof. Jones Jr. today."
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                # The first name's span includes its title; the others' titles are just before their spans.
+                _span(0, "notes", text, "Mr. Ada Lovelace", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Grace Hopper", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Smith", EntityType.LAST_NAME),
+                _span(0, "notes", text, "Jones Jr.", EntityType.LAST_NAME),
+            ]
+        )
+
+        replaced = _execute(dataframe, plan, _RecordingGenerator(), free_text_detector=detector).dataframe
+
+        assert re.fullmatch(
+            r"Seen by \S+ \S+ and Dr\. \S+ \S+, then \S+ and Prof\. \S+ today\.", replaced["notes"].iloc[0]
+        ), replaced["notes"].iloc[0]
+
     def test_free_text_three_word_name_shares_its_middle_name(self) -> None:
         text = "Mary Ann Smith said Ann agreed"
         dataframe = pd.DataFrame({"notes": [text]})
@@ -1046,13 +1066,14 @@ class TestReplacementExecutor:
             ("dr. Ada Lovelace", "dr. Grace Hopper"),
             ("Prof Ada Byron Lovelace", "Prof Grace Mary Hopper"),
             ("John Smith Jr", "Grace Hopper Jr"),
-            ("Mr. John Smith III", "Mr. Grace Hopper III"),
+            ("Mr. John Smith III", "Grace Hopper III"),
+            ("Mrs Ada Lovelace", "Grace Hopper"),
             ("Lovelace, Ada", "Hopper, Grace"),
             ("Guido van Rossum", "Grace Hopper"),
             ("Ada Lovelace, PhD", "Grace Hopper, PhD"),
         ],
     )
-    def test_free_text_full_name_keeps_titles_and_suffixes(self, name: str, expected: str) -> None:
+    def test_free_text_full_name_keeps_titles_of_a_profession_and_suffixes(self, name: str, expected: str) -> None:
         text = f"{name} called"
         dataframe = pd.DataFrame({"notes": [text]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
@@ -1358,7 +1379,8 @@ class TestKnownValueMatching:
             find_and_replace=True,
         )
 
-        assert result.dataframe.at[0, "notes"] == f"Mrs. {result.dataframe.at[0, 'last_name']} called."
+        # Mrs. is dropped, as titles that only say how to address someone always are.
+        assert result.dataframe.at[0, "notes"] == f"{result.dataframe.at[0, 'last_name']} called."
 
     def test_longer_match_beats_a_detected_span_and_equal_length_keeps_the_detected_span(self) -> None:
         text = "Kenneth Gonzales met Jordan"

@@ -32,6 +32,7 @@ from ._common import (
     required_pattern_values,
     resolve_dependency_values,
     shape_preserving_value,
+    with_name_affixes,
 )
 
 if TYPE_CHECKING:
@@ -94,7 +95,10 @@ class FakerReplacementGenerator:
                 locale=self._locale,
                 full_name_pattern=request.full_name_pattern,
             )
-            return render_name(entity_type, request.pattern, rng, values, locale=self._locale)
+            name = render_name(entity_type, request.pattern, rng, values, locale=self._locale)
+            if entity_type is EntityType.FULL_NAME:
+                return with_name_affixes(request.original_value, name, locale=self._locale, pattern=request.pattern)
+            return name
         if entity_type is EntityType.EMAIL:
             return self._generate_email(request, fake, rng, dependencies)
         if entity_type is EntityType.PHONE_NUMBER:

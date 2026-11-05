@@ -25,7 +25,7 @@ from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .letter_case import match_letter_case
-from .person_names import parse_full_name
+from .person_names import is_kept_title, parse_full_name, titles_before
 from .seeding import derive_seed
 from .types import (
     CanonicalValue,
@@ -62,7 +62,7 @@ _NAME_ROLE_PART_TYPES = {
     "middle": EntityType.MIDDLE_NAME,
     "family": EntityType.LAST_NAME,
 }
-# Roles of words kept unchanged, such as Dr. and Jr.
+# Roles of words that are not replaced: titles, such as Dr., which are kept or dropped, and suffixes, such as Jr.
 _KEPT_NAME_ROLES = frozenset({"title", "suffix"})
 
 
@@ -89,7 +89,7 @@ class _NameWord:
     ``van Rossum``."""
 
     part_type: EntityType | None
-    """First, middle, or last name, or ``None`` for a title or suffix kept unchanged."""
+    """First, middle, or last name, or ``None`` for a title or suffix, which is not replaced."""
 
     start: int
     """Offset of the word in the full name."""
@@ -99,6 +99,9 @@ class _NameWord:
 
     is_initial: bool = False
     """Whether the word is a single-letter initial, which is replaced by a letter and never registered."""
+
+    is_title: bool = False
+    """Whether the word is a title, such as ``Dr.`` or ``Mr.``, kept or dropped by :func:`is_kept_title`."""
 
 
 @dataclass(slots=True)
@@ -525,7 +528,13 @@ class FreeTextReplacementExecutor:
                 if key.entity_type is EntityType.FULL_NAME
                 else self._replacement_for(key, statistics),
             )
-            parts.extend((cell.text[cursor : span.start], replacement))
+            # Titles written just before a name, outside its span, are kept or dropped as titles inside it are.
+            title_start, kept_titles = (
+                titles_before(cell.text, span.start, floor=cursor)
+                if key.entity_type is EntityType.FULL_NAME or key.entity_type in _NAME_PART_ENTITY_TYPES
+                else (span.start, "")
+            )
+            parts.extend((cell.text[cursor:title_start], kept_titles, replacement))
             cursor = span.end
             _record_detection(statistics, span, value)
             if self._capture_replacement_map:
@@ -554,13 +563,14 @@ class FreeTextReplacementExecutor:
         ``_name_parts`` can split is built word by word from the first, middle,
         and last name mappings, generating any that are missing, so ``Kenneth
         Gonzales`` and a later bare ``Kenneth`` share one first-name replacement
-        in either order. Titles and suffixes stay unchanged, and initials are
-        replaced as described in ``_initial_replacement``. Any other full name
-        is generated whole.
+        in either order. Suffixes stay unchanged, titles are kept or dropped
+        as structured columns keep or drop them (see ``is_kept_title``), and
+        initials are replaced as described in ``_initial_replacement``. Any
+        other full name is generated whole.
 
         Example:
             After ``Ada Lovelace`` became ``Grace Hopper`` in the same record,
-            ``Dr Ada L.`` becomes ``Dr Grace H.``.
+            ``Dr Ada L.`` becomes ``Dr Grace H.`` and ``Mrs Ada L.`` becomes ``Grace H.``.
         """
         cached = self._cache.get(key)
         if cached is not None:
@@ -572,7 +582,12 @@ class FreeTextReplacementExecutor:
         # Text between the words, such as the comma in "Lovelace, Ada", is kept.
         pieces: list[str] = []
         cursor = 0
-        for word in words:
+        for position, word in enumerate(words):
+            if word.is_title and not is_kept_title(word.text):
+                # A dropped title goes with the text after it, up to the next word.
+                pieces.append(key.original_value[cursor : word.start])
+                cursor = words[position + 1].start if position + 1 < len(words) else word.end
+                continue
             pieces += [key.original_value[cursor : word.start], self._name_word_replacement(key.scope_identity, word)]
             cursor = word.end
         pieces.append(key.original_value[cursor:])
@@ -689,7 +704,7 @@ def _name_parts(value: str, locale: str) -> tuple[_NameWord, ...] | None:
             return None
         role = token.role.value if token.role is not None else None
         if role in _KEPT_NAME_ROLES:
-            words.append(_NameWord(token.text, None, token.span.start, token.span.end))
+            words.append(_NameWord(token.text, None, token.span.start, token.span.end, is_title=role == "title"))
             continue
         part_type = _NAME_ROLE_PART_TYPES.get(role or "")
         if part_type is None or not (_NAME_WORD.fullmatch(token.text) or _NAME_INITIAL.fullmatch(token.text)):

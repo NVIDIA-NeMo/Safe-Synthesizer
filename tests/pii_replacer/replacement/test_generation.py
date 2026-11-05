@@ -44,6 +44,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
 from nemo_safe_synthesizer.pii_replacer.replacement.generators._common import normalize_organization_domain
 from nemo_safe_synthesizer.pii_replacer.replacement.person_names import (
     full_name_layout,
+    name_affixes,
     read_full_name,
     write_full_name,
 )
@@ -495,6 +496,50 @@ class TestReplacementGenerator:
     )
     def test_full_names_are_written_in_the_locale_order(self, locale: str, expected: str) -> None:
         assert write_full_name("Grace", "Hopper", locale) == expected
+
+    @pytest.mark.parametrize(
+        ("full_name", "affixes"),
+        [
+            ("Dr. Ada Lovelace, PhD", ("Dr. ", ", PhD")),
+            ("Prof. Dr. Hans Müller", ("Prof. Dr. ", "")),
+            ("Capt. Jane Doe", ("Capt. ", "")),
+            ("Mr. John A. Smith Jr.", ("", " Jr.")),
+            ("Mr. Dr. John Smith", ("Dr. ", "")),
+            ("Mrs Grace Hopper", ("", "")),
+            ("Herr Hans Müller", ("", "")),
+            ("Sir Ian McKellen", ("", "")),
+            ("Ada Lovelace", ("", "")),
+        ],
+    )
+    def test_name_affixes_keep_titles_of_a_profession_or_office_and_suffixes(
+        self, full_name: str, affixes: tuple[str, str]
+    ) -> None:
+        assert name_affixes(full_name, locale="en_US") == affixes
+
+    @pytest.mark.parametrize("pattern", [None, "{First} {Last}", "Dr. {First} {Last}"])
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("Dr. Ada Lovelace", r"Dr\. \S+ \S+"),
+            ("Ada Lovelace, PhD", r"\S+ \S+, PhD"),
+            ("Mrs. Grace Hopper Jr.", r"\S+ \S+ Jr\."),
+        ],
+    )
+    def test_faker_full_name_keeps_the_originals_title_and_suffix(
+        self, pattern: str | None, original: str, shape: str
+    ) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original, pattern=pattern))
+
+        if pattern is not None and pattern.startswith("Dr. "):
+            shape = shape if shape.startswith("Dr") else r"Dr\. " + shape
+        assert re.fullmatch(shape, replacement), replacement
+
+    def test_nemotron_personas_full_name_keeps_the_originals_title_and_suffix(self, tmp_path: Path) -> None:
+        people = pd.DataFrame({"first_name": ["Grace"], "last_name": ["Hopper"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+
+        assert generator.generate(_request(EntityType.FULL_NAME, "Dr. Ada Lovelace, PhD")) == "Dr. Grace Hopper, PhD"
+        assert generator.generate(_request(EntityType.FULL_NAME, "Mrs. Ada Lovelace")) == "Grace Hopper"
 
     def test_an_unknown_locale_fails_with_the_faker_error(self) -> None:
         with pytest.raises(GenerationError, match="could not load Faker's name formats for locale 'xx_YY'"):

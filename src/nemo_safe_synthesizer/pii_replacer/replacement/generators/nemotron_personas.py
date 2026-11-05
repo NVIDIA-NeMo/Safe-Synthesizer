@@ -30,6 +30,7 @@ from ._common import (
     render_name,
     required_pattern_values,
     resolve_dependency_values,
+    with_name_affixes,
 )
 from .faker import FakerReplacementGenerator
 
@@ -332,7 +333,10 @@ def _generate_persona_value(
         )
         if not _has_values(values, required):
             return None
-        return render_name(entity_type, request.pattern, rng, values, locale=locale)
+        name = render_name(entity_type, request.pattern, rng, values, locale=locale)
+        if entity_type is EntityType.FULL_NAME:
+            return with_name_affixes(request.original_value, name, locale=locale, pattern=request.pattern)
+        return name
     if entity_type is EntityType.STREET_ADDRESS:
         street = _persona_street_components(sampled)
         return street or None
