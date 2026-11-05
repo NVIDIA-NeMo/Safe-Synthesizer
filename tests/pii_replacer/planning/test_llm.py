@@ -36,10 +36,11 @@ from nemo_safe_synthesizer.pii_replacer.planning import llm as llm_module
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_BATCH_BYTES,
     MAX_BATCH_ENTRIES,
-    MAX_CLASSIFICATION_COLUMNS,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
+    _aligned_samples,
     _bounded_batches,
+    _exclusive_dependency_rule,
     _json_bytes,
     _profile_batches,
     _submitted_names,
@@ -197,35 +198,36 @@ class TestClassificationBatching:
         batches = _profile_batches(captured[0].column_profiles)
 
         assert len(batches) > 1
-        assert len(batches[0]) == MAX_CLASSIFICATION_COLUMNS
-        assert all(len(batch) <= MAX_CLASSIFICATION_COLUMNS for batch in batches)
+        assert len(batches[0]) == MAX_BATCH_ENTRIES
+        assert all(len(batch) <= MAX_BATCH_ENTRIES for batch in batches)
         assert all(_json_bytes(batch) <= MAX_BATCH_BYTES for batch in batches)
 
 
 @pytest.mark.unit
 class TestDependencyBatching:
     def test_dependency_targets_are_batched_and_merged(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(llm_module, "MAX_BATCH_ENTRIES", 1)
+        # Classification and dependency selection share the batch size, so both are split here.
+        monkeypatch.setattr(llm_module, "MAX_BATCH_ENTRIES", 2)
         dataframe = pd.DataFrame(
             {
                 "first_name": ["Ada"],
                 "gender": ["F"],
                 "spouse_first_name": ["William"],
                 "spouse_gender": ["M"],
+                "child_first_name": ["Byron"],
+                "child_gender": ["M"],
             }
         )
-        classifications = {
-            "first_name": "first_name",
-            "gender": "gender",
-            "spouse_first_name": "first_name",
-            "spouse_gender": "gender",
-        }
         # One worker keeps batch order deterministic for the scripted responses.
         enhancer, transport = _enhancer(
             [
-                _classifications(classifications),
-                _dependency_selection({"first_name": {"gender": "gender"}}),
-                _dependency_selection({"spouse_first_name": {"gender": "spouse_gender"}}),
+                _classifications({"first_name": "first_name", "gender": "gender"}),
+                _classifications({"spouse_first_name": "first_name", "spouse_gender": "gender"}),
+                _classifications({"child_first_name": "first_name", "child_gender": "gender"}),
+                _dependency_selection(
+                    {"first_name": {"gender": "gender"}, "spouse_first_name": {"gender": "spouse_gender"}}
+                ),
+                _dependency_selection({"child_first_name": {"gender": "child_gender"}}),
             ],
             max_workers=1,
         )
@@ -235,12 +237,16 @@ class TestDependencyBatching:
         depends_on = {
             spec.column_name: [item.column_name for item in spec.depends_on] for spec in plan.columns_to_replace
         }
-        assert depends_on == {"first_name": ["gender"], "spouse_first_name": ["spouse_gender"]}
+        assert depends_on == {
+            "first_name": ["gender"],
+            "spouse_first_name": ["spouse_gender"],
+            "child_first_name": ["child_gender"],
+        }
         dependency_targets = [
             [target["target_column"] for target in json.loads(messages[1]["content"])["dependency_targets"]]
-            for messages, _ in transport.calls[1:]
+            for messages, _ in transport.calls[3:]
         ]
-        assert dependency_targets == [["first_name"], ["spouse_first_name"]]
+        assert dependency_targets == [["first_name", "spouse_first_name"], ["child_first_name"]]
 
     def test_oversized_dependency_target_is_rejected(self) -> None:
         with pytest.raises(ParameterError, match="Dependency options for 'email' exceeds the 48 KiB"):
@@ -250,6 +256,55 @@ class TestDependencyBatching:
                 name_key="target_column",
                 max_entries=MAX_BATCH_ENTRIES,
             )
+
+
+class TestAlignedSamples:
+    def test_repeated_value_is_read_from_a_row_with_its_sources(self) -> None:
+        # One patient's first event has no provider yet; a later event does.
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Ada", "Grace"],
+                "provider_name": [None, "Dr. Rosa Fernandez", "Dr. Ken Ito"],
+            }
+        )
+
+        samples = _aligned_samples(dataframe, ["first_name", "provider_name"])
+
+        assert samples == [
+            {"first_name": "Ada", "provider_name": "Dr. Rosa Fernandez"},
+            {"first_name": "Grace", "provider_name": "Dr. Ken Ito"},
+        ]
+
+    def test_shown_values_do_not_depend_on_row_order(self) -> None:
+        dataframe = pd.DataFrame({"first_name": [f"name{i}" for i in range(10)], "gender": ["F", "M"] * 5})
+
+        forward = _aligned_samples(dataframe, ["first_name", "gender"])
+        backward = _aligned_samples(dataframe.iloc[::-1].reset_index(drop=True), ["first_name", "gender"])
+
+        assert sorted(forward, key=str) == sorted(backward, key=str)
+
+
+@pytest.mark.unit
+class TestExclusiveDependencyRule:
+    def test_states_only_families_a_target_could_break(self) -> None:
+        targets = [
+            {"source_options": {"first_name": {"columns": ["fn"]}, "full_name": {"columns": ["name"]}}},
+            {"source_options": {"gender": {"columns": ["sex"]}}},
+        ]
+
+        rule = _exclusive_dependency_rule(targets)
+
+        assert "first_name, last_name or middle_name together with full_name." in rule
+        assert "ethnic_background or gender" not in rule
+
+    def test_is_omitted_when_no_target_could_break_a_family(self) -> None:
+        # Each type appears in some family, but no single target is offered two groups of one family.
+        targets = [
+            {"source_options": {"full_name": {"columns": ["name"]}}},
+            {"source_options": {"gender": {"columns": ["sex"]}, "first_name": {"columns": ["fn"]}}},
+        ]
+
+        assert _exclusive_dependency_rule(targets) == ""
 
 
 @pytest.mark.unit
@@ -416,18 +471,18 @@ class TestLLMPlanEnhancer:
                     "target_pattern": None,
                     "target_pattern_syntax": None,
                     "source_options": {"organization": {"columns": ["company"]}},
+                    # Each sample row puts the target beside its sources, read from one row of the table.
+                    "aligned_samples": [
+                        {"email": "ada@example.com", "company": "Analytical Engines"},
+                        {"email": "grace@example.com", "company": "US Navy"},
+                    ],
                 }
-            ],
-            "exclusive_dependency_groups": [
-                [["first_name", "last_name", "middle_name"], ["full_name"]],
-                [["full_name"], ["ethnic_background", "gender"]],
             ],
             "pattern_grammars": {},
         }
-        assert (
-            "the source entity types chosen for one target may come from at most one inner group"
-            in dependency_messages[0]["content"]
-        )
+        # The only source type is organization, so no exclusivity family applies.
+        assert "must not be combined" not in dependency_messages[0]["content"]
+        assert "Null is a normal answer" in dependency_messages[0]["content"]
         assert "describes the same person or record as the target" in dependency_messages[0]["content"]
         assert "Return a JSON object with one key per target column" in dependency_messages[0]["content"]
         dependency_schema = dependency_model.model_json_schema()
@@ -478,7 +533,7 @@ class TestLLMPlanEnhancer:
         assert target["source_options"] == {"organization": {"columns": ["company"]}}
         assert "heuristic" not in dependency_messages[0]["content"]
         assert (
-            "Choose null only when no column of that type describes the same person or record"
+            "Choose null when no column of that type describes the same person or record"
             in dependency_messages[0]["content"]
         )
 
@@ -611,6 +666,7 @@ class TestLLMPlanEnhancer:
                 "target_pattern": None,
                 "target_pattern_syntax": None,
                 "source_options": {"gender": {"columns": ["sex"]}},
+                "aligned_samples": [{"first_name": "Ada", "sex": "F"}, {"first_name": "Grace", "sex": "F"}],
             }
         ]
 

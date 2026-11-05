@@ -180,8 +180,9 @@ planning model or your own serving profile, see
 ### Where planning requests go
 
 Plan discovery sends the LLM column statistics, up to eight cell samples per
-column, and distinct values of dependency columns, such as sex or race, that
-need mapping to the sampler's values. Where they go depends only on
+column, up to three sample rows of the columns a dependency could link, and
+distinct values of dependency columns, such as sex or race, that need mapping
+to the sampler's values. Where they go depends only on
 `NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
 
 - Unset: Safe Synthesizer starts its own vLLM server on this machine, and the
