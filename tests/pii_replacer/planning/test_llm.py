@@ -40,6 +40,7 @@ from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     RETRY_MAX_DELAY_SECONDS,
     _aligned_samples,
     _bounded_batches,
+    _exclusive_dependency_rule,
     _json_bytes,
     _profile_batches,
 )
@@ -283,6 +284,29 @@ class TestAlignedSamples:
 
 
 @pytest.mark.unit
+class TestExclusiveDependencyRule:
+    def test_states_only_families_a_target_could_break(self) -> None:
+        targets = [
+            {"source_options": {"first_name": {"columns": ["fn"]}, "full_name": {"columns": ["name"]}}},
+            {"source_options": {"gender": {"columns": ["sex"]}}},
+        ]
+
+        rule = _exclusive_dependency_rule(targets)
+
+        assert "first_name, last_name or middle_name together with full_name." in rule
+        assert "ethnic_background or gender" not in rule
+
+    def test_is_omitted_when_no_target_could_break_a_family(self) -> None:
+        # Each type appears in some family, but no single target is offered two groups of one family.
+        targets = [
+            {"source_options": {"full_name": {"columns": ["name"]}}},
+            {"source_options": {"gender": {"columns": ["sex"]}, "first_name": {"columns": ["fn"]}}},
+        ]
+
+        assert _exclusive_dependency_rule(targets) == ""
+
+
+@pytest.mark.unit
 class TestLLMPlanEnhancer:
     def test_third_pass_maps_only_non_identity_dependency_values(self) -> None:
         dataframe = pd.DataFrame(
@@ -435,10 +459,8 @@ class TestLLMPlanEnhancer:
             ],
             "pattern_grammars": {},
         }
-        assert (
-            "first_name, last_name or middle_name together with full_name, and full_name together with "
-            "ethnic_background or gender" in dependency_messages[0]["content"]
-        )
+        # The only source type is organization, so no exclusivity family applies.
+        assert "must not be combined" not in dependency_messages[0]["content"]
         assert "Null is a normal answer" in dependency_messages[0]["content"]
         assert "describes the same person or record as the target" in dependency_messages[0]["content"]
         assert "Return a JSON object with one key per target column" in dependency_messages[0]["content"]
@@ -490,7 +512,7 @@ class TestLLMPlanEnhancer:
         assert target["source_options"] == {"organization": {"columns": ["company"]}}
         assert "heuristic" not in dependency_messages[0]["content"]
         assert (
-            "Choose null only when no column of that type describes the same person or record"
+            "Choose null when no column of that type describes the same person or record"
             in dependency_messages[0]["content"]
         )
 

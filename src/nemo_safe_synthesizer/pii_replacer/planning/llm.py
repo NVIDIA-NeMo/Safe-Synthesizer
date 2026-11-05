@@ -14,7 +14,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence, Set
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, cast
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
@@ -227,12 +227,16 @@ def _pattern_syntax(entity_type: EntityType | None) -> str | None:
     return syntax.name.lower()
 
 
-def _exclusive_dependency_rule() -> str:
-    """State the source entity types one target must not combine, in sentences.
+def _exclusive_dependency_rule(targets: Sequence[Mapping[str, object]]) -> str:
+    """State the source entity types a target in ``targets`` must not combine, in sentences.
 
     Nested lists of groups were read as puzzles: a reasoning model spent much of its thinking budget checking
     whether a type listed in two families conflicts with itself. The sentences also say when the rule cannot
     apply, so a target with a single source entity type skips the check.
+
+    Only families that some target could break are stated: those where one target's source_options offer types
+    from two or more of the family's groups. When no target could break any family, the rule is omitted and
+    this returns an empty string.
 
     Example:
         With the groups [[first_name, last_name, middle_name], [full_name]], the sentence reads "first_name,
@@ -243,7 +247,18 @@ def _exclusive_dependency_rule() -> str:
         names = sorted(entity_type.value for entity_type in group)
         return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
 
-    combinations = [" together with ".join(either(group) for group in family) for family in EXCLUSIVE_DEPENDS_ON_GROUPS]
+    offered = [
+        {EntityType(entity_type) for entity_type in cast(Mapping[str, object], target["source_options"])}
+        for target in targets
+    ]
+    relevant = [
+        family
+        for family in EXCLUSIVE_DEPENDS_ON_GROUPS
+        if any(sum(bool(types & group) for group in family) >= 2 for types in offered)
+    ]
+    if not relevant:
+        return ""
+    combinations = [" together with ".join(either(group) for group in family) for family in relevant]
     return (
         "3. Some source entity types must not be combined for one target: "
         + ", and ".join(combinations)
@@ -555,10 +570,10 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "Use aligned_samples as evidence too: values of one person agree across a row, for example a first name "
         "that also appears in the full name of the same row, while values of different people do not.\n"
         "2. When a listed column describes the same person or record as the target, choose it, so the fake value "
-        "stays consistent with that column. Choose null only when no column of that type describes the same person "
+        "stays consistent with that column. Choose null when no column of that type describes the same person "
         "or record. Null is a normal answer: many targets have no matching source. Choose a column only when the "
         "samples or column names show it describes the same record as the target; if the samples show values that "
-        "do not belong together, choose null.\n" + _exclusive_dependency_rule() + "\n"
+        "do not belong together, choose null.\n" + _exclusive_dependency_rule(targets) + "\n"
         "Output\n"
         "Return a JSON object with one key per target column in dependency_targets. Each value is an object with one "
         "key per source entity type listed in that target's source_options, set to one of the listed columns or null. "
