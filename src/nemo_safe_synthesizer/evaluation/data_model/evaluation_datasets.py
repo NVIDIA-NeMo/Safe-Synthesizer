@@ -197,7 +197,7 @@ class EvaluationDatasets(BaseModel):
                     "Test dataframe has no columns in common with Training and Synthetic dataframes. Please check dataframes for mismatch."
                 )
             else:
-                test = test.reindex(columns=list(test_shared_columns))
+                test = test.reindex(columns=test_shared_columns)
 
         return training, synthetic, test
 
