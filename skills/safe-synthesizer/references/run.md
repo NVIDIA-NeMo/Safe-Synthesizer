@@ -47,7 +47,7 @@ endpoint NSS applies none of the profile's settings, so also set
 export NSS_INFERENCE_ENDPOINT=http://127.0.0.1:8000/v1
 export NSS_INFERENCE_MODEL=nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
 export NSS_INFERENCE_TIMEOUT=300
-export NSS_INFERENCE_REQUEST_OPTIONS='{"temperature": 1.0, "top_p": 0.95, "thinking_token_budget": 2000}'
+export NSS_INFERENCE_REQUEST_OPTIONS='{"temperature": 1.0, "top_p": 0.95, "thinking_token_budget": 4000}'
 ```
 
 The server holds most of the GPU until stopped. Tell the user to stop it and
