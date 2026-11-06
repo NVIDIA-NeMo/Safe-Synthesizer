@@ -106,6 +106,24 @@ def test_empty_testdf_intersection(fixture_training_df, fixture_synthetic_df, fi
         EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
 
 
+def test_subsample_columns_keeps_holdout_in_sync_with_sampled_columns():
+    columns = [f"c{i}" for i in range(10)]
+    training = pd.DataFrame([range(10)], columns=columns)
+    synthetic = training.copy()
+    test = pd.DataFrame([range(11)], columns=[*columns, "holdout_only"])
+
+    training_out, synthetic_out, test_out = EvaluationDatasets.subsample_columns(
+        training, synthetic, test, target_column_count=4, mandatory_columns=["c0"]
+    )
+
+    selected = list(training_out.columns)
+    assert len(selected) == 4
+    assert "c0" in selected
+    assert list(synthetic_out.columns) == selected
+    assert test_out is not None
+    assert list(test_out.columns) == selected
+
+
 def test_get_columns_of_type(fixture_training_df):
     dataset = EvaluationDatasets.from_dataframes(fixture_training_df, fixture_training_df, fixture_training_df)
     assert set(dataset.get_tabular_columns()) == set(
