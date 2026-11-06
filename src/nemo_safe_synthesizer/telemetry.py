@@ -273,9 +273,9 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         serialization_alias="piiLlmModel",
         description=(
-            "Planning model: the served name of an unmodified bundled local profile, or of a bundled model "
-            "behind an endpoint; 'custom_profile' for a user-supplied local profile; 'other' for any other "
-            "endpoint model. 'undefined' when no LLM planning ran."
+            "Planning model: the local profile's model_id or the endpoint's model ID, sanitized like the "
+            "pretrained model, so local model paths are reported as 'local_path'. 'undefined' when no LLM "
+            "planning ran. Use sanitize_model_for_telemetry()."
         ),
     )
     pii_locale: str = Field(
