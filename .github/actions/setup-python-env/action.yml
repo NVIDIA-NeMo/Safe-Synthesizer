@@ -114,6 +114,10 @@ runs:
     - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'
       shell: bash
+      env:
+        # Authenticated GitHub API calls avoid the 60 req/hr anonymous rate
+        # limit that aqua-backed tool installs hit on shared runner IPs.
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         MISE_REQUIRE_SIGNED_INSTALL=1 \
         MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
