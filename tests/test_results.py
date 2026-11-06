@@ -11,6 +11,7 @@ import pandas as pd
 
 from nemo_safe_synthesizer.config import SafeSynthesizerTiming
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -164,7 +165,11 @@ class TestSafeSynthesizerSummaryLogWandb:
         assert logged["gen/tokens_per_second"] is None
 
     def test_log_wandb_includes_time_series_scores(self):
-        summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(7.5))
+        report = _report_with_autocorrelation(7.5)
+        report.components.append(
+            RollingStatsSimilarity(score=EvaluationScore.finalize_grade(raw_score=0.62, score=6.2))
+        )
+        summary = make_nss_summary(SafeSynthesizerTiming(), None, report)
 
         mock_wandb = MagicMock()
         mock_wandb.run = MagicMock()
@@ -173,6 +178,7 @@ class TestSafeSynthesizerSummaryLogWandb:
 
         logged = mock_wandb.run.summary.update.call_args.args[0]
         assert logged["eval/autocorrelation_similarity_score"] == 7.5
+        assert logged["eval/rolling_stats_similarity_score"] == 6.2
 
     def test_log_wandb_noop_when_no_run(self):
         timing = SafeSynthesizerTiming(generation_time_sec=2.0)

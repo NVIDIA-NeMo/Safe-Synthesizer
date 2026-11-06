@@ -407,10 +407,15 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.time_series.autocorrelation.max_lag` | `20` | Largest positive lag requested | Select a horizon relevant to the downstream use case |
 | `evaluation.time_series.autocorrelation.min_points` | `4` | Minimum finite observations required per sequence | Leave at default unless short sequences must be excluded |
 | `evaluation.time_series.autocorrelation.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
+| `evaluation.time_series.rolling_stats.value_columns` | `null` | Numeric columns included in Rolling Stats Similarity | Leave `null` for inferred numeric columns or provide an explicit list |
+| `evaluation.time_series.rolling_stats.window_size` | `20` | Number of consecutive values that count as local; variation faster than the window counts as spread, slower variation as a change in the local average | Set longer than the short-term fluctuations treated as noise and shorter than the level changes to compare |
+| `evaluation.time_series.rolling_stats.min_points` | `4` | Minimum finite observations required per training sequence; a synthetic sequence with fewer scores 0 | Leave at default unless short sequences must be excluded |
+| `evaluation.time_series.rolling_stats.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
 
 See [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters]
 for the full API reference. See
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md)
+and [Rolling Stats Similarity](time-series-metrics/rolling-stats-similarity.md)
 for calculation and interpretation guidance.
 
 ---

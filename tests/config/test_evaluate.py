@@ -6,7 +6,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
+from nemo_safe_synthesizer.config.evaluate import (
+    EvaluationParameters,
+    RollingStatsSimilarityParameters,
+    TimeSeriesEvaluationParameters,
+)
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 
@@ -72,3 +76,17 @@ def test_global_evaluation_disable_overrides_invalid_time_series_gate_combinatio
 
     assert config.evaluation.enabled is False
     assert config.evaluation.time_series.enabled is True
+
+
+def test_rolling_stats_parameters_default_to_all_numeric_columns_and_a_20_point_window() -> None:
+    rolling_stats = EvaluationParameters().time_series.rolling_stats
+
+    assert rolling_stats.value_columns is None
+    assert rolling_stats.window_size == 20
+    assert rolling_stats.min_points == 4
+    assert rolling_stats.max_groups == 128
+
+
+def test_rolling_stats_window_must_hold_at_least_three_points() -> None:
+    with pytest.raises(ValidationError):
+        RollingStatsSimilarityParameters(window_size=2)

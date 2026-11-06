@@ -37,6 +37,7 @@ from ....evaluation.components.membership_inference_protection import (
     MembershipInferenceProtection,
 )
 from ....evaluation.components.pii_replay import PIIReplay
+from ....evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
@@ -52,7 +53,7 @@ from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
 
-TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity,)
+TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity, RollingStatsSimilarity)
 """Components run when time-series evaluation is enabled, in report display order."""
 
 

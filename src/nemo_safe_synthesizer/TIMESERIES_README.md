@@ -37,7 +37,7 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
   range and interval. Flexible generation learns a final-row marker, and the
   maximum observed group length is a hard limit for synthetic groups.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
-- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
+- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity and Rolling Stats Similarity.
 
 ---
 
@@ -120,7 +120,7 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 ### Evaluation Parameters (In Progress)
 
 Time-series evaluation is configured under `evaluation.time_series`, defined in `src/nemo_safe_synthesizer/config/evaluate.py`.
-Each metric has its own nested section; Autocorrelation Similarity is available today, and more metrics are being added.
+Each metric has its own nested section; Autocorrelation Similarity and Rolling Stats Similarity are available today, and more metrics are being added.
 
 ```yaml
 evaluation:
@@ -131,10 +131,15 @@ evaluation:
       max_lag: 20          # largest lag compared; capped for short sequences
       min_points: 4        # minimum finite observations in each sequence
       max_groups: 128      # reproducible sample of shared groups above this count
+    rolling_stats:
+      value_columns: null  # null evaluates every numeric training column
+      window_size: 20      # values in each rolling window; smaller for short sequences, at least 3
+      min_points: 4        # minimum finite training observations; sparser synthetic sequences score 0
+      max_groups: 128      # reproducible sample of shared groups above this count
 ```
 
 Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; each metric chooses only which value columns it evaluates, with `value_columns`.
-See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) for how to read the score and choose these values.
+See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) and the [Rolling Stats Similarity guide](../../docs/user-guide/time-series-metrics/rolling-stats-similarity.md) for how to read each score and choose these values.
 
 ---
 
@@ -472,6 +477,14 @@ Purpose: Measures how well the synthetic data preserves temporal autocorrelation
 It compares training and synthetic autocorrelation profiles for each shared group and numeric column, discounts differences explained by sampling noise, and averages the pair similarities into a 0--10 score.
 See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the full calculation.
 
+### Rolling Stats Similarity
+
+Located in `src/nemo_safe_synthesizer/evaluation/components/rolling_stats_similarity.py`.
+
+This metric measures whether the local average (rolling mean) and local spread (rolling standard deviation) of synthetic sequences change from beginning to end like the training sequences.
+It averages both rolling statistics over ten aligned segments of each shared group and numeric column, discounts differences explained by chance, and averages the pair similarities into a 0--10 score.
+See `docs/user-guide/time-series-metrics/rolling-stats-similarity.md` for the full calculation.
+
 Auto-Enable: When `is_timeseries=True`, time-series evaluation runs even without explicit evaluation config.
 
 ### Integration with Multimodal Report
@@ -657,6 +670,7 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
+| `evaluation/components/rolling_stats_similarity.py` | Rolling statistics evaluation metric |
 | `evaluation/components/time_series_common.py` | Component base class and grouping and column helpers shared by time-series metrics |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |
