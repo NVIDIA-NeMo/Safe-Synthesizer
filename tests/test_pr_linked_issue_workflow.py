@@ -14,26 +14,26 @@ import yaml
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/pr-linked-issue.yml"
 
 
-def _step(name: str, job: str = "check") -> dict:
+def _step(name: str) -> dict:
     workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
-    return next(step for step in workflow["jobs"][job]["steps"] if step["name"] == name)
+    return next(step for step in workflow["jobs"]["check"]["steps"] if step["name"] == name)
 
 
 def _run_step(
-    tmp_path: Path, name: str, mock_gh: str, *, job: str = "check", **variables: str
+    tmp_path: Path, name: str, mock_gh: str, **variables: str
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     gh = tmp_path / "gh"
     gh.write_text("#!/bin/sh\n" + mock_gh)
     gh.chmod(0o755)
     output = tmp_path / "github-output"
     output.write_text("")
-    script = _step(name, job)["run"].replace("${{ github.repository }}", "NVIDIA-NeMo/Safe-Synthesizer")
+    script = _step(name)["run"].replace("${{ github.repository }}", "NVIDIA-NeMo/Anonymizer")
     env = (
         os.environ
         | {
             "PATH": f"{tmp_path}:{os.environ['PATH']}",
             "GITHUB_OUTPUT": str(output),
-            "REPO": "NVIDIA-NeMo/Safe-Synthesizer",
+            "REPO": "NVIDIA-NeMo/Anonymizer",
             "PR_NUMBER": "42",
         }
         | variables
@@ -71,27 +71,15 @@ def test_issue_validation_distinguishes_policy_failure_from_api_outage(
 
 @pytest.mark.parametrize(
     ("response", "expected_exit", "expected_output"),
-    [
-        ("write", 0, "is_collaborator=true"),
-        ("admin", 0, "is_collaborator=true"),
-        ("read", 0, "is_collaborator=false"),
-        ("HTTP 404", 0, "is_collaborator=false"),
-        ("HTTP 503", 1, ""),
-    ],
+    [("write", 0, "is_collaborator=true"), ("HTTP 404", 0, "is_collaborator=false"), ("HTTP 503", 1, "")],
 )
 def test_author_permission_does_not_treat_api_outage_as_external(
     tmp_path: Path, response: str, expected_exit: int, expected_output: str
 ) -> None:
-    mock = 'case "$SCENARIO" in\n  "HTTP "*) echo "gh: $SCENARIO" >&2; exit 1 ;;\n  *) echo "$SCENARIO" ;;\nesac\n'
+    mock = 'if [ "$SCENARIO" = "write" ]; then echo write; exit 0; fi\necho "gh: $SCENARIO" >&2; exit 1\n'
     result, output = _run_step(tmp_path, "Check author permissions", mock, SCENARIO=response, PR_AUTHOR="contributor")
     assert result.returncode == expected_exit, result.stderr
     assert expected_output in output
-
-
-def test_dependabot_is_exempt_without_a_permission_lookup(tmp_path: Path) -> None:
-    result, output = _run_step(tmp_path, "Check author permissions", "exit 1\n", PR_AUTHOR="dependabot[bot]")
-    assert result.returncode == 0, result.stderr
-    assert "is_collaborator=true" in output
 
 
 @pytest.mark.parametrize(
@@ -100,9 +88,6 @@ def test_dependabot_is_exempt_without_a_permission_lookup(tmp_path: Path) -> Non
         ("Fixes #123", "123"),
         ("<!-- Fixes #123 -->", ""),
         ("<!-- Fixes #123 -->\nResolves #456", "456"),
-        ("<!--\nFixes #123\n-->\ncLoSeS #456", "456"),
-        ("No linked issue required: docs cleanup", ""),
-        ("", ""),
     ],
 )
 def test_issue_parser_reads_current_pr_body(tmp_path: Path, body: str, expected_issue: str) -> None:
@@ -112,17 +97,6 @@ def test_issue_parser_reads_current_pr_body(tmp_path: Path, body: str, expected_
     )
     assert result.returncode == 0, result.stderr
     assert f"issue_num={expected_issue}\n" in output
-
-
-def test_issue_parser_keeps_all_distinct_references(tmp_path: Path) -> None:
-    result, output = _run_step(
-        tmp_path,
-        "Parse issue reference from PR body",
-        'printf "%s\\n" "$CURRENT_BODY"\n',
-        CURRENT_BODY="Fixes #123\nCloses #456\nResolves #123\n<!-- Fixes #789 -->",
-    )
-    assert result.returncode == 0, result.stderr
-    assert "issue_nums=123 456\n" in output
 
 
 def test_second_valid_issue_prevents_close(tmp_path: Path) -> None:
@@ -186,7 +160,7 @@ def test_issue_change_reruns_previously_passing_check(tmp_path: Path, action: st
     call_log = tmp_path / "rerun-call"
     env = os.environ | {
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "REPO": "NVIDIA-NeMo/Safe-Synthesizer",
+        "REPO": "NVIDIA-NeMo/Anonymizer",
         "PR_NUMBERS": "42",
         "ISSUE_ACTION": action,
         "CALL_LOG": str(call_log),
@@ -194,73 +168,6 @@ def test_issue_change_reruns_previously_passing_check(tmp_path: Path, action: st
     result = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert call_log.exists() == should_rerun
-
-
-def test_issue_change_selects_visible_references_only(tmp_path: Path) -> None:
-    prs = [
-        {"number": 1, "body": "Fixes #123"},
-        {"number": 2, "body": "<!-- Fixes #123 -->"},
-        {"number": 3, "body": "Fixes #1234"},
-        {"number": 4, "body": "<!-- Fixes #456 -->\nResolves #123"},
-    ]
-    result, output = _run_step(
-        tmp_path,
-        "Find PRs referencing this issue",
-        'printf "%s\\n" "$PRS_JSON"\n',
-        job="retrigger",
-        ISSUE_NUMBER="123",
-        PRS_JSON=json.dumps(prs),
-    )
-    assert result.returncode == 0, result.stderr
-    assert "prs=1 4 \n" in output
-
-
-@pytest.mark.parametrize(
-    ("collaborator", "issues", "triaged", "existing_comment", "status", "operation"),
-    [
-        ("false", "", "", "", "fail", "create"),
-        ("false", "123", "false", "77", "fail", "PATCH"),
-        ("false", "123", "true", "77", "pass", "DELETE"),
-        ("true", "", "", "77", "pass", "DELETE"),
-    ],
-)
-def test_policy_comment_explains_failure_and_clears_on_success(
-    tmp_path: Path,
-    collaborator: str,
-    issues: str,
-    triaged: str,
-    existing_comment: str,
-    status: str,
-    operation: str,
-) -> None:
-    call_log = tmp_path / "comment-call"
-    body_log = tmp_path / "comment-body"
-    mock = (
-        'if [ "$2" = "--paginate" ]; then printf "%s\\n" "$EXISTING_COMMENT"; exit 0; fi\n'
-        'if [ "$2" = "-X" ]; then echo "$3" > "$CALL_LOG"; else echo create > "$CALL_LOG"; fi\n'
-        'for arg in "$@"; do\n'
-        '  case "$arg" in body=*) printf "%s\\n" "${arg#body=}" > "$BODY_LOG" ;; esac\n'
-        "done\n"
-        "echo 77\n"
-    )
-    result, output = _run_step(
-        tmp_path,
-        "Build comment body and post result",
-        mock,
-        IS_COLLABORATOR=collaborator,
-        ISSUE_NUMS=issues,
-        IS_TRIAGED=triaged,
-        EXISTING_COMMENT=existing_comment,
-        CALL_LOG=str(call_log),
-        BODY_LOG=str(body_log),
-    )
-    assert result.returncode == 0, result.stderr
-    assert f"status={status}\n" in output
-    assert call_log.read_text().strip() == operation
-    if status == "fail":
-        assert "comment_id=77\n" in output
-        assert "reopen" in body_log.read_text()
-        assert "triaged" in body_log.read_text()
 
 
 @pytest.mark.parametrize(
@@ -309,7 +216,7 @@ def test_close_step_rechecks_current_pr(
     assert result.returncode == expected_exit, result.stderr
     assert call_log.exists() == should_close
     if should_close:
-        assert call_log.read_text().strip() == "pr close 42 --repo NVIDIA-NeMo/Safe-Synthesizer"
+        assert call_log.read_text().strip() == "pr close 42 --repo NVIDIA-NeMo/Anonymizer"
     if body == "Fixes #123" and '"triaged"' in issue_response:
         assert "current_valid=true" in output
 

@@ -4,7 +4,6 @@
 name: Linked Issue Check
 
 on:
-  # Only initial opened/reopened runs can close PRs; other events recheck them.
   pull_request_target:
     types: [opened, edited, reopened, ready_for_review, synchronize]
     branches: [main]
@@ -17,10 +16,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # pull_request_target grants write access for fork PRs. Read metadata only;
-  # never check out or execute code from the PR branch in this workflow.
-  # ---------------------------------------------------------------------------
   check:
     name: Check linked issue
     if: >-
@@ -41,12 +36,10 @@ jobs:
             exit 0
           fi
 
-          api_error=$(mktemp)
           permission=$(gh api "repos/${{ github.repository }}/collaborators/${PR_AUTHOR}/permission" \
-            --jq '.permission' 2>"$api_error") || {
-            # Only a definite 404 establishes that an author is not a collaborator.
-            if ! grep -q 'HTTP 404' "$api_error"; then
-              cat "$api_error" >&2
+            --jq '.permission' 2>/tmp/permission-api-error) || {
+            if ! grep -q 'HTTP 404' /tmp/permission-api-error; then
+              cat /tmp/permission-api-error >&2
               exit 1
             fi
             permission="none"
@@ -58,6 +51,72 @@ jobs:
           else
             echo "is_collaborator=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Validate parser cases
+        run: |
+          set -euo pipefail
+
+          extract_issue_num() {
+            local body_file="$1"
+            local clean_body_file
+
+            clean_body_file="$(mktemp)"
+            perl -0pe 's/<!--.*?-->//gs' "$body_file" > "$clean_body_file"
+            grep -ioE '(fixes|closes|resolves)[[:space:]]+#[0-9]+' "$clean_body_file" \
+              | grep -oE '[0-9]+' \
+              | head -1 \
+              || true
+          }
+
+          expect_issue() {
+            local body_file="$1"
+            local expected="$2"
+            local case_name="$3"
+            local actual
+
+            actual="$(extract_issue_num "$body_file")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$case_name should parse issue #$expected, got '${actual:-<none>}'."
+              exit 1
+            fi
+          }
+
+          expect_no_issue() {
+            local body_file="$1"
+            local case_name="$2"
+            local actual
+
+            actual="$(extract_issue_num "$body_file")"
+            if [ -n "$actual" ]; then
+              echo "::error::$case_name should not parse an issue, got #$actual."
+              exit 1
+            fi
+          }
+
+          untouched_template_case="$(mktemp)"
+          cat > "$untouched_template_case" <<'BODY'
+          <!-- Use "Fixes #123", "Closes #123", or "Resolves #123". -->
+          <!-- If no issue is needed, write: "No linked issue required: <reason>". -->
+          BODY
+          expect_no_issue "$untouched_template_case" "Untouched template comments"
+
+          visible_issue_case="$(mktemp)"
+          cat > "$visible_issue_case" <<'BODY'
+          Fixes #123
+          BODY
+          expect_issue "$visible_issue_case" "123" "Visible issue reference"
+
+          empty_exemption_case="$(mktemp)"
+          cat > "$empty_exemption_case" <<'BODY'
+          No linked issue required:
+          BODY
+          expect_no_issue "$empty_exemption_case" "Empty no-issue exemption"
+
+          nonempty_exemption_case="$(mktemp)"
+          cat > "$nonempty_exemption_case" <<'BODY'
+          No linked issue required: Maintainer-requested docs-only cleanup.
+          BODY
+          expect_no_issue "$nonempty_exemption_case" "Nonempty no-issue exemption"
 
       - name: Parse issue reference from PR body
         id: parse
@@ -105,15 +164,13 @@ jobs:
           issue_exists=false
           issue_open=false
           is_triaged=false
-          api_error=$(mktemp)
           for issue_num in $ISSUE_NUMS; do
-            response=$(gh api "repos/${{ github.repository }}/issues/${issue_num}" 2>"$api_error") || {
-              # API outages are inconclusive and must never trigger closure.
-              if grep -q 'HTTP 404' "$api_error"; then
+            response=$(gh api "repos/${{ github.repository }}/issues/${issue_num}" 2>/tmp/issue-api-error) || {
+              if grep -q 'HTTP 404' /tmp/issue-api-error; then
                 echo "Issue #${issue_num} not found"
                 continue
               fi
-              cat "$api_error" >&2
+              cat /tmp/issue-api-error >&2
               exit 1
             }
 
@@ -150,9 +207,8 @@ jobs:
           set -euo pipefail
 
           marker="<!-- linked-issue-check -->"
-          comment_body=$(mktemp)
-          comment_id=$(gh api --paginate --slurp "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --jq "[.[][] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"${marker}\"))] | last | .id // empty" \
+          comment_id=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"${marker}\"))] | last | .id // empty" \
             2>/dev/null || echo "")
 
           if [ "$IS_COLLABORATOR" = "true" ]; then
@@ -165,7 +221,7 @@ jobs:
 
           if [ -z "$ISSUE_NUMS" ]; then
             status="fail"
-            cat > "$comment_body" <<'MSG'
+            cat > /tmp/comment-body.md <<'MSG'
           <!-- linked-issue-check -->
           ### Linked Issue Check
 
@@ -185,7 +241,7 @@ jobs:
           MSG
           elif [ "$IS_TRIAGED" != "true" ]; then
             status="fail"
-            cat > "$comment_body" <<MSG
+            cat > /tmp/comment-body.md <<MSG
           <!-- linked-issue-check -->
           ### Linked Issue Check
 
@@ -205,18 +261,16 @@ jobs:
           if [ "$status" = "fail" ]; then
             if [ -n "$comment_id" ]; then
               gh api -X PATCH "repos/${REPO}/issues/comments/${comment_id}" \
-                -f body="$(cat "$comment_body")"
+                -f body="$(cat /tmp/comment-body.md)"
             else
               comment_id=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-                -f body="$(cat "$comment_body")" --jq '.id')
+                -f body="$(cat /tmp/comment-body.md)" --jq '.id')
             fi
             echo "comment_id=${comment_id}" >> "$GITHUB_OUTPUT"
           elif [ -n "$comment_id" ]; then
             gh api -X DELETE "repos/${REPO}/issues/comments/${comment_id}" || true
           fi
 
-      # Issue changes rerun earlier PR events. Limit closure to the first attempt
-      # so issue housekeeping cannot close a PR that is already under review.
       - name: Close new or reopened PR without an open, triaged issue
         id: close
         if: >-
@@ -253,13 +307,12 @@ jobs:
               | awk '!seen[$0]++' \
               || true
           )
-          api_error=$(mktemp)
           for current_issue in $current_issues; do
-            current_response=$(gh api "repos/${REPO}/issues/${current_issue}" 2>"$api_error") || {
-              if grep -q 'HTTP 404' "$api_error"; then
+            current_response=$(gh api "repos/${REPO}/issues/${current_issue}" 2>/tmp/current-issue-api-error) || {
+              if grep -q 'HTTP 404' /tmp/current-issue-api-error; then
                 continue
               fi
-              cat "$api_error" >&2
+              cat /tmp/current-issue-api-error >&2
               exit 1
             }
             current_valid=$(printf '%s' "$current_response" | jq -r '
@@ -298,6 +351,60 @@ jobs:
           || github.event.label.name == 'triaged')
     runs-on: ubuntu-latest
     steps:
+      - name: Validate recheck selection cases
+        run: |
+          set -euo pipefail
+
+          body_references_issue() {
+            local body_file="$1"
+            local issue_number="$2"
+            local clean_body_file
+
+            clean_body_file="$(mktemp)"
+            perl -0pe 's/<!--.*?-->//gs' "$body_file" > "$clean_body_file"
+            grep -iqE "(fixes|closes|resolves)[[:space:]]+#${issue_number}([^0-9]|$)" "$clean_body_file"
+          }
+
+          visible_reference_case="$(mktemp)"
+          cat > "$visible_reference_case" <<'BODY'
+          Fixes #123
+          BODY
+          body_references_issue "$visible_reference_case" "123"
+
+          commented_reference_case="$(mktemp)"
+          cat > "$commented_reference_case" <<'BODY'
+          <!-- Fixes #123 -->
+          BODY
+          if body_references_issue "$commented_reference_case" "123"; then
+            echo "::error::HTML-commented issue reference should not select a PR for recheck."
+            exit 1
+          fi
+
+          runs_case="$(mktemp)"
+          cat > "$runs_case" <<'JSON'
+          [
+            {
+              "workflow_runs": [
+                {"id": 10, "event": "pull_request_target", "head_sha": "abc", "status": "completed", "conclusion": "failure", "created_at": "2026-01-01T00:00:00Z"},
+                {"id": 11, "event": "pull_request_target", "head_sha": "abc", "status": "completed", "conclusion": "failure", "created_at": "2026-01-02T00:00:00Z"},
+                {"id": 12, "event": "issues", "head_sha": "abc", "status": "completed", "conclusion": "success", "created_at": "2026-01-03T00:00:00Z"}
+              ]
+            }
+          ]
+          JSON
+          selected_run=$(
+            jq -r --arg head_sha "abc" '
+              [.[].workflow_runs[]? | select(.event == "pull_request_target" and .head_sha == $head_sha)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' "$runs_case"
+          )
+          if [ "$selected_run" != "11" ]; then
+            echo "::error::Triaged-label recheck should select the latest pull_request_target run for the PR head SHA."
+            exit 1
+          fi
+
       - name: Find PRs referencing this issue
         id: find-prs
         env:
@@ -308,7 +415,7 @@ jobs:
 
           prs_json=$(gh pr list --repo "${{ github.repository }}" --state open --json number,body --limit 200)
           pr_numbers=""
-          prs_to_recheck=$(mktemp)
+          rm -f /tmp/prs-to-recheck.txt
 
           echo "$prs_json" | jq -c '.[]' | while IFS= read -r pr; do
             pr_num=$(echo "$pr" | jq -r '.number')
@@ -320,11 +427,13 @@ jobs:
             perl -0pe 's/<!--.*?-->//gs' "$body_file" > "$clean_body_file"
 
             if grep -iqE "(fixes|closes|resolves)[[:space:]]+#${ISSUE_NUMBER}([^0-9]|$)" "$clean_body_file"; then
-              echo "$pr_num" >> "$prs_to_recheck"
+              echo "$pr_num" >> /tmp/prs-to-recheck.txt
             fi
           done
 
-          pr_numbers=$(tr '\n' ' ' < "$prs_to_recheck")
+          if [ -f /tmp/prs-to-recheck.txt ]; then
+            pr_numbers=$(tr '\n' ' ' < /tmp/prs-to-recheck.txt)
+          fi
 
           if [ -z "$pr_numbers" ]; then
             echo "No open PRs reference issue #${ISSUE_NUMBER}"
