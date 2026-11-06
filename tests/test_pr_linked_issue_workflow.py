@@ -27,13 +27,13 @@ def _run_step(
     gh.chmod(0o755)
     output = tmp_path / "github-output"
     output.write_text("")
-    script = _step(name)["run"].replace("${{ github.repository }}", "NVIDIA-NeMo/Anonymizer")
+    script = _step(name)["run"].replace("${{ github.repository }}", "NVIDIA-NeMo/Safe-Synthesizer")
     env = (
         os.environ
         | {
             "PATH": f"{tmp_path}:{os.environ['PATH']}",
             "GITHUB_OUTPUT": str(output),
-            "REPO": "NVIDIA-NeMo/Anonymizer",
+            "REPO": "NVIDIA-NeMo/Safe-Synthesizer",
             "PR_NUMBER": "42",
         }
         | variables
@@ -160,7 +160,7 @@ def test_issue_change_reruns_previously_passing_check(tmp_path: Path, action: st
     call_log = tmp_path / "rerun-call"
     env = os.environ | {
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "REPO": "NVIDIA-NeMo/Anonymizer",
+        "REPO": "NVIDIA-NeMo/Safe-Synthesizer",
         "PR_NUMBERS": "42",
         "ISSUE_ACTION": action,
         "CALL_LOG": str(call_log),
@@ -216,7 +216,7 @@ def test_close_step_rechecks_current_pr(
     assert result.returncode == expected_exit, result.stderr
     assert call_log.exists() == should_close
     if should_close:
-        assert call_log.read_text().strip() == "pr close 42 --repo NVIDIA-NeMo/Anonymizer"
+        assert call_log.read_text().strip() == "pr close 42 --repo NVIDIA-NeMo/Safe-Synthesizer"
     if body == "Fixes #123" and '"triaged"' in issue_response:
         assert "current_valid=true" in output
 
