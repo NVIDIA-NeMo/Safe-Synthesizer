@@ -22,7 +22,7 @@ import inspect
 import json
 import re
 import types
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
@@ -214,7 +214,13 @@ def _is_list_type(annotation: object) -> bool:
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
-    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
+    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``.
+
+    A union that contains a model but not ``None`` (for example
+    ``SomeModel | str``) is not nullable and must not get a ``--no-*`` flag.
+    """
+    if type(None) not in union_args:
+        return None
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
 
 
@@ -309,6 +315,26 @@ def _literal_value_types(args: set) -> set:
     return normalized
 
 
+class JsonObjectParamType(click.ParamType):
+    """Click type for a mapping field, given as a JSON object such as ``'{"gender": null}'``."""
+
+    name = "json-object"
+
+    def convert(self, value: Any, param: click.Parameter | None, ctx: click.Context | None) -> dict[str, Any]:
+        if isinstance(value, Mapping):
+            return dict(value)
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            parsed = None
+        if not isinstance(parsed, dict):
+            self.fail("must be a JSON object, such as '{\"label\": 0.5}'", param, ctx)
+        return parsed
+
+
+JSON_OBJECT = JsonObjectParamType()
+
+
 def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
@@ -326,6 +352,8 @@ def _click_type(annotation: Any) -> click.ParamType:
         t = get_args(t)[0]
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
+    if any(get_origin(arg) in (dict, Mapping) for arg in args):
+        return JSON_OBJECT
     if _has_string_literal(args):
         # Auto*Param: Literal["auto"] | <numeric|bool> -- wrap in AutoParamType so
         # --help shows "integer|auto" instead of "TEXT" and Click validates the

@@ -1869,20 +1869,6 @@ wheels = [
 ]
 
 [[package]]
-name = "flashtext"
-version = "2.7"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/81/d8/2cd0656eae456d615c2f1efbcae8dfca2cb871a31f34ba8925aba47d5e09/flashtext-2.7.tar.gz", hash = "sha256:a1be2b93e09d4f0deee4aad72b91a7127b61fb8b8034ca9a9c78ea745d8b05cf", size = 14536, upload-time = "2018-02-16T05:24:17.232Z" }
-
-[[package]]
-name = "flatbuffers"
-version = "25.12.19"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl", hash = "sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4", size = 26661, upload-time = "2025-12-19T23:16:13.622Z" },
-]
-
-[[package]]
 name = "fonttools"
 version = "4.61.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2078,25 +2064,31 @@ wheels = [
 ]
 
 [[package]]
-name = "gliner"
-version = "0.2.24"
+name = "gliner2"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
-    { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
-    { name = "onnxruntime" },
-    { name = "sentencepiece" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "tqdm" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/ab/cebcf92279c85f988bf3853530ec3aa16bfb9f21cc15bde1fba9d2c6db2e/gliner2-2.1.0.tar.gz", hash = "sha256:cfded5eeaa5e95a4ea325ed205889beda3e00b486c69c9d369a1c4cf616fe4f1", size = 399121, upload-time = "2026-10-09T17:49:14.471Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/b1/cae13092a6ca796dd17493c8129d48e38fc370f23b9cce6f616020ed3654/gliner2-2.1.0-py3-none-any.whl", hash = "sha256:0c242c5de53f37020df835788fc4eb820e1673b5212c202cd90e9234a7e786bc", size = 355814, upload-time = "2026-10-09T17:49:12.815Z" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "numpy" },
+    { name = "peft" },
+    { name = "safetensors" },
     { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "torch", version = "2.13.0+cu129", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "torch", version = "2.13.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
-    { name = "tqdm" },
     { name = "transformers", version = "5.17.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "transformers", version = "5.19.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2b/6d/677d50855311e4a1286204c5ef2ef5672d01688246a303bde5326311bdad/gliner-0.2.24.tar.gz", hash = "sha256:191a37d1b3d297927c37ae890ce904e9d4e9d3f4c8e19715e77a9876e5f8a575", size = 160568, upload-time = "2025-11-26T18:20:32.867Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/50/6aae23929bd019300ef13fb79d60609215c53d4541963eaffc438e62f77e/gliner-0.2.24-py3-none-any.whl", hash = "sha256:efe614e05b31d06d848373aef8270f567e34fe1b4e96f816a8c70cef24908a6c", size = 151880, upload-time = "2025-11-26T18:20:28.801Z" },
 ]
 
 [[package]]
@@ -2933,6 +2925,22 @@ wheels = [
 ]
 
 [[package]]
+name = "lightgbm"
+version = "4.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "narwhals" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/8e/4db5e29290d7e619c307fdb8dab0a0514090af2ce3ec483050e024ec6126/lightgbm-4.7.0.tar.gz", hash = "sha256:f8e20f682c9aabd000bcf4a7ed8aa6f473c1adfecccae34ec24e823d156f4af0", size = 1792896, upload-time = "2026-07-18T21:00:56.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/86/f4fe714f2e0bf3941705a20d7f6849dc476276d71236e82ea6b0d6539b86/lightgbm-4.7.0-py3-none-macosx_12_0_arm64.whl", hash = "sha256:129535462686f274df179133643118c5c5c5667167fe6c3a28d955f0b3c8e868", size = 1498914, upload-time = "2026-07-18T21:00:36.549Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/a3/b29580948b92e8c2f84dea70118ac702ff067dc52ec4ffb5d73c953536a5/lightgbm-4.7.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d4529acec5c6fefe4768302a529707d0ead90f6a6f42df694b856212e09695b8", size = 3349492, upload-time = "2026-07-18T21:00:37.943Z" },
+    { url = "https://files.pythonhosted.org/packages/15/eb/837ea3b40cc36e22eeebb9785c01e42b2c255d033eea1d2d9ee8e2540e55/lightgbm-4.7.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d23e922acd891e77212e4d0fbcee9ba973c96dee479491341d05ba595357ebb7", size = 3476028, upload-time = "2026-07-18T21:00:39.331Z" },
+]
+
+[[package]]
 name = "linkify-it-py"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3552,6 +3560,36 @@ wheels = [
 ]
 
 [[package]]
+name = "namedivider-python"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lightgbm" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "regex" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/34/ec/2ad22a0c09101278b4541334b1b3468ce436f46a9150a3339e66f3066168/namedivider_python-0.4.2.tar.gz", hash = "sha256:0c5975511edffcd7cadad705cb903ab24ece9a0a12db65e6a9358e1624d709f6", size = 38063, upload-time = "2026-10-12T06:13:42.804Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f7/7d/3b7a793ac2660ddad925ba2f5de226bea958ee340ec3c89bded3da954a48/namedivider_python-0.4.2-py2.py3-none-any.whl", hash = "sha256:e4fe25f17d1da59612e1556dab96eccad53017f320db84cc855e670ef7eb4b4e", size = 49239, upload-time = "2026-10-12T06:13:41.561Z" },
+]
+
+[[package]]
+name = "nameparser"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/4e/a501fe9da7065c9f5fb970891d46765b723c7b1175de7db17337a633eaf3/nameparser-2.8.0.tar.gz", hash = "sha256:fbb6b97d2c000c21a3dccce4e761dd2249c1c77bb75fd6536642c87a93c1ca38", size = 1353650, upload-time = "2026-10-28T08:59:52.554Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/8f/8d37572ddf9f05f1b473e456cd12d93b3a0426516d996070afcec8a095de/nameparser-2.8.0-py3-none-any.whl", hash = "sha256:1a99a140a01e958849428cd5ac8ec23701d20324fe61f8372b14bfdee5d4823f", size = 482307, upload-time = "2026-10-28T08:59:50.709Z" },
+]
+
+[package.optional-dependencies]
+ja = [
+    { name = "namedivider-python" },
+]
+
+[[package]]
 name = "narwhals"
 version = "2.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3667,10 +3705,7 @@ name = "nemo-safe-synthesizer"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
-    { name = "faker" },
     { name = "httpx" },
-    { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
     { name = "jsonschema" },
     { name = "pandas" },
     { name = "pydantic", extra = ["email"] },
@@ -3689,7 +3724,7 @@ cpu = [
     { name = "bitsandbytes" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
-    { name = "gliner" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cpu' or (extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "kernels" },
     { name = "opacus" },
     { name = "openai" },
@@ -3723,7 +3758,7 @@ cu129 = [
     { name = "flashinfer-jit-cache-sm89", version = "0.7.0.post1+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-jit-cache-sm90a", version = "0.7.0.post1+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
-    { name = "gliner" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cu129' or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "kernels" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux'" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux'" },
@@ -3758,7 +3793,7 @@ cu130 = [
     { name = "flashinfer-jit-cache-sm89", version = "0.7.0.post1+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-jit-cache-sm90a", version = "0.7.0.post1+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "sys_platform == 'linux'" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux'" },
-    { name = "gliner" },
+    { name = "gliner2", extra = ["local"], marker = "extra == 'extra-21-nemo-safe-synthesizer-cu130' or (extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129')" },
     { name = "kernels" },
     { name = "nvidia-cublas", marker = "sys_platform == 'linux'" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux'" },
@@ -3787,20 +3822,20 @@ engine = [
     { name = "dateparser" },
     { name = "dython" },
     { name = "faker" },
-    { name = "flashtext" },
     { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
     { name = "json-repair" },
+    { name = "nameparser", extra = ["ja"] },
     { name = "outlines-core" },
     { name = "pandas" },
+    { name = "phonenumbers" },
     { name = "plotly" },
     { name = "prv-accountant" },
-    { name = "pycountry" },
     { name = "python-stdnum" },
     { name = "range-regex" },
+    { name = "regex" },
     { name = "scikit-learn" },
     { name = "tenacity" },
-    { name = "tldextract" },
     { name = "tqdm" },
     { name = "wandb" },
 ]
@@ -3872,8 +3907,7 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'engine'", specifier = ">=5.0.1" },
     { name = "dateparser", marker = "extra == 'engine'" },
     { name = "dython", marker = "extra == 'engine'", specifier = ">=0.7.12" },
-    { name = "faker", specifier = ">=20.0" },
-    { name = "faker", marker = "extra == 'engine'" },
+    { name = "faker", marker = "extra == 'engine'", specifier = ">=20.0" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cpu" } },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.7.0.post1", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
@@ -3896,18 +3930,17 @@ requires-dist = [
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.7.0.post1" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.7.0.post1" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.7.0.post1" },
-    { name = "flashtext", marker = "extra == 'engine'" },
-    { name = "gliner", marker = "extra == 'cpu'" },
-    { name = "gliner", marker = "extra == 'cu129'" },
-    { name = "gliner", marker = "extra == 'cu130'" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cpu'", specifier = ">=2.1.0" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cu129'", specifier = ">=2.1.0" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'cu130'", specifier = ">=2.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "huggingface-hub", specifier = ">=1.3.0,<2" },
     { name = "huggingface-hub", marker = "extra == 'engine'", specifier = ">=1.3.0,<2" },
     { name = "json-repair", marker = "extra == 'engine'", specifier = ">=0.60.1" },
     { name = "jsonschema", specifier = ">=4.22.0" },
     { name = "kernels", marker = "extra == 'cpu'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu129'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu130'", specifier = ">=0.12.1,<0.15" },
+    { name = "nameparser", extras = ["ja"], marker = "extra == 'engine'", specifier = ">=2.8.0,<3" },
     { name = "nvidia-cublas", marker = "sys_platform == 'linux' and extra == 'cu130'", index = "https://pypi.nvidia.com/" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux' and extra == 'cu129'", index = "https://download.pytorch.org/whl/cu129" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux' and extra == 'cu129'" },
@@ -3924,14 +3957,15 @@ requires-dist = [
     { name = "peft", marker = "extra == 'cpu'", specifier = ">=0.18.0" },
     { name = "peft", marker = "extra == 'cu129'", specifier = ">=0.18.0" },
     { name = "peft", marker = "extra == 'cu130'", specifier = ">=0.18.0" },
+    { name = "phonenumbers", marker = "extra == 'engine'", specifier = ">=8.13" },
     { name = "plotly", marker = "extra == 'engine'" },
     { name = "prv-accountant", marker = "extra == 'engine'" },
-    { name = "pycountry", marker = "extra == 'engine'" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "python-stdnum", marker = "extra == 'engine'" },
     { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "range-regex", marker = "extra == 'engine'", specifier = ">=0.1.0" },
+    { name = "regex", marker = "extra == 'engine'", specifier = ">=2024.11.6" },
     { name = "rich", specifier = ">=14.1.0" },
     { name = "scikit-learn", marker = "extra == 'engine'" },
     { name = "sentence-transformers", marker = "extra == 'cpu'", specifier = ">=5.6.0" },
@@ -3940,7 +3974,6 @@ requires-dist = [
     { name = "setuptools", specifier = ">=83.0.0" },
     { name = "structlog", specifier = ">=25.4.0" },
     { name = "tenacity", marker = "extra == 'engine'", specifier = "==9.1.4" },
-    { name = "tldextract", marker = "extra == 'engine'" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'cpu'", specifier = "==2.13.0" },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==2.13.0+cpu", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "nemo-safe-synthesizer", extra = "cpu" } },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==2.13.0+cu129", index = "https://download.pytorch.org/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
@@ -4708,36 +4741,6 @@ wheels = [
 ]
 
 [[package]]
-name = "onnxruntime"
-version = "1.24.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "flatbuffers" },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "protobuf" },
-    { name = "sympy" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/4e/050c947924ffd8ff856d219d8f83ee3d4e7dc52d5a6770ff34a15675c437/onnxruntime-1.24.2-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:69d1c75997276106d24e65da2e69ec4302af1b117fef414e2154740cde0f6214", size = 17217298, upload-time = "2026-02-19T17:15:09.891Z" },
-    { url = "https://files.pythonhosted.org/packages/30/17/c814121dff4de962476ced979c402c3cce72d5d46e87099610b47a1f2622/onnxruntime-1.24.2-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:670d7e671af2dbd17638472f9b9ff98041889efd7150718406b9ea989312d064", size = 15027128, upload-time = "2026-02-19T17:13:19.367Z" },
-    { url = "https://files.pythonhosted.org/packages/2c/32/4e5921ba8b82ac37cad45f1108ca6effd430f49c7f20577d53f317d166ed/onnxruntime-1.24.2-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:93fe190ee555ae8e9c1214bcfcf13af85cd06dd835e8d835ce5a8d01056844fe", size = 17107440, upload-time = "2026-02-19T17:14:02.932Z" },
-    { url = "https://files.pythonhosted.org/packages/23/1c/38af1cfe82c75d2b205eb5019834b0f2b0b6647ec8a20a3086168e413570/onnxruntime-1.24.2-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:d8a50b422d45c0144864c0977d04ad4fa50a8a48e5153056ab1f7d06ea9fc3e2", size = 17217857, upload-time = "2026-02-19T17:15:14.297Z" },
-    { url = "https://files.pythonhosted.org/packages/01/8a/e2d4332ae18d6383376e75141cd914256bee12c3cc439f42260eb176ceb9/onnxruntime-1.24.2-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:76c44fc9a89dcefcd5a4ab5c6bbbb9ff1604325ab2d5d0bc9ff5a9cba7b37f4a", size = 15027167, upload-time = "2026-02-19T17:13:21.92Z" },
-    { url = "https://files.pythonhosted.org/packages/35/af/ad86cfbfd65d5a86204b3a30893e92c0cf3f1a56280efc5a12e69d81f52d/onnxruntime-1.24.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:09aa6f8d766b4afc3cfba68dd10be39586b49f9462fbd1386c5d5644239461ca", size = 17106547, upload-time = "2026-02-19T17:14:05.758Z" },
-    { url = "https://files.pythonhosted.org/packages/9c/98/8f5b9ae63f7f6dd5fb2d192454b915ec966a421fdd0effeeef5be7f7221f/onnxruntime-1.24.2-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:038ebcd8363c3835ea83eed66129e1d11d8219438892dfb7dc7656c4d4dfa1f9", size = 17217884, upload-time = "2026-02-19T17:13:36.193Z" },
-    { url = "https://files.pythonhosted.org/packages/55/e6/dc4dc59565c93506c45017c0dd3f536f6d1b7bc97047821af13fba2e3def/onnxruntime-1.24.2-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8235cc11e118ad749c497ba93288c04073eccd8cc6cc508c8a7988ae36ab52d8", size = 15026995, upload-time = "2026-02-19T17:13:25.029Z" },
-    { url = "https://files.pythonhosted.org/packages/ac/62/6f2851cf3237a91bc04cdb35434293a623d4f6369f79836929600da574ba/onnxruntime-1.24.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e92b46cc6d8be4286436a05382a881c88d85a2ae1ea9cfe5e6fab89f2c3e89cc", size = 17106308, upload-time = "2026-02-19T17:14:09.817Z" },
-    { url = "https://files.pythonhosted.org/packages/35/e4/7dfed3f445f7289a0abff709d012439c6c901915390704dd918e5f47aad3/onnxruntime-1.24.2-cp313-cp313t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e22fb5d9ac51b61f50cca155ce2927576cc2c42501ede6c0df23a1aeb070bdd5", size = 15036844, upload-time = "2026-02-19T17:13:27.928Z" },
-    { url = "https://files.pythonhosted.org/packages/90/45/9d52397e30b0d8c1692afcec5184ca9372ff4d6b0f6039bba9ad479a2563/onnxruntime-1.24.2-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2956f5220e7be8b09482ae5726caabf78eb549142cdb28523191a38e57fb6119", size = 17117779, upload-time = "2026-02-19T17:14:13.862Z" },
-    { url = "https://files.pythonhosted.org/packages/a9/c8/2321cd06ddbb4321326df365ccb8345cdb4e05643f539729f3943c706e97/onnxruntime-1.24.2-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:487e3fdedc24bc93f2acdf47c622de49b3999fb5754e7cfa466e5533a0215051", size = 17219405, upload-time = "2026-02-19T17:13:39.925Z" },
-    { url = "https://files.pythonhosted.org/packages/ad/ff/a2cdf95d2647f2a5076eb3fc49ae662e375c4eb5c7b6b675f910f96c8e15/onnxruntime-1.24.2-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:9c33398bd6ab1a6b7de9410af7360cd8b6312bc0c4848ddb738456c13dfbec4b", size = 15027713, upload-time = "2026-02-19T17:13:30.693Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/74/a1913b3a0fc2f27fe1751e9545745a3f35fd7833e3438a4208b4e215778f/onnxruntime-1.24.2-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2658b3ce6cb33bdeddfcd74c6da509510310717611220cf2106e6c401febabe5", size = 17106108, upload-time = "2026-02-19T17:14:16.619Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/84/14e5e804836476d3ef6ac07afe3ed6bdf01b69f8ef3ce6ae82c6c80b6d62/onnxruntime-1.24.2-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5360d3fd9c08ce17fff757759ce4b152852be14d597130f41174d8271f954630", size = 15036834, upload-time = "2026-02-19T17:13:33.65Z" },
-    { url = "https://files.pythonhosted.org/packages/3a/27/ecdd3ae7d49d9f54820ededce2d88ddc3333b9ac9bb5f1d0d6aa3148c686/onnxruntime-1.24.2-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:05a2792b5ef9278a89415a1f39d0a22192a872168257100503a5157165a38e7b", size = 17117770, upload-time = "2026-02-19T17:14:20.048Z" },
-]
-
-[[package]]
 name = "opacus"
 version = "1.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -5153,6 +5156,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "phonenumbers"
+version = "9.0.42"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/e0/b6c30d6bb4255fc999f7fe3b7f7821dbe7a92272768f3b57b6939f4eedcf/phonenumbers-9.0.42.tar.gz", hash = "sha256:83ddc20edea93814f5bb2ee8d365b3ef64fa274c8a4f6d06bd8b2c7996030564", size = 2312652, upload-time = "2026-10-27T07:49:34.218Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/92/517a82af51c58601d3e9c2e5757587f1d8201143ce98ac62f262d47f3355/phonenumbers-9.0.42-py2.py3-none-any.whl", hash = "sha256:321c92d9734bfb4adc64575f940da26463f09fc79ac692b43a35f9306e4ecc7d", size = 2595813, upload-time = "2026-10-27T07:49:32.576Z" },
 ]
 
 [[package]]
@@ -6069,18 +6081,6 @@ wheels = [
 ]
 
 [[package]]
-name = "requests-file"
-version = "3.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3c/f8/5dc70102e4d337063452c82e1f0d95e39abfe67aa222ed8a5ddeb9df8de8/requests_file-3.0.1.tar.gz", hash = "sha256:f14243d7796c588f3521bd423c5dea2ee4cc730e54a3cac9574d78aca1272576", size = 6967, upload-time = "2025-10-20T18:56:42.279Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/d5/de8f089119205a09da657ed4784c584ede8381a0ce6821212a6d4ca47054/requests_file-3.0.1-py2.py3-none-any.whl", hash = "sha256:d0f5eb94353986d998f80ac63c7f146a307728be051d4d1cd390dbdb59c10fa2", size = 4514, upload-time = "2025-10-20T18:56:41.184Z" },
-]
-
-[[package]]
 name = "rich"
 version = "14.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -6739,22 +6739,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7a/fd/7a5ee21fd08ff70d3d33a5781c255cbe779659bd03278feb98b19ee550f4/tinycss2-1.4.0.tar.gz", hash = "sha256:10c0972f6fc0fbee87c3edb76549357415e94548c1ae10ebccdea16fb404a9b7", size = 87085, upload-time = "2024-10-24T14:58:29.895Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/34/ebdc18bae6aa14fbee1a08b63c015c72b64868ff7dae68808ab500c492e2/tinycss2-1.4.0-py3-none-any.whl", hash = "sha256:3a49cf47b7675da0b15d0c6e1df8df4ebd96e9394bb905a5775adb0d884c5289", size = 26610, upload-time = "2024-10-24T14:58:28.029Z" },
-]
-
-[[package]]
-name = "tldextract"
-version = "5.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "filelock" },
-    { name = "idna", version = "3.17", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "idna", version = "3.20", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
-    { name = "requests" },
-    { name = "requests-file" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/65/7b/644fbbb49564a6cb124a8582013315a41148dba2f72209bba14a84242bf0/tldextract-5.3.1.tar.gz", hash = "sha256:a72756ca170b2510315076383ea2993478f7da6f897eef1f4a5400735d5057fb", size = 126105, upload-time = "2025-12-28T23:58:05.532Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/42/0e49d6d0aac449ca71952ec5bae764af009754fcb2e76a5cc097543747b3/tldextract-5.3.1-py3-none-any.whl", hash = "sha256:6bfe36d518de569c572062b788e16a659ccaceffc486d243af0484e8ecf432d9", size = 105886, upload-time = "2025-12-28T23:58:04.071Z" },
 ]
 
 [[package]]

@@ -44,7 +44,7 @@ fi
 
 if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
     echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
-    echo "Create it with at least NSS_INFERENCE_KEY (and WANDB_API_KEY if WANDB_MODE=online)." >&2
+    echo "Create it with WANDB_API_KEY (required when WANDB_MODE=online) and HF_TOKEN." >&2
     exit 1
 fi
 source "${LUSTRE_DIR}/.api_tokens.sh"
@@ -125,7 +125,7 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
         --find-links https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/ \
         --find-links https://flashinfer.ai/whl/flashinfer-cubin/ \
-        --find-links https://wheels.vllm.ai/0.27.0/cu129/vllm/ \
+        --find-links https://wheels.vllm.ai/0.32.0/cu129/vllm/ \
         --find-links https://download.pytorch.org/whl/cu129/torch/ \
         --find-links https://download.pytorch.org/whl/cu129/torchaudio/ \
         --find-links https://download.pytorch.org/whl/cu129/torchvision/ \
@@ -152,9 +152,8 @@ fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
-# for column classification
-export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+# Do not export NSS_INFERENCE_ENDPOINT and NSS_INFERENCE_MODEL as the endpoint couldn't handle
+# all the concurrent requests. Use the default local inference option.
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"

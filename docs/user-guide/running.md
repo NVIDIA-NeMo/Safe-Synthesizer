@@ -118,6 +118,9 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
+- `safe-synthesizer run replace-pii` -- replace PII in the complete input without entering the synthesis pipeline
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a reusable PII replacement configuration without
+  replacing rows
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -173,7 +176,8 @@ synthesizer.run()
 ```
 
 `with_*` keyword arguments take precedence over whatever is in the YAML file.
-Sections not mentioned in the builder call retain their values from `config`.
+Fields you don't pass keep their values from `config`, and so do sections not
+mentioned in the builder call.
 
 See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
 for the full override precedence rules.
@@ -203,8 +207,9 @@ safe-synthesizer run --config config.yaml --data-source data.csv
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Only `--data-source` is required;
-all others have defaults or are optional.
+These options apply to `run`, `run train`, `run generate`, and `run replace-pii`.
+Only `--data-source` is required for new runs; all others have defaults or are
+optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
@@ -212,7 +217,7 @@ all others have defaults or are optional.
 | `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
 | `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
-| `--output-file` | -- | -- | Path to output CSV file |
+| `--output-file` | -- | -- | Path to output file; `run replace-pii` writes Parquet when it ends in `.parquet`, and CSV otherwise |
 | `--log-format` | `NSS_LOG_FORMAT` | `plain` (TTY) / `json` (non-TTY) | Console log format -- auto-detected from TTY; accepts `plain` or `json` |
 | `--log-file` | `NSS_LOG_FILE` | -- | Log file path (defaults to run directory) |
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
@@ -220,6 +225,12 @@ all others have defaults or are optional.
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
+| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | -- (local vLLM server) | OpenAI-compatible endpoint for PII plan discovery; a non-loopback URL sends planning data to that service ([details](environment.md#where-planning-requests-go)) |
+| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the PII inference endpoint |
+| `--inference-timeout-seconds` | `NSS_INFERENCE_TIMEOUT` | local profile's timeout, else `60` | Per-request PII inference timeout, including model reasoning |
+| `--inference-request-options` | `NSS_INFERENCE_REQUEST_OPTIONS` | local profile's options, else none (server defaults) | JSON object of fields for each PII inference request; overrides a profile's options field by field |
+| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile |
+| `--inference-local-profile` | `NSS_INFERENCE_LOCAL_PROFILE` | -- | Custom profile YAML, or bundled profile name, for the local vLLM server used for PII planning ([details](customize-pii-replacement.md#local-inference-server)) |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides
@@ -252,9 +263,9 @@ argument is preserved as one list item. In a single comma-separated argument,
 escape a literal comma as `\,`, for example
 `--evaluation__pii_replay_columns 'last\, first,account_id'`. To preserve
 literal brackets in a single value, escape them as `\[customer\]` or use a
-JSON string array such as `'["[customer]"]'`. Lists of structured objects,
-such as `replace_pii.steps`, require JSON: repeat the flag with one JSON object
-per item or pass one JSON array.
+JSON string array such as `'["[customer]"]'`. Lists of structured objects
+require JSON: repeat the flag with one JSON object per item or pass one JSON
+array.
 
 ### `run train`
 
@@ -299,6 +310,24 @@ Accepts the same common options and synthesis parameter override syntax as `run`
     are always inherited from the trained run and cannot be changed at generate
     time, since they describe how the adapter was produced.
 
+### `run replace-pii`
+
+Replace PII in the complete input without holdout, training, generation, or
+evaluation:
+
+```bash
+safe-synthesizer run replace-pii \
+  --config config.yaml \
+  --data-source data.csv \
+  --output-file pii_replaced.csv
+```
+
+Add `--plan-only` to write the replacement plan for review without replacing
+any rows. Both forms write `pii_replacement_plan.yaml` and
+`safe-synthesizer-config.yaml` to the run directory. See
+[Customizing PII Replacement](customize-pii-replacement.md#review-and-reuse-the-plan)
+for the review workflow and SDK equivalents.
+
 ### `run --validate`
 
 Validate your dataset and configuration without starting training or
@@ -316,7 +345,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Inference config for PII classification: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only) |
+| `env.inference` | config | Validates the PII planning endpoint and hosted authentication, or that the local vLLM server can run, when the replacement plan is discovered automatically |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
@@ -561,125 +590,11 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Enabled-by-default stage that runs before training. Detection works in two independent
-steps: GLiNER NER is used on columns detected as free text for named-entity
-patterns (names, emails, phone numbers, etc.) and replaces matches with
-synthetic placeholders. An optional second step uses an LLM to identify
-columns that are exclusively a single entity type (e.g., a column that is
-always SSNs), marking those columns for wholesale replacement before training.
-The two steps are independent -- NER runs on free-text content, LLM
-classification targets structured sensitive columns. PII replacement is on by
-default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
-
-!!! tip "Skip PII replacement"
-    If your dataset does not contain PII, you may disable this stage to reduce pipeline
-    runtime:
-
-    - CLI: `--no-replace-pii`
-    - SDK: `.with_replace_pii(enable=False)`
-
-=== "CLI"
-
-    Default (PII on, no config needed):
-
-    ```bash
-    safe-synthesizer run --data-source data.csv
-    ```
-
-    Customize (e.g. enable LLM classification and restrict entity types) with
-    nested CLI flags. Repeat a list-valued flag once per entity:
-
-    ```bash
-    safe-synthesizer run \
-      --data-source data.csv \
-      --replace_pii__globals__classify__enable_classify true \
-      --replace_pii__globals__classify__entities email \
-      --replace_pii__globals__classify__entities phone_number
-    ```
-
-    See [Synthesis Parameter Overrides](#synthesis-parameter-overrides) for
-    comma-separated, bracketed, escaped, and JSON list forms. YAML and the SDK
-    remain available for larger PII configurations.
-
-=== "SDK"
-
-    PII replacement is on by default -- no `with_replace_pii()` call is needed
-    for the standard case.  Call it only to customize the config or to disable:
-
-    ```python
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-
-    # Default: PII on, no call needed
-    synthesizer = SafeSynthesizer().with_data_source("data.csv").with_train()
-
-    # Customize: enable LLM classification for specific entity types
-    pii_config = PiiReplacerConfig.get_default_config()
-    pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
-
-    synthesizer = (
-        SafeSynthesizer()
-        .with_data_source("data.csv")
-        .with_replace_pii(config=pii_config)
-        .with_train()
-        .with_generate(num_records=5000)
-    )
-    ```
-
-    The SDK builder merges partial overrides with
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig], so you don't need to
-    provide the full `steps` list.
-
-=== "Config reference"
-
-    ```yaml
-    replace_pii:
-      globals:
-        classify:
-          enable_classify: true
-          entities: ["email", "phone_number", "ssn"]
-      steps:
-        - rows:
-            update:
-              - condition: column.entity == "email" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "phone_number" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "ssn" and not (this | isna)
-                value: column.entity | fake
-    ```
-
-    `steps` is required and has no default. The snippet above shows a minimal
-    single-step config. For the full default ruleset (50+ entity types), use
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
-    in the SDK and export it to YAML:
-
-    ```python
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-    PiiReplacerConfig.get_default_config().to_yaml("pii_config.yaml")
-    ```
-
-### LLM Column Classification
-
-To enable LLM-based PII column classification (optional), set the API key
-before running the pipeline. The endpoint defaults to
-`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
-custom OpenAI-compatible endpoint.
-
-When using the CLI, set both for column classification:
-
-```bash
-export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
-```
-
-PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
-When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
-falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement.
-
-See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
+During a normal run, Safe Synthesizer builds the PII replacement plan from the
+full input and replaces PII only in the training split, so evaluation still
+sees the original data. To run replacement on its own, see
+[`run replace-pii`](#run-replace-pii). To review or customize the plan, see
+[Customizing PII Replacement](customize-pii-replacement.md).
 
 ---
 

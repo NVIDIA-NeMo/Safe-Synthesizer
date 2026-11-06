@@ -8,9 +8,9 @@ base_runtime_deps = []
 torch_runtime_deps = [
     "accelerate>=1.15.0",
     "bitsandbytes>=0.46.1",
+    "gliner2[local]>=2.1.0",
     "flashinfer-python==0.7.0.post1; sys_platform == 'linux'",
     "flashinfer-cubin==0.7.0.post1; sys_platform == 'linux'",
-    "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",

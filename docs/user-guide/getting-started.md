@@ -23,7 +23,8 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.13.4 or a later 0.13 release. In a clone of this repository, uv
+  refuses to run with any other version.
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
@@ -137,6 +138,27 @@ Commands:
   run        Run the Safe Synthesizer end-to-end pipeline.
 ```
 
+### Optional Nemotron-Personas Data
+
+PII replacement draws replacement names from the Nemotron-Personas dataset for
+`replace_pii.locale` when it is downloaded. Names then follow the locale's real
+population and can match a row's ethnic background. Without it, Safe Synthesizer uses Faker
+and logs a warning. The exception is a plan that maps ethnicity values: that run
+stops with an error, because Faker has no ethnicity values. Downloading requires an NGC API key and the
+[NGC CLI](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling).
+For `en_US`:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+See [Customizing PII Replacement -- Nemotron-Personas](customize-pii-replacement.md#nemotron-personas)
+for other locales and storage locations.
+
 ### Optional Agent Skill
 
 This repository includes an Agent Skill at `skills/safe-synthesizer/`. The
@@ -224,13 +246,10 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 
 ### 2. PII Replacement
 
-PII replacement is on by default as a pre-processing step. The PII replacer detects
-personally identifiable information (PII) using GLiNER NER and optional LLM-based
-column classification, then replaces detected entities with synthetic but
-realistic values prior to fine-tuning. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See [Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types) for the full entity list.
-
-See [Configuration -- Replacing PII](configuration.md#replacing-pii) for
-entity types, LLM classification setup, and SDK customization.
+Before training, Safe Synthesizer replaces names, contact details, IDs, and
+other PII in the training data with realistic synthetic values. See
+[PII Replacement](../product-overview/pii_replacement.md) for how it works and
+[Customizing PII Replacement](customize-pii-replacement.md) to review or change the plan.
 
 ### 3. Training
 

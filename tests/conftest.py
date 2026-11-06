@@ -16,6 +16,8 @@ import pandas as pd
 import pytest
 from datasets import Dataset, load_dataset
 
+from nemo_safe_synthesizer.config.inference_environment import INFERENCE_ENV_VARS
+
 pytest_plugins = ("pytester",)
 
 
@@ -104,6 +106,27 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     skip_marker = pytest.mark.skip(reason="CUDA is not available")
     for item in gpu_items:
         item.add_marker(skip_marker)
+
+
+@pytest.fixture(autouse=True)
+def fixture_isolate_pii_inference(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep developer inference settings out of tests and block accidental vLLM launches.
+
+    Without an endpoint, LLM-assisted PII planning starts a local vLLM server.
+    Only ``requires_gpu`` tests may launch one; other tests fake the launch.
+    """
+    for name in INFERENCE_ENV_VARS:
+        # ``delenv`` restores only a variable that was set, so set it first: a value the test or the CLI
+        # writes later is then removed at teardown instead of leaking into later tests.
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    if request.node.get_closest_marker("requires_gpu") is not None:
+        return
+
+    def refuse_launch(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Unit tests must not launch a real vLLM server; set NSS_INFERENCE_ENDPOINT or fake it")
+
+    monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.local_inference.server._launch", refuse_launch)
 
 
 @pytest.fixture(autouse=True)
@@ -199,12 +222,6 @@ def tokenizers_dir(test_data_dir) -> Path:
 def stub_tokenizer_dir(tests_dir) -> Path:
     """Path to a minimal stub tokenizer used for fast unit tests."""
     return tests_dir / "stub_tokenizer"
-
-
-@pytest.fixture(scope="session")
-def pii_test_data_dir(test_data_dir) -> Path:
-    """Path to PII-specific test data (NER fixtures, redaction samples)."""
-    return test_data_dir / "pii"
 
 
 @pytest.fixture(scope="session")

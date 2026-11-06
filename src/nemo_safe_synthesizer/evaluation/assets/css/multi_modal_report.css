@@ -1078,7 +1078,7 @@ tbody tr:hover td {
 }
 
 .columns-table .type-tag,
-.pii-panel .type-tag {
+.pii-replacement .type-tag {
     border-color: #888888;
     border-radius: 999px;
     background: transparent;
@@ -1245,21 +1245,31 @@ tbody tr:hover td {
     content: "";
 }
 
-.pii-panel {
-    margin-top: 24px;
+.metric-card-stat {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
 }
 
-.pii-panel .metric-panel-heading {
-    padding-bottom: 18px;
+.pii-replacement .table-wrap {
+    margin: 0 0 16px;
 }
 
-.pii-panel .table-wrap {
-    margin-top: 0;
-    padding: 0 24px 24px;
-}
-
-.pii-panel table {
+.pii-replacement table {
     table-layout: auto;
+}
+
+.pii-replacement .pii-context,
+.pii-replacement .pii-footnote {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.pii-replacement .pii-footnote {
+    margin: 0;
 }
 
 .tnum {
@@ -1366,4 +1376,100 @@ tbody tr:hover td {
     .distribution-charts {
         grid-template-columns: 1fr;
     }
+}
+
+/* Content sets the column widths: PII types and counts stay on one line, and the method text takes the rest. */
+.pii-replacement table.pii-replacement-table {
+    min-width: 700px;
+    table-layout: auto;
+}
+
+
+.pii-replacement-table th {
+    white-space: normal;
+}
+
+.pii-replacement-table th:nth-child(1) {
+    width: 14%;
+}
+
+.pii-replacement-table th:nth-child(2) {
+    width: 32%;
+}
+
+.pii-replacement-table td.pii-type-cell,
+.pii-replacement-table td.tnum {
+    white-space: nowrap;
+}
+
+.pii-replacement-table td.pii-group-cell:first-child {
+    overflow-wrap: anywhere;
+}
+
+/* One tbody per column: a free-text column's PII types sit in tight rows under one name, with one separator. */
+.pii-replacement-table tbody.pii-group td {
+    height: auto;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-bottom: none;
+}
+
+.pii-replacement-table tbody.pii-group tr:first-child td {
+    padding-top: 14px;
+}
+
+.pii-replacement-table tbody.pii-group tr:last-child td,
+.pii-replacement-table tbody.pii-group td.pii-group-cell {
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.pii-replacement-table tbody.pii-group:hover td {
+    background: #141414;
+}
+
+.pii-replacement-table td {
+    vertical-align: top;
+}
+
+.pii-replacement-table code {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.pattern-symbols {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.pattern-symbols code {
+    display: inline;
+    margin: 0 4px 0 0;
+    color: var(--text);
+}
+
+.pii-replacement-table small {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.pii-replacement-table div + div {
+    margin-top: 6px;
+}
+
+.pii-none {
+    color: var(--subtle);
+}
+
+.pii-kept {
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: 14px;
 }

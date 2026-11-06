@@ -5,8 +5,8 @@
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
-configuration, and NER parallelism, see [Environment Variables](environment.md).
+and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, and inference
+endpoint settings, see [Environment Variables](environment.md).
 
 ---
 
@@ -29,7 +29,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
-| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
+| Wrong columns replaced, or PII missed | Discovery misclassified a column | [Review and edit the plan](customize-pii-replacement.md#review-and-reuse-the-plan) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | `timestamp_interval_mismatch` error | Timestamps do not follow `timestamp_interval_seconds` | [Details](#interval-mismatch) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
@@ -71,17 +71,9 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.30.0.
-Keep vLLM's constraints intact so the resolver selects the configured
-Transformers/vLLM pairing.
-
-```toml
-[project]
-dependencies = [
-  "transformers>=5.12,<5.12.1",
-  "vllm==0.30.0",
-]
-```
+Safe Synthesizer pins one vLLM release and the `transformers` range that
+works with it; see the `engine` extra in `pyproject.toml` for the current
+pair. Keep vLLM's constraints intact so the resolver selects that pairing.
 
 If you've vendored or copied parts of `pyproject.toml` into another project,
 avoid adding a broad `transformers>=5.0,<6` override for vLLM. That can erase
@@ -510,9 +502,11 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
-| `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
-| `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
-| `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
+| `inference_model_missing` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` is set but no model ID is (`replace_pii.llm.model_id`, `--inference-model-id`, or `NSS_INFERENCE_MODEL`) |
+| `inference_request_settings_invalid` | error | `env.inference` | `NSS_INFERENCE_TIMEOUT` is not a positive number of seconds, or `NSS_INFERENCE_REQUEST_OPTIONS` is not a JSON object or sets a field Safe Synthesizer manages |
+| `inference_local_profile_invalid` | error | `env.inference` | The local vLLM profile cannot be loaded, `NSS_INFERENCE_ENDPOINT` is not a usable loopback address for it, or a configured model differs from the profile's model |
+| `inference_local_runtime_unavailable` | error | `env.inference` | No inference endpoint is set, so Safe Synthesizer would run a local vLLM server, but vLLM, a CUDA GPU, enough GPUs for the profile's `tensor_parallel_size`, or the profile's `min_gpu_memory_gib` is unavailable; set `NSS_INFERENCE_ENDPOINT` to use a remote service |
+| `inference_endpoint_invalid` | error | `env.inference` | The configured PII inference endpoint is not an absolute HTTP(S) URL, embeds credentials, or uses plain HTTP for a non-loopback host |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
@@ -541,49 +535,115 @@ check of its own.
 
 ---
 
-## PII and NER
+## PII Replacement
 
-Model downloads and processing timeouts for PII detection.
+`safe-synthesizer run replace-pii` resolves the plan and applies replacement in
+one run. Add `--plan-only` only when you want to validate and persist the
+resolved plan without replacing rows. Plan, dependency, and pattern errors are
+reported as configuration errors without logging source values.
 
-### GLiNER Download Fails
+Free-text targets require the configured GLiNER2 checkpoint. The default is
+`fastino/gliner2-privacy-filter-PII-multi`; allow Hugging Face downloads on the
+first run or pre-populate the model cache before using
+`--disable-huggingface-remote`. A model-load or inference failure stops the run
+instead of silently continuing with regex detection only.
 
-The PII replacer downloads the GLiNER NER model on first use. If the download
-fails, it raises an exception immediately.
+### Automatic Plan Discovery Fails
 
-Pre-download the model by running PII replacement once in an environment
-with internet access. To force offline use after the model is cached, set
-`HF_HUB_OFFLINE=1` or pass `--disable-huggingface-remote`.
+Automatic discovery needs a planning model. By default it runs on a local vLLM
+server on your GPU; with `NSS_INFERENCE_ENDPOINT` set, it uses that service
+instead. Common failures:
 
-### Offline Mode Not Taking Effect
+- `The local vLLM server exited with code ... before it became ready`: the
+  default planning model needs one GPU with 80 GB of memory. Use a GPU that
+  size with no other jobs on it, or use one of the options below. The message
+  ends with the server's last output lines, which usually name the cause, such
+  as running out of GPU memory.
+- `Cannot start the local PII inference server on ... because the address is in use`:
+  another process is listening on the planning port. Stop it, or follow the
+  message to use that server or choose another port.
+- `PII inference authentication or authorization failed`: the hosted service
+  rejected `NSS_INFERENCE_KEY`.
+- `NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too`: set
+  `NSS_INFERENCE_MODEL` or `replace_pii.llm.model_id` to the model the service
+  serves.
+- `... failed after 3 attempts`: requests to the planning model kept failing,
+  for example because the service is unreachable or overloaded. Check the
+  endpoint URL and try again later.
+- `... returned invalid structured output after 3 attempts`: the model kept
+  giving answers that do not fit the plan format. Use the default planning
+  model or a larger one.
 
-Symptom: `HF_HUB_OFFLINE=1` (or `--disable-huggingface-remote`) is set, yet the
-run still attempts a download, or `--enable-huggingface-remote` does not
-re-enable downloads.
+If discovery cannot run where you train, you have two other options:
 
-Cause: huggingface_hub reads `HF_HUB_OFFLINE` once, at import time, and caches
-it. If the variable is changed after huggingface_hub has been imported in the
-process, the change is ignored.
+- Send planning to a hosted model service. Column samples then leave your
+  machine; see
+  [Where planning requests go](environment.md#where-planning-requests-go).
+- Write the plan yourself, or discover it once on a machine with a large
+  enough GPU and reuse the saved plan. See
+  [Customizing PII Replacement](customize-pii-replacement.md#review-and-reuse-the-plan).
 
-Fixes:
+### GLiNER2 Device and Throughput
 
-- CLI: export `HF_HUB_OFFLINE` before launching `safe-synthesizer`, or use
-  `--enable-huggingface-remote` / `--disable-huggingface-remote`. The CLI
-  applies the flag before huggingface_hub loads, so the flag always wins over
-  an inherited environment value.
-- Programmatic / SDK: set `HF_HUB_OFFLINE` before importing
-  `nemo_safe_synthesizer` (or any library that imports huggingface_hub, such as
-  `transformers` or `datasets`). Setting it afterward has no effect for that
-  process.
+Safe Synthesizer loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
+columns stops with `GLiNER2 free-text PII detection needs a CUDA GPU` instead of
+falling back to CPU, which is too slow for real datasets. Street-address
+columns do not stop the run: without GLiNER2, each full street address is
+replaced whole, with a warning, instead of keeping its city and postal code.
+Agent sandboxes and containers often hide a GPU the machine has; run Safe Synthesizer where
+`nvidia-smi` lists it. Model loading and inference emit completion records and a progress
+heartbeat every 30 seconds; the records include the selected device, chunk
+count, configured batch size, and requested-label count without source text.
 
-### NER Processing Timeouts
+Free-text inference deduplicates exact cell values, splits each unique value
+into overlapping character chunks, and sends the flattened chunks through
+GLiNER2's batched API. Start with the defaults (`batch_size: 8`,
+`chunk_length: 384`, and `chunk_overlap: 128`). Reduce `batch_size` to 4, 2, or
+1 after a CUDA out-of-memory error. Increase it gradually only when a GPU has
+headroom; it does not change chunk boundaries or detection semantics.
 
-NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
-too long, it is dropped with a warning in the logs.
+The checkpoint favors recall and documents that it can over-predict names.
+`free_text_detection.entity_thresholds` contains one threshold for every
+GLiNER2-detected entity. The defaults are tuned on a PII detection benchmark,
+and most are above 0.97 because the checkpoint's scores cluster just below 1.0,
+so change them in small steps. Email, payment-card, IPv4, and IPv6 detection is
+owned by structurally validated regex and has no confidence threshold. If
+medical terms, product names, or common nouns are replaced as people, raise the
+relevant name entries or add a matching label to
+`free_text_detection.name_exclusion_thresholds`; it is merged into the
+default labels. If real names are missed, drop the label that removes them by
+setting it to `null`, such as `gender: null`: the default exclusion labels also
+drop names the model scores as, for example, a `gender` term. Check both false positives
+and missed real names on a representative development sample before and after
+any change.
 
-Check the logs for timeout warnings. The timeout is not currently
-configurable; for large datasets, reduce the amount of text processed per
-chunk (for example, shorten text fields or split them into smaller pieces) and
-optionally reduce CPU parallelism so each worker has more resources.
+The default checkpoint's documented languages are English, French, Spanish,
+German, Italian, Portuguese, and Dutch. Natural-language date parsing happens
+only after GLiNER2 detects a birth-date span, so the parser does not extend the
+checkpoint's detection-language coverage.
+
+GLiNER2 birth-date candidates must contain a complete parseable day, month,
+and year. Natural-language and multilingual complete dates are accepted; vague
+phrases such as `spring` are skipped with a PII-free aggregate warning. If a
+complete date is unexpectedly skipped, inspect the aggregate warning count
+with `-v` and report the date format without sharing the original value.
+
+Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. If the file is
+missing, first download the dataset for `replace_pii.locale`, as described under
+[Nemotron-Personas](customize-pii-replacement.md#nemotron-personas). Set
+`replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
+stored elsewhere. When `replace_pii.sampler` is not set, Safe Synthesizer uses Faker if the locale file is
+missing, unless the plan maps ethnicity values. When `replace_pii.sampler` names this
+sampler, or the plan maps ethnicity values, and the locale file is missing or unreadable, replacement fails
+with a configuration error; set `replace_pii.sampler.backend: faker` and remove any ethnicity
+mapping to replace PII without persona data. Fields a persona row lacks, and entity types that are
+not persona fields, still use Faker. Dependency values that select no Nemotron-Personas candidates
+are configuration errors and must be fixed in `data_to_sampler_value_mapping`.
+
+If `data_to_sampler_value_mapping does not match the ... sampler` stops a run, the plan was likely
+discovered for another sampler or locale. The error lists every entry the sampler cannot use; change
+those entries, or set `replace_pii.sampler` and `replace_pii.locale` to the ones the plan was
+written for. Gender entries may always use `female` and `male`.
 
 ---
 

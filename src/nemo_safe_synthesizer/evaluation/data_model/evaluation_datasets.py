@@ -163,8 +163,10 @@ class EvaluationDatasets(BaseModel):
         """
         if mandatory_columns is None:
             mandatory_columns = []
-        # Check and subsample columns
-        shared_columns = set(training.columns).intersection(set(synthetic.columns))
+        # Check and subsample columns. Columns keep the training order: set order follows string hashes, which
+        # change between processes, and attribute inference picks its quasi-identifiers by column order.
+        synthetic_columns = set(synthetic.columns)
+        shared_columns = [col for col in training.columns if col in synthetic_columns]
         if len(shared_columns) == 0:
             raise ValueError(
                 "Training and Synthetic dataframes contain no columns in common. Please check dataframes for mismatch."
@@ -181,23 +183,25 @@ class EvaluationDatasets(BaseModel):
                 # same columns for correlation and everything else.
                 r = random.Random()
                 r.seed(2112)
-                shared_columns = shared_columns.difference(set(mandatory_columns))
-                col_set.update(r.sample(list(shared_columns), k=(target_column_count - len(col_set))))
+                shared_columns = [col for col in shared_columns if col not in mandatory_columns]
+                col_set.update(r.sample(shared_columns, k=(target_column_count - len(col_set))))
+            selected_columns = [col for col in training.columns if col in col_set]
         else:
             # Even without sampling, we only want to use shared columns.
-            col_set = shared_columns
-        training = training.reindex(columns=list(col_set))
-        synthetic = synthetic.reindex(columns=list(col_set))
+            selected_columns = shared_columns
+        training = training.reindex(columns=selected_columns)
+        synthetic = synthetic.reindex(columns=selected_columns)
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
-            test_shared_columns = shared_columns.intersection(set(test.columns))
+            test_columns = set(test.columns)
+            test_shared_columns = [col for col in shared_columns if col in test_columns]
             if len(test_shared_columns) == 0:
                 raise ValueError(
                     "Test dataframe has no columns in common with Training and Synthetic dataframes. Please check dataframes for mismatch."
                 )
             else:
-                test = test.reindex(columns=list(test_shared_columns))
+                test = test.reindex(columns=test_shared_columns)
 
         return training, synthetic, test
 

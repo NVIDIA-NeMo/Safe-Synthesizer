@@ -290,42 +290,10 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 
 ## NIM Integration
 
-Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
-in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
-override it to use a different endpoint.
-
-When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
-using the default) so column classification can run.
-
-### Local Endpoint
-
-To point to a locally hosted LLM, add the variables to `.env.local` (git-ignored, auto-loaded by mise):
-
-```bash
-# .env.local
-NSS_INFERENCE_ENDPOINT=https://your-local-nim-endpoint
-NSS_INFERENCE_KEY=your-api-key  # pragma: allowlist secret
-```
-
-Or export them in your shell:
-
-```bash
-export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
-```
-
-### Disable Classification
-
-To disable classification entirely:
-
-```yaml
-replace_pii:
-  globals:
-    classify:
-      enable_classify: false
-```
-
-When classification is disabled, NSS falls back to default entity types.
+PII plan discovery runs a local vLLM server by default. To use a hosted NVIDIA
+NIM or another OpenAI-compatible endpoint instead, set
+`NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY`; see
+[Where planning requests go](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/#where-planning-requests-go).
 
 ## Artifacts and Workdirs
 
@@ -337,6 +305,8 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
+├── safe-synthesizer-config.yaml     # resolved configuration, when PII replacement runs
+├── pii_replacement_plan.yaml        # the PII replacement plan that configuration names
 ├── train/
 │   ├── safe-synthesizer-config.json
 │   └── adapter/                     # trained PEFT adapter

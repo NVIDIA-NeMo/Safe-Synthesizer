@@ -1,332 +1,1232 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Dataset-specific PII detection/replacement plan.
+
+This is the declarative, column-oriented plan a user (or an upstream detector)
+provides to describe *how* to replace PII in a dataset.
+
+Every label is an ``Entity`` with an ``EntityAction`` and whether it
+``can_condition`` other columns. User-facing plans name the entity on each
+replace target and on read-only ``depends_on`` entries. A conditioner that is
+also a replace target inherits the entity from that target.
+"""
+
 from __future__ import annotations
 
-import os
-from typing import Annotated, Any, Self
+import heapq
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import Enum, StrEnum, auto
+from pathlib import Path
+from types import MappingProxyType
+from typing import Annotated, ClassVar, Literal, Self, cast
 
-from faker.config import AVAILABLE_LOCALES
-from pydantic import Field, field_validator, model_validator
-
-from ..configurator.parameters import (
-    Parameters,
+import yaml
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    SkipValidation,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_serializer,
+    model_validator,
 )
+
+from ..configurator.parameters import CONFIG_DIR_CONTEXT_KEY, Parameters
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
+from ..errors import ParameterError
 from .base import NSSBaseModel
-from .types import OptionalListOrInt, OptionalListOrStr, OptionalStrList
+from .unknown_fields import normalize_unknown_fields, raise_if_removed_legacy_fields
+from .validation import format_pydantic_validation_error
 
 __all__ = [
-    "PiiReplacerConfig",
-    "Globals",
-    "StepDefinition",
-    "Column",
-    "Row",
-    "RowActions",
-    "GlinerConfig",
-    "ColumnActions",
-    "ClassifyConfig",
-    "has_inference_key",
-    "DEFAULT_PII_TRANSFORM_CONFIG",
+    "ALLOWED_DEPENDS_ON",
+    "AUTO_DISCOVERY",
+    "ConditioningColumn",
+    "DEFAULT_GLINER2_MODEL_ID",
+    "DEFAULT_GLINER2_MODEL_REVISION",
+    "DataToSamplerValueMapping",
+    "ENTITIES",
+    "ENTITY_BY_TYPE",
+    "EXCLUSIVE_DEPENDS_ON_GROUPS",
+    "FREE_TEXT_DETECTION_ENTITY_TYPES",
+    "GLINER_DETECTION_ENTITY_TYPES",
+    "REGEX_DETECTION_ENTITY_TYPES",
+    "Entity",
+    "EntityAction",
+    "EntityType",
+    "FreeTextDetectionConfig",
+    "LLMConfig",
+    "PatternSyntax",
+    "PiiColumnPlan",
+    "PiiReplacementPlan",
+    "PiiSamplerBackend",
+    "PiiSamplerConfig",
+    "ReplacePiiConfig",
+    "can_condition",
+    "is_columns_to_replace_type",
+    "validate_dependency_relationship",
+    "validate_pattern_eligibility",
 ]
 
-MAX_32_BIT_INT = 2**31 - 1
-
-
-class Column(NSSBaseModel):
-    """Rule matcher for selecting columns by name, position, condition, entity, or type."""
-
-    name: str | None = Field(description="Column name.", default=None)
-
-    position: OptionalListOrInt = Field(description="Column position.", default=None)
-
-    condition: str | None = Field(description="Column condition.", default=None)
-
-    value: str | None = Field(description="Rename to value.", default=None)
-
-    entity: OptionalListOrStr = Field(description="Column entity match.", default=None)
-
-    type: OptionalListOrStr = Field(description="Column type match.", default=None)
-
-    @model_validator(mode="before")
-    @classmethod
-    def identifier_required(cls, values: Any) -> Any:
-        """Ensure at least one column identifier field is provided."""
-        # Handle both dict and model instance cases (Pydantic v2 compatibility)
-        if not isinstance(values, dict):
-            return values
-        if (
-            values.get("name") is None
-            and values.get("condition") is None
-            and values.get("entity") is None
-            and values.get("position") is None
-            and values.get("type") is None
-        ):
-            raise ValueError("column rule must contain one of name, position, entity, type or condition.")
-        return values
-
-
-class ColumnActions(NSSBaseModel):
-    """Container for column add, drop, and rename operations."""
-
-    add: list[Column] | None = Field(description="Columns to add.", default=None)
-
-    drop: list[Column] | None = Field(description="Columns to drop.", default=None)
-
-    rename: list[Column] | None = Field(description="Columns to rename.", default=None)
-
-
-class Row(NSSBaseModel):
-    """Rule matcher for selecting rows by name, condition, entity, or type."""
-
-    # eg PrimaryKey or [AddressLine1, AddressLine2]
-    name: OptionalListOrStr = Field(description="Row name.", default=None)
-
-    condition: str | None = Field(description="Row condition match.", default=None)
-
-    foreach: str | None = Field(description="Foreach expression.", default=None)
-
-    value: str | None = Field(description="Row value definition.", default=None)
-
-    entity: OptionalListOrStr = Field(description="Row entity match.", default=None)
-
-    type: OptionalListOrStr = Field(description="Row type match.", default=None)
-
-    fallback_value: str | None = Field(description="Row fallback value.", default=None)
-
-    description: str | None = Field(description="Rule description for human consumption.", default=None)
-
-    @model_validator(mode="before")
-    @classmethod
-    def identifier_required(cls, values: Any) -> Any:
-        """Ensure at least one row identifier field is provided."""
-        # Handle both dict and model instance cases (Pydantic v2 compatibility)
-        if not isinstance(values, dict):
-            return values
-        if (
-            values.get("name") is None
-            and values.get("condition") is None
-            and values.get("entity") is None
-            and values.get("type") is None
-        ):
-            raise ValueError("row rule must contain one of name, entity, type or condition.")
-
-        if values.get("foreach") is not None and values.get("value") is None:
-            raise ValueError(
-                "foreach without value field. If a rule contains foreach, it must also "
-                "include a value field to iterate on."
-            )
-        return values
-
-
-class RowActions(NSSBaseModel):
-    """Container for row drop and update operations."""
-
-    drop: list[Row] | None = Field(description="Rows to drop.", default=None)
-
-    update: list[Row] | None = Field(description="Rows to update.", default=None)
-
-
-class StepDefinition(NSSBaseModel):
-    """Single transformation step with optional variables, column actions, and row actions."""
-
-    vars: dict[str, str | dict | list] | None = Field(description="Variable names and templates.", default=None)
-
-    columns: ColumnActions | None = Field(description="Columns transform configuration.", default=None)
-
-    rows: RowActions | None = Field(description="Rows transform configurations.", default=None)
-
-
-class GlinerConfig(NSSBaseModel):
-    """Configuration for the GLiNER named-entity recognition model."""
-
-    enable_gliner: bool = Field(description="Enable GLiNER NER module.", default=True)
-
-    enable_batch_mode: bool = Field(description="Enable GLiNER batch mode.", default=True)
-
-    batch_size: int = Field(description="GLiNER batch size.", default=8)
-
-    chunk_length: int = Field(description="GLiNER batch chunk length in characters.", default=512)
-
-    gliner_model: str = Field(
-        description="GLiNER model name.",
-        default="nvidia/gliner-PII",
-    )
-
-
-class NERConfig(NSSBaseModel):
-    """Configuration for Named Entity Recognition."""
-
-    ner_threshold: float = Field(description="NER model threshold.", default=0.3)
-
-    enable_regexps: bool = Field(
-        description="Enable NER regular expressions (experimental).",
-        default=False,
-    )
-
-    gliner: GlinerConfig = Field(
-        description="GLiNER NER configuration.",
-        default=GlinerConfig(),
-    )
-
-    ner_entities: OptionalStrList = Field(
-        description="List of entity types to recognize. If unset, classification entity types are used.",
-        default=None,
-    )
-
-
-class ClassifyConfig(NSSBaseModel):
-    """Configuration for column classification using an LLM."""
-
-    enable_classify: bool | None = Field(default=None, description="Enable column classification.")
-
-    entities: OptionalStrList = Field(default=None, description="List of entity types to classify.")
-
-    num_samples: int | None = Field(description="Number of column values to sample for classification.", default=3)
-
-    classify_model_provider: str | None = Field(
-        default=None,
-        description="Name of the model provider in the Inference Gateway for column classification. "
-        "The job compiler will resolve this to the appropriate endpoint URL.",
-    )
-
-
-class Globals(NSSBaseModel):
-    """Global settings for the PII replacer including locales, seed, NER, and classification."""
-
-    locales: list[str] | None = Field(description="List of locales.", examples=["en_US"], default=None)
-
-    seed: int | None = Field(
-        lt=MAX_32_BIT_INT,
-        gt=-MAX_32_BIT_INT,
-        description="Optional random seed.",
-        default=None,
-    )
-
-    classify: Annotated[ClassifyConfig, Field(description="Column classification configuration.")] = ClassifyConfig()
-
-    ner: Annotated[NERConfig, Field(description="Named Entity Recognition configuration.")] = NERConfig()
-
-    lock_columns: OptionalStrList = Field(
-        description="List of columns to preserve as immutable across all transformations.",
-        default=None,
-    )
-
-    @field_validator("locales")
-    @classmethod
-    def _validate_locale(cls, locales: list[str] | None) -> list[str] | None:
-        """Validate locale strings against Faker's supported locales."""
-        if locales is None:
-            return locales
-
-        validated_locales = []
-        for locale in locales:
-            canonical_locale = locale.replace("-", "_")
-
-            # AVAILABLE_LOCALES is in `en_US` format (with underscore).
-            supported_locales = set(AVAILABLE_LOCALES)
-            if canonical_locale not in supported_locales:
-                raise ValueError(f"Invalid locale: {locale}!")
-
-            validated_locales.append(canonical_locale)
-
-        return validated_locales
-
-
-def has_inference_key() -> bool:
-    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value.
-
-    Shared by ``nemo_pii`` (remediation messaging) and ``preflight`` (PII
-    classification warning) so both paths apply the same "set and
-    non-whitespace" definition.
-    """
-    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
-
-
-class PiiReplacerConfig(Parameters):
-    """Configuration for PII replacer.
-
-    Defines how PII data should be detected and replaced in a dataset.
+# Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
+# entity discovery instead of an explicit plan.
+AUTO_DISCOVERY = "auto_discovery"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
+DEFAULT_GLINER2_MODEL_REVISION = "c153999da5f4c509df4322b0c6a1baf3d2c284d7"  # pragma: allowlist secret
+"""Hugging Face commit of ``DEFAULT_GLINER2_MODEL_ID`` that the default thresholds were tuned on."""
+# Unversioned configurations are permanently interpreted as v3. Adding a new
+# schema may expand the supported set, but must not advance this implicit value.
+_IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
+_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS = frozenset({3})
+
+
+class EntityType(StrEnum):
+    """Closed vocabulary for discovery and plan ``entity_type`` fields.
+
+    ``FREE_TEXT`` marks columns whose accepted PII spans are detected by
+    GLiNER2 and applicable deterministic regex rules, then replaced without
+    changing the surrounding text.
     """
 
-    globals: Globals = Field(description="Global configuration options.", default_factory=Globals)
+    FIRST_NAME = "first_name"
+    MIDDLE_NAME = "middle_name"
+    LAST_NAME = "last_name"
+    FULL_NAME = "full_name"
+    EMAIL = "email"
+    PHONE_NUMBER = "phone_number"
+    DATE_OF_BIRTH = "date_of_birth"
+    STREET_ADDRESS = "street_address"
+    NATIONAL_ID = "national_id"
+    CREDIT_DEBIT_CARD = "credit_debit_card"
+    API_KEY = "api_key"  # pragma: allowlist secret
+    IPV4 = "ipv4"
+    IPV6 = "ipv6"
+    UNIQUE_IDENTIFIER = "unique_identifier"
 
-    steps: list[StepDefinition] = Field(
-        min_length=1,
-        max_length=10,
-        description="List of transformation steps to perform on input data.",
-    )
+    # Detect and replace PII spans in free-form text with GLiNER2 plus the
+    # applicable deterministic built-in regex rules.
+    FREE_TEXT = "free_text"
 
-    @classmethod
-    def get_default_config(cls) -> Self:
-        """Return a default configuration loaded from the embedded YAML template."""
-        return cls.from_yaml_str(DEFAULT_PII_TRANSFORM_CONFIG)
+    # Identify-only (and often original-value conditioners): discovery may classify
+    # these so they are not mistaken for free text / replace targets.
+    DATE = "date"  # generic (non-birth) date
+    GENDER = "gender"
+    ETHNIC_BACKGROUND = "ethnic_background"
+    CITY = "city"
+    STATE = "state"
+    ZIPCODE = "zipcode"
+    COUNTRY = "country"
+    ORGANIZATION = "organization"
 
 
-DEFAULT_PII_TRANSFORM_CONFIG = """
-globals:
-  classify:
-    enable_classify: true
-    entities:
-      - first_name
-      - last_name
-      - name
-      - street_address
-      - city
-      - state
-      - postcode
-      - address
-      - phone_number
-      - fax_number
-      - email
-      - ssn
-      - national_id
-      - tax_id
-      - credit_debit_card
-  ner:
-    ner_threshold: 0.3
-    ner_entities:
-      - first_name
-      - last_name
-      - name
-      - street_address
-      - city
-      - state
-      - postcode
-      - address
-      - phone_number
-      - fax_number
-      - email
-      - ssn
-      - national_id
-      - tax_id
-      - credit_debit_card
-  locales: [en_US]
-steps:
-  - vars:
-      row_seed: random.random()
-    rows:
-      update:
-        - condition: column.entity == "first_name" and not (this | isna)
-          value: fake.persona(row_index=vars.row_seed + index).first_name
-        - condition: column.entity == "last_name" and not (this | isna)
-          value: fake.persona(row_index=vars.row_seed + index).last_name
-        - condition: column.entity == "name" and not (this | isna)
-          value: column.entity | fake
-        - condition: (column.entity == "street_address" or column.entity == "city" or column.entity == "state" or column.entity == "postcode" or column.entity == "address") and not (this | isna)
-          value: column.entity | fake
-        - condition: column.entity == "email" and not (this | isna)
-          value: fake.persona(row_index=vars.row_seed + index).email
-        - condition: column.entity == "ssn" and not (this | isna)
-          value: column.entity | fake
-        - condition: column.entity == "phone_number" and not (this | isna)
-          value: (fake.random_number(digits=3) | string) + "-" + (fake.random_number(digits=3) | string) + "-" + (fake.random_number(digits=4) | string)
-        - condition: column.entity == "fax_number" and not (this | isna)
-          value: (fake.random_number(digits=3) | string) + "-" + (fake.random_number(digits=3) |
-            string) + "-" + (fake.random_number(digits=4) | string)
-        - condition: (column.entity == "national_id" or column.entity == "tax_id") and not (this | isna)
-          value: fake.itin()
-        - condition: column.entity == "credit_debit_card" and not (this | isna)
-          value: fake.credit_card_number()
-        - condition: column.entity is none and column.type == "text"
-          value: this | fake_entities
+DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
+"""Dependency-column values mapped to values understood by one sampler.
+
+Keyed by ``depends_on`` column name, then by dataset value. All keys and values are compared ignoring case.
 """
+
+
+class EntityAction(Enum):
+    """What the engine does to a column of this entity type."""
+
+    REPLACE = auto()
+    """Synthesize a new cell value."""
+
+    REPLACE_IN_TEXT = auto()
+    """Rewrite PII spans inside free-form text, leaving the surrounding text intact.
+
+    Unlike ``REPLACE``, the cell is not itself a single entity value: only the
+    spans accepted from GLiNER2 and applicable deterministic regex rules are
+    rewritten. Existing structured values and mappings do not create spans.
+    """
+
+    IDENTIFY_ONLY = auto()
+    """Label the column but never write to it.
+
+    Cannot appear on ``columns_to_replace``; may still condition other columns
+    when ``can_condition`` is set.
+    """
+
+
+class PatternSyntax(Enum):
+    """Grammar used by ``PiiColumnPlan.pattern`` for an entity type."""
+
+    STRFTIME = auto()
+    """Python ``strftime`` codes, e.g. ``%m/%d/%Y`` or ``%d.%m.%y``."""
+
+    CHARACTER_MASK = auto()
+    """One drawn character per token, e.g. ``pmc-######`` or ``CUST-10[01]###``."""
+
+    NAME_PARTS = auto()
+    """Whole-value templates composed of literals and name-part placeholders."""
+
+
+@dataclass(frozen=True, slots=True)
+class Entity:
+    """One label in the entity vocabulary."""
+
+    entity_type: EntityType
+    """Label this entry defines, as named by ``entity_type`` in user-facing plans."""
+
+    action: EntityAction
+    """Engine treatment of a column carrying this entity."""
+
+    can_condition: bool
+    """Whether this entity may appear as ``entity_type`` on a ``depends_on`` entry.
+
+    The executor applies ``columns_to_replace`` in DAG order and reads the
+    current cell as the conditioner, so a conditioner that is itself a replace
+    target supplies its post-replacement value.
+    """
+
+    description: str
+    """Short, general definition shown to the LLM classifier, so it can tell this entity from similar-looking data."""
+
+    pattern_syntax: PatternSyntax | None = None
+    """Notation ``pattern`` uses, or ``None`` when this entity allows no pattern."""
+
+
+ENTITIES: tuple[Entity, ...] = (
+    # Replace and may condition later columns.
+    Entity(
+        EntityType.FIRST_NAME,
+        action=EntityAction.REPLACE,
+        can_condition=True,
+        description="A person's given name.",
+        pattern_syntax=PatternSyntax.NAME_PARTS,
+    ),
+    Entity(
+        EntityType.MIDDLE_NAME,
+        action=EntityAction.REPLACE,
+        can_condition=True,
+        description="A person's middle name or middle initial.",
+        pattern_syntax=PatternSyntax.NAME_PARTS,
+    ),
+    Entity(
+        EntityType.LAST_NAME,
+        action=EntityAction.REPLACE,
+        can_condition=True,
+        description="A person's family name or surname.",
+        pattern_syntax=PatternSyntax.NAME_PARTS,
+    ),
+    Entity(
+        EntityType.FULL_NAME,
+        action=EntityAction.REPLACE,
+        can_condition=True,
+        description="A person's full name.",
+        pattern_syntax=PatternSyntax.NAME_PARTS,
+    ),
+    # Replace only.
+    Entity(
+        EntityType.EMAIL,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="An email address.",
+        pattern_syntax=PatternSyntax.NAME_PARTS,
+    ),
+    Entity(
+        EntityType.PHONE_NUMBER,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A telephone or fax number.",
+        pattern_syntax=PatternSyntax.CHARACTER_MASK,
+    ),
+    Entity(
+        EntityType.DATE_OF_BIRTH,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A person's date of birth, written as a full or partial calendar date.",
+        pattern_syntax=PatternSyntax.STRFTIME,
+    ),
+    Entity(
+        EntityType.STREET_ADDRESS,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A street address, possibly including city, state, or postal code.",
+    ),
+    Entity(
+        EntityType.NATIONAL_ID,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A government-issued personal identification number, such as a US Social Security number.",
+    ),
+    Entity(
+        EntityType.CREDIT_DEBIT_CARD,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A payment card number.",
+        pattern_syntax=PatternSyntax.CHARACTER_MASK,
+    ),
+    Entity(
+        EntityType.API_KEY,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A secret access credential, such as an API key or access token.",
+        pattern_syntax=PatternSyntax.CHARACTER_MASK,
+    ),
+    Entity(EntityType.IPV4, action=EntityAction.REPLACE, can_condition=False, description="An IPv4 address."),
+    Entity(EntityType.IPV6, action=EntityAction.REPLACE, can_condition=False, description="An IPv6 address."),
+    Entity(
+        EntityType.UNIQUE_IDENTIFIER,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description=(
+            "An identifier that refers to a specific person or their records. "
+            "Identifiers of products, places, or events, and row numbers, are not this type."
+        ),
+        pattern_syntax=PatternSyntax.CHARACTER_MASK,
+    ),
+    # Rewrite spans inside cell text (username/url use this too).
+    Entity(
+        EntityType.FREE_TEXT,
+        action=EntityAction.REPLACE_IN_TEXT,
+        can_condition=False,
+        description="Free-form text, such as notes or comments, that may mention personal details.",
+    ),
+    # Identify-only.
+    Entity(
+        EntityType.DATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=False,
+        description="A date other than a date of birth.",
+    ),
+    # Identify-only and may condition replacements.
+    Entity(
+        EntityType.GENDER,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's gender or sex.",
+    ),
+    Entity(
+        EntityType.ETHNIC_BACKGROUND,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's race or ethnicity.",
+    ),
+    Entity(EntityType.CITY, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A city or town."),
+    Entity(
+        EntityType.STATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=False,
+        description="A state, province, or region.",
+    ),
+    Entity(
+        EntityType.ZIPCODE, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A postal or ZIP code."
+    ),
+    Entity(EntityType.COUNTRY, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A country."),
+    Entity(
+        EntityType.ORGANIZATION,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="The name of a company, institution, or other organization.",
+    ),
+)
+
+ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
+
+FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity.entity_type for entity in ENTITIES if entity.action is EntityAction.REPLACE
+)
+"""Entity types eligible for fresh detection and replacement inside free text."""
+
+REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
+    EntityType.EMAIL,
+    EntityType.CREDIT_DEBIT_CARD,
+    EntityType.IPV4,
+    EntityType.IPV6,
+)
+"""Entity types detected exclusively by structurally validated built-in regex rules."""
+
+GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity_type for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES if entity_type not in REGEX_DETECTION_ENTITY_TYPES
+)
+"""Entity types requested from GLiNER2 rather than the built-in regex detector.
+
+The checkpoint's specific ``full_name`` label is used for complete names; its
+broader ``person`` label is intentionally not requested.
+"""
+
+# Thresholds come from tuning on a labeled development set of PII text (entity-type exact F0.5),
+# rounded, with checked_national_id_threshold tuned jointly. Name thresholds were tuned together with the name exclusion labels below and assume them.
+# Dev has no gold middle names, so middle_name was set by review and relies on the middle-name
+# neighbour rule to reject words such as clothing sizes.
+_DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType(
+    {
+        EntityType.FIRST_NAME: 0.944,
+        EntityType.MIDDLE_NAME: 0.7,
+        EntityType.LAST_NAME: 0.614,
+        EntityType.FULL_NAME: 0.963,
+        EntityType.PHONE_NUMBER: 0.992,
+        EntityType.DATE_OF_BIRTH: 0.9998,
+        EntityType.STREET_ADDRESS: 0.987,
+        EntityType.NATIONAL_ID: 0.979,
+        EntityType.API_KEY: 0.991,
+        EntityType.UNIQUE_IDENTIFIER: 0.946,
+    }
+)
+# Same tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
+# span overlapping one of these labels is dropped. Earlier tunings also requested medical_procedure, but tuned it to
+# 1.0, which never fires, so it is not requested.
+_DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
+    {
+        "body_part": 0.053,
+        "family_relationship": 0.229,
+        "gender": 0.485,
+        "medical_condition": 0.378,
+        "organism": 0.061,
+    }
+)
+_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD = 0.733
+_ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
+
+
+def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
+    """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
+    return {
+        entity_type: _DEFAULT_GLINER_ENTITY_THRESHOLDS[entity_type] for entity_type in GLINER_DETECTION_ENTITY_TYPES
+    }
+
+
+def _default_name_exclusion_thresholds() -> dict[str, float | None]:
+    """Return a fresh copy of the tuned name exclusion labels."""
+    return dict(_DEFAULT_NAME_EXCLUSION_THRESHOLDS)
+
+
+def _normalize_gliner_label(label: str) -> str:
+    """Normalize a GLiNER2 label's case and separators so equivalent spellings compare equal."""
+    return label.strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+# entity_type → allowed depends_on entity types (optional edges may be omitted).
+ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
+    EntityType.FIRST_NAME: frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND, EntityType.FULL_NAME}),
+    EntityType.MIDDLE_NAME: frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND, EntityType.FULL_NAME}),
+    EntityType.LAST_NAME: frozenset({EntityType.ETHNIC_BACKGROUND, EntityType.FULL_NAME}),
+    EntityType.FULL_NAME: frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND}),
+    EntityType.EMAIL: frozenset(
+        {
+            EntityType.FIRST_NAME,
+            EntityType.MIDDLE_NAME,
+            EntityType.LAST_NAME,
+            EntityType.FULL_NAME,
+            EntityType.ORGANIZATION,
+        }
+    ),
+}
+
+# Each inner tuple is one exclusivity family: at most one group from that family
+# may appear in a single depends_on list. Families are independent.
+# Applied to every columns_to_replace entry after entity_type inference.
+EXCLUSIVE_DEPENDS_ON_GROUPS: tuple[tuple[frozenset[EntityType], ...], ...] = (
+    (
+        frozenset({EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME}),
+        frozenset({EntityType.FULL_NAME}),
+    ),
+    (
+        frozenset({EntityType.FULL_NAME}),
+        frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND}),
+    ),
+)
+
+
+def is_columns_to_replace_type(entity_type: EntityType) -> bool:
+    """Whether ``entity_type`` may appear on ``columns_to_replace``."""
+    return ENTITY_BY_TYPE[entity_type].action is not EntityAction.IDENTIFY_ONLY
+
+
+def can_condition(entity_type: EntityType) -> bool:
+    """Whether ``entity_type`` may appear on a ``depends_on`` entry."""
+    return ENTITY_BY_TYPE[entity_type].can_condition
+
+
+def validate_pattern_eligibility(entity_type: EntityType | None, pattern: str | None) -> None:
+    """Validate context-free eligibility of a classification or plan pattern."""
+    if pattern is None:
+        return
+    if not pattern.strip():
+        raise ParameterError("pattern must be non-empty when provided")
+    if entity_type is None:
+        raise ParameterError("unclassified columns cannot include a pattern")
+    if ENTITY_BY_TYPE[entity_type].pattern_syntax is None:
+        raise ParameterError(f"entity_type {entity_type.value!r} does not allow pattern")
+
+
+def validate_dependency_relationship(
+    target_entity_type: EntityType,
+    source_entity_type: EntityType | None,
+    *,
+    target_column: str,
+) -> None:
+    """Validate one dependency edge against the entity relationship catalog.
+
+    A missing source type is deferred until ``PiiReplacementPlan`` can infer it
+    from the complete replacement graph; the target must still support
+    dependencies at this earlier validation seam.
+    """
+    allowed = ALLOWED_DEPENDS_ON.get(target_entity_type, frozenset())
+    if not allowed:
+        raise ParameterError(
+            f"column {target_column!r}: entity_type {target_entity_type.value!r} does not allow depends_on"
+        )
+    if source_entity_type is None or source_entity_type in allowed:
+        return
+    raise ParameterError(
+        f"column {target_column!r}: depends_on entity_type "
+        f"{source_entity_type.value!r} is not allowed for entity_type "
+        f"{target_entity_type.value!r} (allowed: {sorted(entity.value for entity in allowed)})"
+    )
+
+
+class ConditioningColumn(NSSBaseModel):
+    """An existing column that conditions the replacement of another column.
+
+    ``entity_type`` is required for read-only conditioners (``gender``,
+    ``ethnic_background``, ``city``, …) that are not listed under
+    ``columns_to_replace``.
+
+    When the conditioner is itself a replace target (e.g. email depends on
+    ``first_name``), ``entity_type`` may be omitted: the plan fills it in from that
+    column's entry, and an explicit value must match it. Downstream nodes see the
+    cell after upstream replacements.
+    """
+
+    column_name: str = Field(description="Existing dataframe column that supplies the conditioning value.")
+    entity_type: EntityType | None = Field(
+        default=None,
+        description=(
+            "Entity this conditioning column holds. Required for read-only "
+            "conditioners. Optional when this column_name is also in columns_to_replace: "
+            "it is filled in from that entry's entity_type, and an explicit value must match it."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _require_can_condition_when_set(self) -> Self:
+        if self.entity_type is not None and not can_condition(self.entity_type):
+            raise ParameterError(
+                f"entity_type {self.entity_type.value!r} cannot be used in depends_on "
+                f"(allowed: {sorted(e.entity_type.value for e in ENTITIES if e.can_condition)})"
+            )
+        return self
+
+
+class PiiColumnPlan(NSSBaseModel):
+    """Replacement spec for one named column.
+
+    ``entity_type`` must have action ``REPLACE`` or ``REPLACE_IN_TEXT``, not
+    ``IDENTIFY_ONLY``.
+    Identify-only types (``date``, ``gender``, ``city``, …) are invalid here.
+    ``depends_on`` is allowed only for types in ``ALLOWED_DEPENDS_ON``.
+    """
+
+    column_name: str = Field(description="Name of the dataframe column to replace or scan.")
+    entity_type: EntityType = Field(
+        description="Entity this column holds. Identify-only entity types are not allowed here.",
+    )
+    pattern: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "Optional whole-value format using the grammar associated with this entity type. "
+            "Only entity types that define a pattern syntax may set this. "
+            "When provided, the whole column is replaced with the pattern if it "
+            "covers at least 99% of non-null values (checked against the dataframe, "
+            "not here)."
+        ),
+    )
+    depends_on: list[ConditioningColumn] = Field(
+        default_factory=list,
+        exclude_if=lambda dependencies: not dependencies,
+        description=(
+            "Columns that condition the replacement of this column. "
+            "Only entity types in ALLOWED_DEPENDS_ON may set this. Can omit "
+            "ConditioningColumn.entity_type when the conditioner is listed in "
+            "columns_to_replace. Matrix checks for explicit entity_type run here; "
+            "omitted types and exclusive-group checks are resolved on PiiReplacementPlan."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_entity_and_depends_on(self) -> Self:
+        entity = ENTITY_BY_TYPE[self.entity_type]
+        if entity.action is EntityAction.IDENTIFY_ONLY:
+            raise ParameterError(
+                f"column {self.column_name!r}: entity_type {self.entity_type.value!r} is "
+                "identify-only (or otherwise not replaceable); omit it from columns_to_replace "
+            )
+        validate_pattern_eligibility(self.entity_type, self.pattern)
+        for dependency in self.depends_on:
+            if dependency.column_name == self.column_name:
+                raise ParameterError(f"column {self.column_name!r} cannot depend on itself")
+            validate_dependency_relationship(
+                self.entity_type,
+                dependency.entity_type,
+                target_column=self.column_name,
+            )
+        return self
+
+
+class PiiSamplerBackend(StrEnum):
+    """Source of synthetic values for names and related person-like fields."""
+
+    NEMOTRON_PERSONAS = "nemotron-personas"
+    """Draw from downloaded Nemotron-Personas locale assets."""
+
+    FAKER = "faker"
+    """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
+
+
+class PiiSamplerConfig(NSSBaseModel):
+    """Settings for Nemotron-Personas or Faker-backed person sampling."""
+
+    backend: PiiSamplerBackend = Field(
+        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
+        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
+    )
+    nemotron_personas_path: str | None = Field(
+        default=None,
+        description=(
+            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
+            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
+        ),
+    )
+
+    def resolved_nemotron_personas_path(self) -> Path:
+        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
+        if self.nemotron_personas_path is not None:
+            return Path(self.nemotron_personas_path).expanduser()
+        return default_nemotron_personas_path()
+
+
+class PiiReplacementPlan(Parameters):
+    """Dataset-specific replacement plan: the part of ``replace_pii`` a person reviews.
+
+    ``data_to_sampler_value_mapping`` targets the values of ``replace_pii.sampler``
+    in ``replace_pii.locale``, so a plan is checked against the sampler of each
+    run that uses it. ``columns_to_replace`` is a flat list whose
+    cross-column relationships are ``depends_on`` edges (a DAG). Context-free
+    dependency and graph checks are enforced here; plan-vs-dataframe checks
+    live in ``pii_replacer.planning.validation``.
+    """
+
+    columns_to_replace: list[PiiColumnPlan] = Field(
+        default_factory=list,
+        description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
+    )
+    data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(
+        default_factory=dict,
+        description=(
+            "Maps dataset values in depends_on columns to the values used by replace_pii.sampler. Unlike most "
+            "NSS settings, all matching here ignores case: dataset values, mapping keys, and sampler values, so "
+            "Female, female, and FEMALE are the same value. For example, {sex: {Woman: [female], Non-binary: "
+            "[female, male]}} makes rows where sex is Woman sample a female persona and rows where sex is "
+            "Non-binary sample either. Gender values are female and male for every sampler; Nemotron-Personas "
+            "also accepts its locale's own words, such as femme in fr_FR. Ethnicity values need "
+            "Nemotron-Personas in a locale with ethnicity data. A dataset value without an entry is looked up in "
+            "the sampler as is; a value that has no entry and matches no sampler value is an error. When "
+            "replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_data_to_sampler_value_mapping(self) -> Self:
+        for column_name, mappings in self.data_to_sampler_value_mapping.items():
+            if not column_name.strip():
+                raise ParameterError("data_to_sampler_value_mapping column names must be non-empty")
+            seen_sources: set[str] = set()
+            for source, targets in mappings.items():
+                source_key = source.casefold()
+                if not source.strip():
+                    raise ParameterError("data_to_sampler_value_mapping dataset values must be non-empty")
+                if source_key in seen_sources:
+                    raise ParameterError(
+                        f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                        "dataset values after case-folding"
+                    )
+                seen_sources.add(source_key)
+
+                if not targets:
+                    raise ParameterError("data_to_sampler_value_mapping sampler value lists must be non-empty")
+
+                seen_targets: set[str] = set()
+                for target in targets:
+                    target_key = target.casefold()
+                    if not target.strip():
+                        raise ParameterError("data_to_sampler_value_mapping sampler values must be non-empty")
+                    if target_key in seen_targets:
+                        raise ParameterError(
+                            f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                            "sampler values after case-folding"
+                        )
+                    seen_targets.add(target_key)
+        return self
+
+    @model_validator(mode="after")
+    def _reject_duplicate_replace_columns(self) -> Self:
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for spec in self.columns_to_replace:
+            if spec.column_name in seen:
+                duplicates.append(spec.column_name)
+            seen.add(spec.column_name)
+        if duplicates:
+            raise ParameterError(
+                "columns_to_replace has duplicate column_name values: " + ", ".join(repr(name) for name in duplicates)
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _resolve_omitted_depends_on_types(self) -> Self:
+        """Fill in or check depends_on.entity_type for columns that are also replaced.
+
+        A dependency on a column in ``columns_to_replace`` may omit ``entity_type`` for convenience; it is filled in
+        from that column's entry and serialized like any other value. An explicit ``entity_type`` must match the entry.
+        Inference is written to copies: callers may reuse a ``PiiColumnPlan`` across plans, where the same instance
+        would otherwise carry one plan's inferred types into the next.
+        """
+        targets = {spec.column_name: spec for spec in self.columns_to_replace}
+        updated: list[PiiColumnPlan] = []
+        for spec in self.columns_to_replace:
+            if not spec.depends_on:
+                updated.append(spec)
+                continue
+            resolved: list[ConditioningColumn] = []
+            inferred_any = False
+            for dep in spec.depends_on:
+                source = targets.get(dep.column_name)
+                if source is not None:
+                    inferred = source.entity_type
+                    if dep.entity_type is not None and dep.entity_type is not inferred:
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column {dep.column_name!r} has entity_type "
+                            f"{dep.entity_type.value!r}, but its columns_to_replace entry has "
+                            f"{inferred.value!r}; omit entity_type or make them match"
+                        )
+                    if not can_condition(inferred):
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column "
+                            f"{dep.column_name!r} has entity_type {inferred.value!r}, which "
+                            "cannot be used as a conditioner"
+                        )
+                    validate_dependency_relationship(
+                        spec.entity_type,
+                        inferred,
+                        target_column=spec.column_name,
+                    )
+                    if dep.entity_type is None:
+                        dep = dep.model_copy(update={"entity_type": inferred})
+                        inferred_any = True
+                elif dep.entity_type is None:
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on column "
+                        f"{dep.column_name!r} is missing entity_type; set entity_type "
+                        "for read-only conditioners (e.g. gender, ethnic_background)"
+                    )
+                elif is_columns_to_replace_type(dep.entity_type):
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on column "
+                        f"{dep.column_name!r} has entity_type {dep.entity_type.value!r}, which is "
+                        "a replace target; list it in columns_to_replace"
+                    )
+                else:
+                    validate_dependency_relationship(
+                        spec.entity_type,
+                        dep.entity_type,
+                        target_column=spec.column_name,
+                    )
+                resolved.append(dep)
+            updated.append(spec.model_copy(update={"depends_on": resolved}) if inferred_any else spec)
+        self.columns_to_replace = updated
+        return self
+
+    @model_validator(mode="after")
+    def _reject_duplicate_depends_on_entity_types(self) -> Self:
+        """At most one depends_on edge per conditioner entity_type on a target."""
+        for spec in self.columns_to_replace:
+            seen: dict[EntityType, str] = {}
+            for dep in spec.depends_on:
+                entity_type = dep.entity_type
+                if entity_type is None:
+                    continue
+                prior = seen.get(entity_type)
+                if prior is not None:
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on entity_type "
+                        f"{entity_type.value!r} appears more than once "
+                        f"({prior!r} and {dep.column_name!r})"
+                    )
+                seen[entity_type] = dep.column_name
+        return self
+
+    @model_validator(mode="after")
+    def _reject_exclusive_depends_on_groups(self) -> Self:
+        """Forbid mixing mutually exclusive conditioner groups within a family."""
+        for spec in self.columns_to_replace:
+            if not spec.depends_on:
+                continue
+            dep_types = {dep.entity_type for dep in spec.depends_on}
+            for groups in EXCLUSIVE_DEPENDS_ON_GROUPS:
+                hit = [group for group in groups if dep_types & group]
+                if len(hit) < 2:
+                    continue
+                formatted = " vs ".join(
+                    "{" + ", ".join(sorted(member.value for member in group)) + "}" for group in hit
+                )
+                raise ParameterError(
+                    f"column {spec.column_name!r}: depends_on mixes mutually exclusive conditioner groups: {formatted}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_dependency_cycles(self) -> Self:
+        """Reject cycles defensively even though the current catalog is acyclic."""
+        self.replacement_order()
+        return self
+
+    def replacement_order(self) -> tuple[PiiColumnPlan, ...]:
+        """Return ``columns_to_replace`` so every column comes after the columns it depends on.
+
+        Independent columns keep their listed order. Dependencies on columns that are not replaced
+        do not affect the order.
+
+        Raises:
+            ParameterError: If the dependencies form a cycle; the message names the columns in it.
+        """
+        specs = self.columns_to_replace
+        by_name = {spec.column_name: spec for spec in specs}
+        position = {spec.column_name: index for index, spec in enumerate(specs)}
+        outgoing: dict[str, set[str]] = {column: set() for column in by_name}
+        indegree = dict.fromkeys(by_name, 0)
+        for spec in specs:
+            for dependency in spec.depends_on:
+                source = dependency.column_name
+                if source not in by_name or spec.column_name in outgoing[source]:
+                    continue
+                outgoing[source].add(spec.column_name)
+                indegree[spec.column_name] += 1
+
+        ready = [(position[column], column) for column, degree in indegree.items() if degree == 0]
+        heapq.heapify(ready)
+        ordered: list[PiiColumnPlan] = []
+        while ready:
+            _, source = heapq.heappop(ready)
+            ordered.append(by_name[source])
+            for target in outgoing[source]:
+                indegree[target] -= 1
+                if indegree[target] == 0:
+                    heapq.heappush(ready, (position[target], target))
+
+        if len(ordered) != len(by_name):
+            cycle_columns = sorted(column for column, degree in indegree.items() if degree > 0)
+            raise ParameterError(
+                "replacement dependencies contain a cycle involving: "
+                + ", ".join(repr(column) for column in cycle_columns)
+            )
+        return tuple(ordered)
+
+
+class LLMConfig(NSSBaseModel):
+    """Inference behavior for LLM-assisted PII plan discovery.
+
+    Automatic discovery always uses the LLM. Without an endpoint, NSS runs the
+    model in a managed local vLLM server. An
+    OpenAI-compatible endpoint is supplied at runtime through
+    ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
+    in NSS configuration.
+    """
+
+    model_id: str | None = Field(
+        default=None,
+        description=(
+            "Model identifier for PII inference. When unset, uses NSS_INFERENCE_MODEL. Without an inference "
+            "endpoint, selects the bundled local vLLM profile and defaults to "
+            f"{DEFAULT_NSS_INFERENCE_LOCAL_MODEL}; with an endpoint, a model ID is required."
+        ),
+    )
+    max_workers: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum concurrent requests for LLM-assisted plan discovery. Must be at least 1.",
+    )
+
+
+class FreeTextDetectionConfig(NSSBaseModel):
+    """GLiNER2 and deterministic regex settings for free-text PII detection."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_default_revision_for_other_models(cls, data: object) -> object:
+        """Load the latest revision of a non-default model unless the caller pins one.
+
+        The default revision is a commit of the default model and does not exist in other repositories.
+        """
+        if not isinstance(data, Mapping):
+            return data
+        values = {str(key): value for key, value in data.items()}
+        if "model_revision" in values or values.get("model_id", DEFAULT_GLINER2_MODEL_ID) == DEFAULT_GLINER2_MODEL_ID:
+            return data
+        return {**values, "model_revision": None}
+
+    model_id: str = Field(
+        default=DEFAULT_GLINER2_MODEL_ID,
+        min_length=1,
+        description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
+    )
+    model_revision: str | None = Field(
+        default=DEFAULT_GLINER2_MODEL_REVISION,
+        min_length=1,
+        description=(
+            "Hugging Face revision (commit, branch, or tag) of model_id to load. Defaults to the commit of the "
+            "default model that the default thresholds were tuned on. When model_id is changed and "
+            "model_revision is not set, the latest revision is loaded. Set null to load the latest revision."
+        ),
+    )
+    entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
+        default_factory=_default_gliner_entity_thresholds,
+        description=(
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.944 for "
+            "first_name; 0.7 for middle_name; 0.614 for last_name; 0.963 for full_name; 0.992 for phone_number; 0.9998 for "
+            "date_of_birth; 0.987 for street_address; 0.979 for national_id; 0.991 for api_key; "
+            "and 0.946 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
+            "take no threshold."
+        ),
+    )
+    checked_national_id_threshold: _ConfidenceThreshold = Field(
+        default=_DEFAULT_CHECKED_NATIONAL_ID_THRESHOLD,
+        description=(
+            "Minimum GLiNER2 confidence score for a detected national ID that python-stdnum accepts as a personal "
+            "ID of replace_pii.locale's country, such as a US Social Security number for en_US. It replaces "
+            "entity_thresholds.national_id for those values, since the check rather than the score tells them "
+            "apart. Locales without a check, such as en_GB, use only the national_id threshold."
+        ),
+    )
+    name_exclusion_thresholds: dict[str, _ConfidenceThreshold | None] = Field(
+        default_factory=_default_name_exclusion_thresholds,
+        description=(
+            "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
+            "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
+            "replaced, and find_and_replace does not replace text inside them. Labels you set are merged into the "
+            "defaults; set a label to null to drop it, and it stays null in the configuration. Dropping every "
+            "label turns exclusion off, which finds more "
+            "real names at the cost of more false names in clinical text."
+        ),
+    )
+    find_and_replace: bool = Field(
+        default=True,
+        description=(
+            "Search free text for values already known in the same record or group and replace the occurrences "
+            "the detectors missed. Detected spans reuse a known value's replacement either way; this setting only "
+            "adds the search. Known values are original values of structured replacement columns, including the "
+            "words of a plain full name, and values detected elsewhere in free text. Only whole words are matched, ignoring case. Values shorter "
+            "than three characters, one-word values that are common English words, such as 'Will' or "
+            "'Brown', and missing-value placeholders such as 'Unknown' are not searched for, and text inside a "
+            "name-exclusion span, such as a medical condition, is never replaced this way. Set false to replace "
+            "only detected spans, for example to measure what the search adds. The search runs only when "
+            "replace_pii.locale is en_US, because the common-word list is English."
+        ),
+    )
+    batch_size: int = Field(
+        default=8,
+        gt=0,
+        description="Number of text chunks processed in one GLiNER2 inference batch. Must be positive.",
+    )
+    chunk_length: int = Field(
+        default=384,
+        gt=0,
+        description="Maximum length of each GLiNER2 text chunk. Must be positive.",
+    )
+    chunk_overlap: int = Field(
+        default=128,
+        ge=0,
+        description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
+    )
+
+    @field_validator("entity_thresholds", mode="before")
+    @classmethod
+    def _fill_default_entity_thresholds(cls, value: object) -> object:
+        """Let users override selected thresholds; unspecified entity types keep their defaults."""
+        if isinstance(value, Mapping):
+            return {**_default_gliner_entity_thresholds(), **value}
+        return value
+
+    @field_validator("entity_thresholds")
+    @classmethod
+    def _reject_non_gliner_entity_thresholds(
+        cls,
+        value: dict[EntityType, float],
+    ) -> dict[EntityType, float]:
+        unsupported = sorted(entity_type.value for entity_type in set(value) - set(GLINER_DETECTION_ENTITY_TYPES))
+        if unsupported:
+            raise ParameterError(
+                "free_text_detection.entity_thresholds accepts only GLiNER-detected entity types; "
+                f"unsupported: {unsupported}"
+            )
+        return value
+
+    @field_validator("name_exclusion_thresholds", mode="before")
+    @classmethod
+    def _merge_default_name_exclusion_thresholds(cls, value: object) -> object:
+        """Merge selected labels into the defaults; a label set to ``None`` is dropped.
+
+        Labels are matched after normalizing case and separators, so ``Medical Condition`` overrides the default
+        ``medical_condition`` instead of adding a second label. A dropped label stays in the value as ``None``, so
+        validating a stored value again, as SDK overlays and saved configurations do, does not merge it back.
+        """
+        if not isinstance(value, Mapping):
+            return value
+        overrides = {str(label): threshold for label, threshold in value.items()}
+        if len({_normalize_gliner_label(label) for label in overrides}) != len(overrides):
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
+        merged: dict[str, object] = {
+            label: threshold
+            for label, threshold in _default_name_exclusion_thresholds().items()
+            if _normalize_gliner_label(label) not in {_normalize_gliner_label(key) for key in overrides}
+        }
+        merged.update(overrides)
+        return merged
+
+    @field_validator("name_exclusion_thresholds")
+    @classmethod
+    def _validate_name_exclusion_labels(cls, value: dict[str, float | None]) -> dict[str, float | None]:
+        """Reject blank, duplicate, and entity-type labels, since each would silently change detection."""
+        normalized = {_normalize_gliner_label(label) for label in value}
+        if "" in normalized:
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be nonempty")
+        if len(normalized) != len(value):
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
+        active = {_normalize_gliner_label(label) for label, threshold in value.items() if threshold is not None}
+        colliding = sorted(active & {entity_type.value for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES})
+        if colliding:
+            raise ParameterError(
+                f"free_text_detection.name_exclusion_thresholds cannot use detected entity types: {colliding}"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_chunk_overlap(self) -> Self:
+        if self.chunk_overlap >= self.chunk_length:
+            raise ParameterError(
+                "free_text_detection.chunk_overlap must be smaller than chunk_length, "
+                f"got chunk_overlap={self.chunk_overlap}, chunk_length={self.chunk_length}"
+            )
+        return self
+
+
+def _load_plan_file(path: Path) -> dict[str, object]:
+    """Return the mapping in a replacement plan file, rejecting fields the plan does not have."""
+    try:
+        raw = yaml.safe_load(path.read_text())
+    except OSError as exc:
+        raise ParameterError(
+            f"replace_pii.replacement_plan is not {AUTO_DISCOVERY!r} or an inline plan, and the plan file "
+            f"{str(path)!r} could not be read: {exc}"
+        ) from exc
+    except yaml.YAMLError as exc:
+        raise ParameterError(f"Invalid YAML in the PII replacement plan file {str(path)!r}: {exc}") from exc
+    if not isinstance(raw, Mapping):
+        raise ParameterError(f"The PII replacement plan file {str(path)!r} must contain a mapping")
+    try:
+        plan = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], raw), "reject")
+    except ParameterError as exc:
+        raise ParameterError(f"Invalid PII replacement plan file {str(path)!r}: {exc}") from exc
+    return plan
+
+
+class ReplacePiiConfig(Parameters):
+    """Top-level ``replace_pii`` config.
+
+    ``replacement_plan`` holds what a person reviews: the columns to replace
+    and the value mapping. It is ``"auto_discovery"`` (the default), an inline
+    plan, or the path of a YAML plan file, resolved relative to the
+    configuration file that names it. ``locale``, ``seed``, and ``sampler``
+    configure generation; a plan's value mapping is checked against the
+    ``sampler`` and ``locale`` of each run. ``llm`` and ``free_text_detection``
+    configure how NSS finds PII.
+
+    Auto-discovery classifies columns with the LLM configured by ``llm``, which
+    defaults to the NSS inference defaults. An inline plan bypasses discovery,
+    so it makes no LLM request; that is the way to replace PII without an LLM.
+    The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
+    or the corresponding CLI option; it is never stored in this model.
+
+    v2 fields ``globals`` and ``steps`` are rejected with a removal error.
+    """
+
+    removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"globals", "steps"})
+    removed_legacy_fields_message: ClassVar[str] = (
+        "This configuration uses the PII replacement v2 schema, which is not supported by PII replacement v3. "
+        "Configure replace_pii.replacement_plan instead. "
+        "See docs/user-guide/configuration.md#replacing-pii "
+        "for the current configuration."
+    )
+
+    schema_version: Literal[3] = Field(
+        default=_IMPLICIT_REPLACE_PII_SCHEMA_VERSION,
+        description=(
+            "Version of this replace_pii configuration schema. Missing versions are treated as version 3; "
+            "this release accepts only version 3."
+        ),
+    )
+    locale: str = Field(
+        default="en_US",
+        description=(
+            "Locale for generated names, addresses, and phone numbers, and of the Nemotron-Personas dataset "
+            "(datasets/{locale}.parquet)."
+        ),
+    )
+    seed: int | None = Field(
+        default=None,
+        description=(
+            "Seed for synthetic value generation. When unset, each run draws a random seed and saves it in the "
+            "resolved configuration. Anyone who knows the seed can test guesses for original values in the "
+            "replaced data, so keep a configuration that contains it as private as the input data."
+        ),
+    )
+    sampler: PiiSamplerConfig = Field(
+        default_factory=PiiSamplerConfig,
+        description=(
+            "Sampler that generates names and addresses: Nemotron-Personas or Faker. When sampler is not set, "
+            "NSS uses Nemotron-Personas, or Faker with a warning when the Nemotron-Personas data for locale is "
+            "missing and the plan maps no ethnicity values. A relative nemotron_personas_path is resolved "
+            "against the directory of the configuration file."
+        ),
+    )
+    replacement_plan: SkipValidation[PiiReplacementPlan] | str = Field(
+        default=AUTO_DISCOVERY,
+        description=(
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data; an inline plan; or the path of a YAML "
+            "plan file. A relative path is resolved against the directory of the configuration file."
+        ),
+    )
+    llm: LLMConfig = Field(
+        default_factory=LLMConfig,
+        description=(
+            "Inference behavior for LLM-assisted plan discovery; the defaults run a local vLLM server. "
+            "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
+            "An inline plan makes no LLM request."
+        ),
+    )
+    free_text_detection: FreeTextDetectionConfig = Field(
+        default_factory=FreeTextDetectionConfig,
+        description="GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_v2_fields(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_schema_version(cls, value: object) -> object:
+        """Reject invalid or unsupported versions before validating the schema body."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        version = mapping.get("schema_version", _IMPLICIT_REPLACE_PII_SCHEMA_VERSION)
+        if type(version) is not int:
+            raise ParameterError("replace_pii.schema_version must be an integer")
+        if version not in _SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS:
+            supported = ", ".join(str(item) for item in sorted(_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS))
+            raise ParameterError(
+                f"replace_pii schema version {version} is unsupported; this NSS release supports version {supported}"
+            )
+        return value
+
+    @model_serializer(mode="wrap")
+    def _serialize_schema_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Include the selected schema version even in sparse serialization."""
+        serialized = cast(dict[str, object], handler(self))
+        serialized["schema_version"] = self.schema_version
+        return serialized
+
+    @field_validator("llm", mode="before")
+    @classmethod
+    def _reject_null_llm(cls, value: object) -> object:
+        if value is None:
+            raise ParameterError(
+                "replace_pii.llm cannot be null because automatic discovery needs an LLM; to replace PII without "
+                "one, give an inline plan in replace_pii.replacement_plan, or set replace_pii to null to skip "
+                "replacement"
+            )
+        return value
+
+    @field_validator("sampler", mode="before")
+    @classmethod
+    def _resolve_personas_path(cls, value: object, info: ValidationInfo) -> object:
+        """Resolve a relative ``nemotron_personas_path`` against the configuration file's directory.
+
+        The joined path is made absolute, so a configuration saved elsewhere still names the same directory.
+
+        Example:
+            A configuration in ``/runs/a`` naming ``personas`` reads personas from ``/runs/a/personas``,
+            wherever NSS is started.
+        """
+        context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
+        if context_dir is None or not isinstance(value, Mapping):
+            return value
+        sampler = cast(Mapping[str, object], value)
+        personas_path = sampler.get("nemotron_personas_path")
+        if isinstance(personas_path, str) and not Path(personas_path).expanduser().is_absolute():
+            return {**sampler, "nemotron_personas_path": str((Path(context_dir) / personas_path).absolute())}
+        return value
+
+    @field_validator("replacement_plan", mode="before")
+    @classmethod
+    def _resolve_replacement_plan(cls, value: object, info: ValidationInfo) -> object:
+        """Resolve the sentinel, an inline plan, or a plan file path, relative to the configuration file.
+
+        Left to the union, a malformed inline plan reports the plan's own errors
+        *and* a sentinel mismatch. Validating a mapping as a plan up front keeps
+        the report to the fields the user actually got wrong.
+
+        Unknown plan fields are always rejected, as in plan files: a misspelled
+        ``columns_to_replace`` would otherwise leave an empty plan and train on
+        the original values.
+        """
+        if value == AUTO_DISCOVERY or isinstance(value, PiiReplacementPlan):
+            return value
+        context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
+        config_dir = Path(context_dir) if context_dir is not None else None
+        if isinstance(value, str | Path):
+            path = Path(value).expanduser()
+            if not path.is_absolute() and config_dir is not None:
+                path = config_dir / path
+            value = _load_plan_file(path)
+        if not isinstance(value, Mapping):
+            raise ParameterError(
+                f"replace_pii.replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or the path of a YAML "
+                f"plan file (got {value!r})"
+            )
+        try:
+            value = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], value), "reject")
+        except ParameterError as exc:
+            raise ParameterError(f"invalid replacement plan ({exc})") from exc
+        try:
+            return PiiReplacementPlan.model_validate(value)
+        except ValidationError as exc:
+            details = format_pydantic_validation_error(exc)
+            raise ParameterError(f"invalid replacement plan ({details})") from exc
+
+    @property
+    def is_auto_discovery(self) -> bool:
+        """Whether replacements should be auto-discovered (no explicit plan)."""
+        return self.replacement_plan == AUTO_DISCOVERY
+
+    @property
+    def inline_plan(self) -> PiiReplacementPlan | None:
+        """The inline plan, or ``None`` for auto-discovery."""
+        return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None
+
+    def with_plan(self, plan: PiiReplacementPlan) -> Self:
+        """Return a copy whose ``replacement_plan`` is ``plan``."""
+        return self.model_copy(update={"replacement_plan": plan})
+
+    def with_sampler_backend(self, backend: PiiSamplerBackend) -> Self:
+        """Return a copy whose ``sampler`` uses ``backend``, keeping its other settings."""
+        return self.model_copy(update={"sampler": self.sampler.model_copy(update={"backend": backend})})
