@@ -516,7 +516,6 @@ class TestReplacementGenerator:
     ) -> None:
         assert name_affixes(full_name, locale="en_US") == affixes
 
-    @pytest.mark.parametrize("pattern", [None, "{First} {Last}", "Dr. {First} {Last}"])
     @pytest.mark.parametrize(
         ("original", "shape"),
         [
@@ -525,23 +524,23 @@ class TestReplacementGenerator:
             ("Mrs. Grace Hopper Jr.", r"\S+ \S+ Jr\."),
         ],
     )
-    def test_faker_full_name_keeps_the_originals_title_and_suffix(
-        self, pattern: str | None, original: str, shape: str
+    def test_faker_full_name_without_a_pattern_keeps_the_originals_title_and_suffix(
+        self, original: str, shape: str
     ) -> None:
-        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original, pattern=pattern))
+        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original))
 
-        if pattern is not None and pattern.startswith("Dr. "):
-            shape = shape if shape.startswith("Dr") else r"Dr\. " + shape
         assert re.fullmatch(shape, replacement), replacement
 
     @pytest.mark.parametrize(
         ("original", "pattern", "shape"),
         [
-            ("Prof. Dr. Hans Müller", "Dr. {First} {Last}", r"Prof\. Dr\. \S+ \S+"),
-            ("Ada Lovelace Jr., PhD", "{First} {Last} Jr.", r"\S+ \S+ Jr\., PhD"),
+            ("Dr. Ada Lovelace", "{First} {Last}", r"\S+ \S+"),
+            ("Ada Lovelace, PhD", "{First} {Last}", r"\S+ \S+"),
+            ("Prof. Dr. Hans Müller", "Dr. {First} {Last}", r"Dr\. \S+ \S+"),
+            ("Ada Lovelace", "Dr. {First} {Last}", r"Dr\. \S+ \S+"),
         ],
     )
-    def test_faker_full_name_adds_only_the_titles_and_suffixes_its_pattern_lacks(
+    def test_faker_full_name_with_a_pattern_is_written_exactly_as_the_pattern(
         self, original: str, pattern: str, shape: str
     ) -> None:
         replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original, pattern=pattern))
@@ -554,6 +553,10 @@ class TestReplacementGenerator:
 
         assert generator.generate(_request(EntityType.FULL_NAME, "Dr. Ada Lovelace, PhD")) == "Dr. Grace Hopper, PhD"
         assert generator.generate(_request(EntityType.FULL_NAME, "Mrs. Ada Lovelace")) == "Grace Hopper"
+        assert (
+            generator.generate(_request(EntityType.FULL_NAME, "Dr. Ada Lovelace, PhD", pattern="{First} {Last}"))
+            == "Grace Hopper"
+        )
 
     def test_an_unknown_locale_fails_with_the_faker_error(self) -> None:
         with pytest.raises(GenerationError, match="could not load Faker's name formats for locale 'xx_YY'"):

@@ -169,6 +169,12 @@ such as `{First} {Last}` or `{f}.{last}@{domain}`:
   written as a domain label. An email pattern must contain `@`, and `#` writes
   one random digit.
 
+A full name without a pattern keeps the original's professional titles and
+suffixes, such as `Dr.` and `Jr.`, and drops forms of address such as `Mr.` and
+`Mrs.`. A full name with a pattern is written exactly as the pattern says:
+`{First} {Last}` writes no title, and `Dr. {First} {Last}` writes `Dr.` in
+every value.
+
 Character masks, for phone numbers, card numbers, API keys, and identifiers,
 write one random character per token and copy everything else, so `pmc-######`
 produces values like `pmc-482913`:
