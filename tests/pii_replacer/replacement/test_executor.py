@@ -1270,6 +1270,21 @@ class TestKnownValueMatching:
             None,
         )
 
+    @pytest.mark.parametrize("original", [" Kenneth", "Kenneth "])
+    def test_structured_value_with_surrounding_spaces_matches_free_text(self, original: str) -> None:
+        notes = "kenneth called, then Kenneth left"
+        dataframe = pd.DataFrame({"first_name": [original], "notes": [notes]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME), _target("notes", EntityType.FREE_TEXT))
+        # The detector finds the second mention only; find-and-replace must catch the first.
+        detector = _StaticDetector([_span(0, "notes", notes, "Kenneth", EntityType.FIRST_NAME)])
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector, find_and_replace=True)
+
+        replacement = str(result.dataframe.at[0, "first_name"]).strip()
+        assert result.dataframe.at[0, "notes"] == f"{replacement.lower()} called, then {replacement} left"
+        assert len(generator.requests) == 1
+
     def test_detected_values_replace_missed_occurrences_in_the_same_record_only(self) -> None:
         dataframe = pd.DataFrame(
             {

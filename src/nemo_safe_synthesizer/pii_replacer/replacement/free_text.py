@@ -414,8 +414,13 @@ class FreeTextReplacementExecutor:
         original: str,
         replacement: str,
     ) -> None:
-        """Keep the first scoped replacement for an exact entity/value pair."""
-        self._store(FreeTextMappingKey(scope_identity, entity_type, original), replacement)
+        """Keep the first scoped replacement for an exact entity/value pair.
+
+        Surrounding whitespace is stripped from both sides, because prose never
+        includes it: a structured `` Rockaway Blvd`` must match ``Rockaway Blvd``
+        in free text and replace it without the padding.
+        """
+        self._store(FreeTextMappingKey(scope_identity, entity_type, original.strip()), replacement.strip())
 
     def _store(self, key: FreeTextMappingKey, replacement: str) -> str:
         """Cache ``replacement`` unless ``key`` already has one, and return the cached value.
