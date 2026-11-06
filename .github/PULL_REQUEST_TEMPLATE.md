@@ -7,11 +7,6 @@
 # Summary
 <!-- Brief description of changes -->
 
-## Related Issue
-
-<!-- Use Fixes #NNN, Closes #NNN, or Resolves #NNN. At least one issue must be open and labeled `triaged` for external contributions. Check the issue for that label before reopening an automatically closed PR. -->
-- Closes #<issue>
-
 ## Human review
 
 Select exactly one. The default is no human review; uncheck it when choosing another level.
@@ -45,4 +40,7 @@ Ensure that the following pass:
 - [ ] New or updated tests for any fix or new behavior
 - [ ] Updated documentation for new features and behaviors, including docstrings for API docs.
 
-## Other Notes
+## Related Issue
+
+<!-- Use Fixes #NNN, Closes #NNN, or Resolves #NNN. At least one issue must be open and labeled `triaged` for external contributions. Check the issue for that label before reopening an automatically closed PR. -->
+- Closes #<issue>
