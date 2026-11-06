@@ -23,7 +23,8 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.13.4 or a later 0.13 release. In a clone of this repository, uv
+  refuses to run with any other version.
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
