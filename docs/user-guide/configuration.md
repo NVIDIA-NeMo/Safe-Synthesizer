@@ -407,11 +407,17 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.time_series.autocorrelation.max_lag` | `20` | Largest positive lag requested | Select a horizon relevant to the downstream use case |
 | `evaluation.time_series.autocorrelation.min_points` | `4` | Minimum finite observations required per sequence | Leave at default unless short sequences must be excluded |
 | `evaluation.time_series.autocorrelation.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
+| `evaluation.time_series.window_group_mia.value_columns` | `null` | Numeric columns combined into each window for Window Membership Inference Protection | Leave `null` for inferred numeric columns, up to `max_columns`, or provide an explicit list |
+| `evaluation.time_series.window_group_mia.window_size` | `10` | Number of consecutive values compared as one window; windows start every half window | Lower to detect partial copies in short sequences; raise to detect copies blurred by noise |
+| `evaluation.time_series.window_group_mia.max_windows` | `1000` | Maximum training and holdout windows compared, each, in a reproducible sample balanced across groups | Lower to reduce evaluation time; fewer windows make the score noisier |
+| `evaluation.time_series.window_group_mia.max_columns` | `12` | Maximum automatically selected numeric columns combined into each window | Lower to reduce evaluation time for wide data |
 
 See [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters]
 for the full API reference. See
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md)
 for calculation and interpretation guidance.
+See [Window Membership Inference Protection](time-series-metrics/window-membership-inference-protection.md)
+for the time-series privacy metric.
 
 ---
 

@@ -27,25 +27,8 @@
 {% endif %}
 {%- endmacro %}
 
-{#- Pair summary, legend, and chart grid for a time-series metric card.
-    The caller block renders after the pair summary, for metric-specific notes. -#}
-{% macro chart_grid(metric) -%}
-{% if metric.figures %}
-<p class="chart-subheading">
-    {% set group_count = metric.evaluated_group_count %}
-    {% set column_count = metric.evaluated_column_count %}
-    Summarizing {{ metric.evaluated_profile_count }} group-column pairs
-    ({{ group_count }} {{ "group" if group_count == 1 else "groups" }},
-    {{ column_count }} numeric {{ "column" if column_count == 1 else "columns" }}).
-    {% if column_count > metric.pair_score_column_count %}
-    Pair scores shows the {{ metric.pair_score_column_count }} lowest-scoring columns.
-    {% endif %}
-</p>
-{{ caller() }}
-<div class="chart-legend" aria-label="Chart legend">
-    <span><i class="legend-training"></i>Training Data</span>
-    <span><i class="legend-synthetic"></i>Synthetic Data</span>
-</div>
+{#- Figures of a time-series metric card, each with its heading, info tooltip, and column select. -#}
+{% macro chart_figures(metric) -%}
 <div class="time-series-charts"{% if metric.score_colored_traces %} data-score-colored-traces{% endif %}>
 {% for row in metric.figures %}
 <figure>
@@ -73,5 +56,27 @@
 </figure>
 {% endfor %}
 </div>
+{%- endmacro %}
+
+{#- Pair summary, legend, and chart grid for a time-series metric card.
+    The caller block renders after the pair summary, for metric-specific notes. -#}
+{% macro chart_grid(metric) -%}
+{% if metric.figures %}
+<p class="chart-subheading">
+    {% set group_count = metric.evaluated_group_count %}
+    {% set column_count = metric.evaluated_column_count %}
+    Summarizing {{ metric.evaluated_profile_count }} group-column pairs
+    ({{ group_count }} {{ "group" if group_count == 1 else "groups" }},
+    {{ column_count }} numeric {{ "column" if column_count == 1 else "columns" }}).
+    {% if column_count > metric.pair_score_column_count %}
+    Pair scores shows the {{ metric.pair_score_column_count }} lowest-scoring columns.
+    {% endif %}
+</p>
+{{ caller() }}
+<div class="chart-legend" aria-label="Chart legend">
+    <span><i class="legend-training"></i>Training Data</span>
+    <span><i class="legend-synthetic"></i>Synthetic Data</span>
+</div>
+{{ chart_figures(metric) }}
 {% endif %}
 {%- endmacro %}

@@ -41,6 +41,7 @@ from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
 from ....evaluation.components.time_series_common import TimeSeriesComponent
+from ....evaluation.components.window_group_mia import WindowGroupMIA
 from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -52,7 +53,7 @@ from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
 
-TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity,)
+TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity, WindowGroupMIA)
 """Components run when time-series evaluation is enabled, in report display order."""
 
 
@@ -111,7 +112,13 @@ class MultimodalReport(EvaluationReport):
                     self.evaluation_datasets
                 )
 
-            ctx["time_series_cards"] = [c.jinja_context for c in self.components if isinstance(c, TimeSeriesComponent)]
+            time_series_components = [c for c in self.components if isinstance(c, TimeSeriesComponent)]
+            ctx["time_series_cards"] = [
+                c.jinja_context for c in time_series_components if c.report_section == "time_series"
+            ]
+            ctx["data_privacy_time_series_cards"] = [
+                c.jinja_context for c in time_series_components if c.report_section == "data_privacy"
+            ]
             ctx["with_time_series"] = bool(ctx["time_series_cards"])
 
             return ctx

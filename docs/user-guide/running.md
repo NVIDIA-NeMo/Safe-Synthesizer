@@ -1138,6 +1138,10 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 In time-series mode, the HTML report also includes
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md).
 Set `evaluation.time_series.enabled: false` to skip it.
+The same setting also controls
+[Window Membership Inference Protection](time-series-metrics/window-membership-inference-protection.md),
+which appears in the report's Data Privacy section and needs grouped data and at least two holdout groups for a score
+([when the score is available](time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)).
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in
