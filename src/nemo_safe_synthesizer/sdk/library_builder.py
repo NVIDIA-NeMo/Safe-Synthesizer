@@ -97,29 +97,23 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
     """Return the telemetry ``(mode, model)`` labels for LLM-assisted PII planning.
 
     Resolves where planning runs the same way plan discovery does, without
-    launching a server. Only bundled model names are reported; custom profiles
-    and other endpoint models collapse to fixed labels so private model or
-    deployment names are never sent.
+    launching a server. The model goes through the same
+    ``sanitize_model_for_telemetry`` check as ``training.pretrained_model``, so
+    local model paths are reported as ``"local_path"``. A local server reports
+    its profile's ``model_id`` rather than its served name, which can be any label.
     """
     if plan_source != "auto_discovery":
         return "none", "undefined"
 
-    from ..pii_replacer.local_inference import (
-        LocalServerRequest,
-        bundled_profile_for_model,
-        resolve_planning_inference,
-    )
+    from ..pii_replacer.local_inference import LocalServerRequest, resolve_planning_inference
 
     try:
         inference = resolve_planning_inference(config.llm)
     except ParameterError:
         return "invalid", "undefined"
     if isinstance(inference, LocalServerRequest):
-        profile = inference.profile
-        is_bundled = bundled_profile_for_model(profile.served_name) == profile
-        return "local", profile.served_name if is_bundled else "custom_profile"
-    is_bundled_model = bundled_profile_for_model(inference.model_id) is not None
-    return "endpoint", inference.model_id if is_bundled_model else "other"
+        return "local", sanitize_model_for_telemetry(inference.profile.model_id)
+    return "endpoint", sanitize_model_for_telemetry(inference.model_id)
 
 
 def _build_telemetry_event(
