@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -378,6 +378,16 @@ class TestGenerationBatchesTokenAggregation:
         b1 = _make_batch_with_tokens([10], [5], completion_tokens=100)
         gen = GenerationBatches(batches=[b1])
         assert gen.total_non_record_tokens == 85  # 100 - 10 - 5
+
+    def test_results_total_non_record_tokens_sums_drift_without_warnings(self):
+        drifting = _make_batch_with_tokens([30], [], completion_tokens=25)
+        regular = _make_batch_with_tokens([10], [5], completion_tokens=100)
+        gen = GenerationBatches(batches=[drifting, regular])
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_logger:
+            assert gen.total_non_record_tokens == (25 - 30) + (100 - 10 - 5)
+
+        mock_logger.warning.assert_not_called()
 
     def test_total_tokenization_time_sec(self):
         b1 = _make_batch_with_tokens([10], [5], completion_tokens=100, tok_time=0.01)

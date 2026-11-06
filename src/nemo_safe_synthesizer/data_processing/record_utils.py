@@ -107,6 +107,9 @@ class ParsedResponse:
     prompt_number: int | None = None
     """Index of the prompt within the batch (set by the processor call)."""
 
+    completion_tokens: int = 0
+    """Number of tokens in the completion (set by ``Batch.process``); 0 when the backend does not report them."""
+
     @property
     def valid_records(self) -> list[RecordDict]:
         """Parsed dicts for records that passed validation."""
