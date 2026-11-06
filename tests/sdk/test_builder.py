@@ -449,11 +449,18 @@ class TestTelemetryEmission:
                 "openai/gpt-oss-120b",
             ),
             (
-                {"model_id": "acme/private-deployment"},
+                {"model_id": "acme/planner-7b"},
                 "auto_discovery",
                 {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
                 "endpoint",
-                "other",
+                "acme/planner-7b",
+            ),
+            (
+                {"model_id": "/srv/alice/models/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "local_path",
             ),
             (
                 {},
@@ -469,7 +476,8 @@ class TestTelemetryEmission:
             "local-bundled",
             "local-unbundled-model",
             "endpoint-bundled-model",
-            "endpoint-private-model",
+            "endpoint-repo-id-model",
+            "endpoint-local-path-model",
             "endpoint-without-model",
         ],
     )
@@ -494,12 +502,16 @@ class TestTelemetryEmission:
 
         assert (event.pii_llm_mode, event.pii_llm_model) == (expected_mode, expected_model)
 
-    def test_build_telemetry_event_reports_custom_local_profile_without_its_model_name(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    @pytest.mark.parametrize(
+        ("model_id", "expected_model"),
+        [("acme/planner-7b", "acme/planner-7b"), ("/home/alice/models/planner", "local_path")],
+        ids=["repo-id", "local-path"],
+    )
+    def test_build_telemetry_event_reports_custom_local_profile_model_id_not_served_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, model_id: str, expected_model: str
     ):
-        # Reuses a bundled model name with different settings, so only the label is reported.
         profile_path = tmp_path / "private-profile.yaml"
-        profile_path.write_text("model_id: openai/gpt-oss-120b\nrevision: main\ngpu_memory_utilization: 0.5\n")
+        profile_path.write_text(f"model_id: {model_id}\nrevision: main\nserved_model_name: alice-private-planner\n")
         monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", str(profile_path))
         builder = _builder_for_telemetry()
         builder._nss_config = SafeSynthesizerParameters(
@@ -508,7 +520,7 @@ class TestTelemetryEmission:
 
         event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
-        assert (event.pii_llm_mode, event.pii_llm_model) == ("local", "custom_profile")
+        assert (event.pii_llm_mode, event.pii_llm_model) == ("local", expected_model)
 
     def test_build_telemetry_event_reports_undefined_backend_without_config(self):
         builder = _builder_for_telemetry()
