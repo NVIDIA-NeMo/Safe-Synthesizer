@@ -910,7 +910,8 @@ class Mistral(ModelMetadata):
         **kwargs,
     ) -> None:
         config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-        if rope_scaling_factor:
+        # A factor of 1 means no scaling, so ignoring it changes nothing.
+        if rope_scaling_factor and rope_scaling_factor != 1:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
             )
@@ -1030,7 +1031,8 @@ class SmolLM2(ModelMetadata):
         **kwargs,
     ) -> None:
         config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-        if rope_scaling_factor:
+        # A factor of 1 means no scaling, so ignoring it changes nothing.
+        if rope_scaling_factor and rope_scaling_factor != 1:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
             )
@@ -1085,7 +1087,8 @@ class SmolLM3(ModelMetadata):
         bos_token_id = 128011
 
         # SmolLM3 uses high theta values (1.5M-5M) so it's important to read from config
-        if rope_scaling_factor:
+        # A factor of 1 means no scaling, so ignoring it changes nothing.
+        if rope_scaling_factor and rope_scaling_factor != 1:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM3 due to longer default context lengths. Ignoring."
             )
