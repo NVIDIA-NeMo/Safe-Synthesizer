@@ -20,13 +20,18 @@ __all__ = [
     "AutocorrelationSimilarityParameters",
     "DEFAULT_AUTOCORRELATION_MAX_LAG",
     "DEFAULT_AUTOCORRELATION_MIN_POINTS",
+    "DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH",
+    "DEFAULT_SPECTRAL_MIN_POINTS",
     "EvaluationParameters",
+    "SpectralSimilarityParameters",
     "TimeSeriesEvaluationParameters",
     "TimeSeriesMetricParameters",
 ]
 
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
+DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH = 128
+DEFAULT_SPECTRAL_MIN_POINTS = 16
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -82,6 +87,43 @@ class AutocorrelationSimilarityParameters(TimeSeriesMetricParameters):
     )
 
 
+class SpectralSimilarityParameters(TimeSeriesMetricParameters):
+    """Control spectral similarity evaluation.
+
+    Timestamp ordering and sequence grouping use the top-level time-series and
+    data settings. Cycles are distinguished up to the shorter sequence's length
+    or ``max_cycle_length``, and undersized, constant, or trend-only training
+    sequences are skipped. A constant, trend-only, or mostly missing synthetic
+    sequence paired with varying training data receives zero similarity.
+    """
+
+    metric_label: ClassVar[str] = "Spectral"
+
+    max_cycle_length: int = Field(
+        default=DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH,
+        ge=4,
+        description=(
+            "Longest cycle, in observations, that the score tells apart from shorter cycles. The last band "
+            "is centered here and also holds slower variation, and shorter sequences distinguish cycles up "
+            "to their own length. Raise it when longer cycles matter, such as a weekly cycle in hourly data "
+            "(168). Scores computed with different values are not directly comparable."
+        ),
+    )
+    min_points: int = Field(
+        default=DEFAULT_SPECTRAL_MIN_POINTS,
+        ge=8,
+        description=(
+            "Minimum finite observations required in each sequence. Shorter training sequences are skipped, "
+            "and shorter synthetic sequences score 0."
+        ),
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate using a reproducible sample to bound runtime.",
+    )
+
+
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration.
 
@@ -98,6 +140,10 @@ class TimeSeriesEvaluationParameters(Parameters):
     autocorrelation: AutocorrelationSimilarityParameters = Field(
         default_factory=AutocorrelationSimilarityParameters,
         description="Autocorrelation similarity metric parameters.",
+    )
+    spectral: SpectralSimilarityParameters = Field(
+        default_factory=SpectralSimilarityParameters,
+        description="Spectral similarity metric parameters.",
     )
 
 

@@ -407,10 +407,15 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.time_series.autocorrelation.max_lag` | `20` | Largest positive lag requested | Select a horizon relevant to the downstream use case |
 | `evaluation.time_series.autocorrelation.min_points` | `4` | Minimum finite observations required per sequence | Leave at default unless short sequences must be excluded |
 | `evaluation.time_series.autocorrelation.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
+| `evaluation.time_series.spectral.value_columns` | `null` | Numeric columns included in Spectral Similarity | Leave `null` for inferred numeric columns or provide an explicit list |
+| `evaluation.time_series.spectral.max_cycle_length` | `128` | Longest cycle, in observations, told apart from shorter cycles; the last band is centered here and also holds slower variation | Raise when longer cycles matter, such as `168` for a weekly cycle in hourly data |
+| `evaluation.time_series.spectral.min_points` | `16` | Minimum finite observations per sequence; shorter training sequences are skipped and shorter synthetic sequences score 0 | Raise to leave out sequences too short to show the cycles of interest |
+| `evaluation.time_series.spectral.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
 
 See [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters]
 for the full API reference. See
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md)
+and [Spectral Similarity](time-series-metrics/spectral-similarity.md)
 for calculation and interpretation guidance.
 
 ---

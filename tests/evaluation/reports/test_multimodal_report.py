@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from jinja2 import Environment, FunctionLoader, select_autoescape
 
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -13,10 +14,11 @@ from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
+from nemo_safe_synthesizer.evaluation.components.spectral_similarity import SpectralSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
-from nemo_safe_synthesizer.evaluation.render import render_report
+from nemo_safe_synthesizer.evaluation.render import _get_template, render_report
 from nemo_safe_synthesizer.evaluation.reports.multimodal import multimodal_report as multimodal_report_module
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 
@@ -294,15 +296,19 @@ def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     cards = report.jinja_context["time_series_cards"]
-    assert cards == [report.jinja_context["autocorrelation_similarity"]]
+    assert cards == [report.jinja_context["autocorrelation_similarity"], report.jinja_context["spectral_similarity"]]
     assert cards[0]["card_id"] == "autocorrelation-similarity"
     assert cards[0]["template"] == "jinja/components/autocorrelation_similarity.j2"
     assert cards[0]["score_colored_traces"] is True
+    assert cards[1]["card_id"] == "spectral-similarity"
+    assert cards[1]["template"] == "jinja/components/spectral_similarity.j2"
+    assert cards[1]["score_colored_traces"] is False
     assert report.jinja_context["with_time_series"] is True
     output = render_report(report)
     assert output is not None
-    assert 'id="autocorrelation-similarity"' in output
+    assert output.index('id="autocorrelation-similarity"') < output.index('id="spectral-similarity"')
     assert "Measures whether numeric columns change over time like the training data" in output
+    assert "Measures whether numeric columns repeat in cycles of the same lengths as the training data" in output
     assert 'class="time-series-charts" data-score-colored-traces' in output
 
 
@@ -315,3 +321,63 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
+
+
+def test_spectral_report_renders_when_every_synthetic_sequence_collapses() -> None:
+    time = np.arange(200)
+    training = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 24) + 0.1 * np.cos(time)})
+    synthetic = training.assign(value=1.0)
+    report = _minimal_multimodal_report()
+    report.components = [
+        SpectralSimilarity.from_evaluation_datasets(
+            EvaluationDatasets.from_dataframes(training, synthetic, enable_sampling=False), _time_series_config()
+        )
+    ]
+
+    context = report.jinja_context["spectral_similarity"]
+    assert context["constant_synthetic_profile_count"] == 1
+    assert len(context["figures"]) == 3
+    env = Environment(loader=FunctionLoader(_get_template), autoescape=select_autoescape(["html", "xml"]))
+    card = env.get_template("jinja/components/spectral_similarity.j2")
+    assert "1 pair has constant, straight-line, or mostly missing synthetic values." in " ".join(
+        card.render(ctx=report.jinja_context).split()
+    )
+
+
+def test_spectral_report_builds_its_charts_and_counts_unscored_pairs() -> None:
+    report = _minimal_multimodal_report()
+    profiles = [
+        {
+            "group": str(index),
+            "column": column,
+            "band_cycle_lengths": [2.0, 2.828427, 4.0],
+            "training_bands": [0.2, 0.3, 0.5],
+            "synthetic_bands": [None, None, None] if index == 0 else [0.25, 0.3, 0.45],
+            "similarity": index / 3,
+        }
+        for index in range(3)
+        for column in ("value", "other")
+    ]
+    report.components = [
+        SpectralSimilarity(
+            score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0),
+            details={"profiles": profiles},
+        )
+    ]
+
+    context = report.jinja_context["spectral_similarity"]
+
+    assert context["constant_synthetic_profile_count"] == 2
+    assert [figure["title"] for figure in context["figures"]] == [
+        "Cycle lengths",
+        "Difference by cycle length",
+        "Pair scores",
+    ]
+    assert [figure["tooltip_id"] for figure in context["figures"]] == [
+        "spectral-bands-info",
+        "spectral-difference-info",
+        "spectral-pair-scores-info",
+    ]
+    assert context["summary_columns"] == ["other", "value"]
+    assert context["summary_traces_per_column"] == 4
+    assert context["pair_score_column_count"] == 2

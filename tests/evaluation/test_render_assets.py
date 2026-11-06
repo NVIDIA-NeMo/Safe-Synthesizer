@@ -258,6 +258,47 @@ def test_autocorrelation_notes_constant_synthetic_pairs_missing_from_profile_cha
     assert expected in rendered
 
 
+def _spectral_context(constant_synthetic_profile_count: int) -> dict[str, object]:
+    return {
+        "spectral_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": 2,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": 2,
+            "constant_synthetic_profile_count": constant_synthetic_profile_count,
+            "pair_score_column_count": 2,
+            "summary_columns": ["a", "b"],
+            "summary_traces_per_column": 4,
+            "figures": [
+                {
+                    "title": "Cycle lengths",
+                    "html": "<div>bands</div>",
+                    "column_select": True,
+                    "tooltip_id": "spectral-bands-info",
+                    "tooltip": "Lines should overlap.",
+                }
+            ],
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant, straight-line, or mostly missing synthetic values."),
+        (3, "3 pairs have constant, straight-line, or mostly missing synthetic values."),
+    ],
+)
+def test_spectral_notes_constant_synthetic_pairs_missing_from_band_charts(constant_count: int, expected: str) -> None:
+    rendered = _render_template(
+        "jinja/components/spectral_similarity.j2",
+        ctx=_spectral_context(constant_count),
+    )
+
+    assert expected in " ".join(rendered.split())
+
+
 def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:
     quality = _render_template("jinja/components/score_guidance.j2", kind="quality", grade="Good")
     privacy = _render_template("jinja/components/score_guidance.j2", kind="privacy", grade="Excellent")
