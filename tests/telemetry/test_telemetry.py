@@ -212,7 +212,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert NSSTrainingAndGenerationEvent._event_name == "train_and_generation_event"
 
     def test_schema_version(self):
-        assert NSSTrainingAndGenerationEvent._schema_version == "1.10"
+        assert NSSTrainingAndGenerationEvent._schema_version == "1.13"
 
     def test_feature_flags(self):
         event = NSSTrainingAndGenerationEvent(
