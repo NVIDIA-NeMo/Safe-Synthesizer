@@ -26,8 +26,8 @@ import pandas as pd
 from ..observability import get_logger
 from .records.json_types import JsonSchema, JsonValue, is_json_object
 
-RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
-RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
+RECORD_REGEX_PATTERN = r"{.+?}(?:\r?\n|$)"
+RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\r?\n|$)"
 
 logger = get_logger()
 
