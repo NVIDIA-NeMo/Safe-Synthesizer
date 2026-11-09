@@ -36,11 +36,17 @@ runs:
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       with:
         enable-cache: true
-        # One cache entry per CUDA extra. Cache entries are immutable and the
-        # first job to finish saves it, so a shared key leaves the other CUDA
-        # variant's large wheels (torch, nvidia-*, vllm, flashinfer) uncached.
-        # Not keyed per Python version: ~5 GB per entry would exceed the repo
-        # cache quota across the matrix.
+        # Restore only. The warm-uv-cache job in gpu-tests.yml fills and saves
+        # each entry before the GPU jobs start. Entries are immutable, so a GPU
+        # job whose restore failed would spend minutes archiving the cache only
+        # for the save to be rejected.
+        save-cache: false
+        # One cache entry per CUDA extra, so each variant's large wheels
+        # (torch, nvidia-*, vllm, flashinfer) get their own entry. Not keyed
+        # per Python version: for cu129, one version needs ~8.6 GB of wheels
+        # and all four ~13.8 GB (most of it shared), so per-version entries
+        # would cut each download by only about a third while roughly
+        # tripling cache storage.
         cache-suffix: ${{ inputs.cuda-extra }}
         cache-dependency-glob: |
           .python-version

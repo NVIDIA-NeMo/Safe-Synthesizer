@@ -73,8 +73,8 @@ jobs:
   # GPU jobs restore one uv cache entry per CUDA extra (see
   # setup-gpu-test-env). When that entry is missing -- the first run after a
   # pyproject.toml change, or after eviction -- every GPU job downloads ~280
-  # packages, and on slow nights that has run past the 60-minute GPU job
-  # timeout while holding an A100. This job does the download once per CUDA
+  # packages, and on slow nights that has run past the GPU job timeout while
+  # holding an A100. This job is the only one that saves the entry. This job does the download once per CUDA
   # extra, for every smoke-test Python version, with a longer timeout. On a
   # cache hit it only looks the entry up and exits.
   # ---------------------------------------------------------------------------
@@ -215,7 +215,10 @@ jobs:
           inputs.suite == 'smoke'
         )
       }}
-    timeout-minutes: 60
+    # Normal runs take 15-30 minutes. The headroom covers a runner whose uv
+    # cache restore fails (the ~17 GB download can outlive its signed URL) and
+    # falls back to downloading every package, which has taken over 40 minutes.
+    timeout-minutes: 90
     runs-on: linux-amd64-gpu-a100-latest-1
     # Non-required until a run of green nightly cu130 results validates the rollout;
     # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
