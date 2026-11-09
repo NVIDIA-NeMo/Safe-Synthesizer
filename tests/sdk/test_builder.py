@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -19,7 +20,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event, _emit_nss_telemetry
-from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
+from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, NSSTrainingAndGenerationEvent, TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
 _REPORT_HTML = "<html><body>report</body></html>"
@@ -256,6 +257,39 @@ def _builder_for_telemetry() -> SafeSynthesizer:
     return builder
 
 
+_LABEL_RULE = (32, r"[a-z][a-z0-9_-]{0,31}")
+# A copy of the maxLength and pattern of each PII field in the shared NeMo
+# telemetry schema. The collector rejects the whole event when one field breaks
+# its rule, so every event these tests build is checked against them.
+_SCHEMA_PII_FIELD_RULES = {
+    "piiSamplerBackend": _LABEL_RULE,
+    "piiPlanSource": _LABEL_RULE,
+    "piiReplacedColumnsBucket": (32, r"undefined|[0-9]+(-[0-9]+|\+)?"),
+    "piiLlmMode": _LABEL_RULE,
+    "piiLlmModel": (
+        192,
+        r"undefined|local_path|other|([A-Za-z0-9][A-Za-z0-9._-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,126}",
+    ),
+    "piiLocale": (9, r"undefined|other|[a-z]{2,3}(_[A-Z]{2})?"),
+}
+
+
+def _assert_pii_fields_fit_schema(event: NSSTrainingAndGenerationEvent) -> None:
+    payload = event.model_dump(by_alias=True, mode="json")
+    for field, (max_length, pattern) in _SCHEMA_PII_FIELD_RULES.items():
+        value = payload[field]
+        assert len(value) <= max_length, (field, value)
+        assert re.fullmatch(pattern, value), (field, value)
+
+
+def _build_checked_telemetry_event(
+    builder: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
+) -> NSSTrainingAndGenerationEvent:
+    event = _build_telemetry_event(builder, status, task=task)
+    _assert_pii_fields_fit_schema(event)
+    return event
+
+
 class TestTelemetryEmission:
     def test_run_emits_completed_after_save_results(self, monkeypatch, tmp_path: Path):
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
@@ -352,7 +386,7 @@ class TestTelemetryEmission:
         builder = _builder_for_telemetry()
         builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=replace_pii)
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert event.replace_pii_enabled is expected_enabled
         assert event.pii_sampler_backend == expected_backend
@@ -384,7 +418,7 @@ class TestTelemetryEmission:
         builder = _builder_for_telemetry()
         builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=replace_pii)
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert event.pii_plan_source == expected_source
         assert event.pii_replaced_columns_bucket == expected_columns_bucket
@@ -397,7 +431,7 @@ class TestTelemetryEmission:
             emit_telemetry=True, replace_pii=ReplacePiiConfig(replacement_plan=str(plan_file))
         )
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert event.pii_plan_source == "provided"
         assert event.pii_replaced_columns_bucket == "1-5"
@@ -413,7 +447,7 @@ class TestTelemetryEmission:
         builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=resolved)
         builder._pii_plan_source = "auto_discovery"
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert event.pii_plan_source == "auto_discovery"
         assert event.pii_replaced_columns_bucket == "1-5"
@@ -430,7 +464,7 @@ class TestTelemetryEmission:
             replace_pii=ReplacePiiConfig(locale=locale),
         )
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert event.pii_locale == expected
 
@@ -463,6 +497,20 @@ class TestTelemetryEmission:
                 "local_path",
             ),
             (
+                {"model_id": "café/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "other",
+            ),
+            (
+                {"model_id": "o" * 65 + "/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "other",
+            ),
+            (
                 {},
                 "auto_discovery",
                 {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
@@ -478,6 +526,8 @@ class TestTelemetryEmission:
             "endpoint-bundled-model",
             "endpoint-repo-id-model",
             "endpoint-local-path-model",
+            "endpoint-non-ascii-model",
+            "endpoint-long-org-model",
             "endpoint-without-model",
         ],
     )
@@ -498,7 +548,7 @@ class TestTelemetryEmission:
             replace_pii=ReplacePiiConfig.model_validate({"llm": llm, "replacement_plan": replacement_plan}),
         )
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert (event.pii_llm_mode, event.pii_llm_model) == (expected_mode, expected_model)
 
@@ -518,7 +568,7 @@ class TestTelemetryEmission:
             emit_telemetry=True, replace_pii=ReplacePiiConfig(llm=LLMConfig())
         )
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
         assert (event.pii_llm_mode, event.pii_llm_model) == ("local", expected_model)
 
@@ -526,7 +576,7 @@ class TestTelemetryEmission:
         builder = _builder_for_telemetry()
         builder._nss_config = None
 
-        event = _build_telemetry_event(builder, TaskStatusEnum.ERROR, task="replace_pii")
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.ERROR, task="replace_pii")
 
         assert event.task == "replace_pii"
         assert event.replace_pii_enabled is False

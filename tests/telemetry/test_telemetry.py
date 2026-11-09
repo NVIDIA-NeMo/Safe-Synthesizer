@@ -24,6 +24,7 @@ from nemo_safe_synthesizer.telemetry import (
     build_payload,
     sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
+    sanitize_pii_llm_model_for_telemetry,
 )
 
 telemetry_module = importlib.import_module("nemo_safe_synthesizer.telemetry")
@@ -152,10 +153,37 @@ class TestSanitizeModelForTelemetry:
         assert sanitize_model_for_telemetry(model) == "undefined"
 
 
+class TestSanitizePiiLlmModelForTelemetry:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-oss-120b",
+            "openai/gpt-oss-120b",
+            "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+            "o" * 64 + "/" + "m" * 96,
+        ],
+    )
+    def test_repo_ids_the_schema_accepts_are_preserved(self, model):
+        assert sanitize_pii_llm_model_for_telemetry(model) == model
+
+    @pytest.mark.parametrize(("model", "expected"), [(None, "undefined"), ("/srv/alice/planner", "local_path")])
+    def test_missing_and_local_path_labels_are_kept(self, model, expected):
+        assert sanitize_pii_llm_model_for_telemetry(model) == expected
+
+    @pytest.mark.parametrize("model", ["café/planner", "planner-ü", "o" * 65 + "/planner"])
+    def test_repo_ids_the_schema_rejects_are_other(self, model):
+        assert sanitize_pii_llm_model_for_telemetry(model) == "other"
+
+
 class TestSanitizeLocaleForTelemetry:
     @pytest.mark.parametrize("locale", ["en_US", "fil_PH", "de", "ja_JP"])
     def test_locale_codes_are_preserved(self, locale):
         assert sanitize_locale_for_telemetry(locale) == locale
+
+    def test_every_faker_locale_is_preserved(self):
+        from faker.config import AVAILABLE_LOCALES
+
+        assert [locale for locale in AVAILABLE_LOCALES if sanitize_locale_for_telemetry(locale) != locale] == []
 
     @pytest.mark.parametrize("locale", ["", "en-US", "EN_us", "/home/alice/locale", "en_US.UTF-8", "Alice Smith"])
     def test_non_locale_values_are_redacted(self, locale):

@@ -40,8 +40,12 @@ DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
 LOCAL_MODEL_LABEL = "local_path"
-OTHER_LOCALE_LABEL = "other"
+OTHER_LABEL = "other"
+# These two patterns match the piiLocale and piiLlmModel patterns in the shared
+# NeMo telemetry schema. The collector rejects a whole event when one field does
+# not match its pattern, so values are checked here and reported as "other".
 _LOCALE_PATTERN = re.compile(r"[a-z]{2,3}(_[A-Z]{2})?")
+_PII_LLM_MODEL_PATTERN = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,126}")
 logger = get_logger(__name__)
 
 
@@ -142,8 +146,22 @@ def sanitize_locale_for_telemetry(locale: str | None) -> str:
     if locale is None:
         return "undefined"
     if _LOCALE_PATTERN.fullmatch(locale) is None:
-        return OTHER_LOCALE_LABEL
+        return OTHER_LABEL
     return locale
+
+
+def sanitize_pii_llm_model_for_telemetry(model: str | None) -> str:
+    """Return a telemetry-safe label for the PII planning model.
+
+    Applies ``sanitize_model_for_telemetry``, then reports ``"other"`` for a
+    repo ID the telemetry schema does not accept: one with non-ASCII
+    characters, an organization longer than 64 characters, or a name longer
+    than 127 characters.
+    """
+    label = sanitize_model_for_telemetry(model)
+    if label in ("undefined", LOCAL_MODEL_LABEL) or _PII_LLM_MODEL_PATTERN.fullmatch(label) is not None:
+        return label
+    return OTHER_LABEL
 
 
 def _session_prefix() -> str | None:
@@ -274,8 +292,9 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         serialization_alias="piiLlmModel",
         description=(
             "Planning model: the local profile's model_id or the endpoint's model ID, sanitized like the "
-            "pretrained model, so local model paths are reported as 'local_path'. 'undefined' when no LLM "
-            "planning ran. Use sanitize_model_for_telemetry()."
+            "pretrained model, so local model paths are reported as 'local_path'. 'other' when the repo ID does "
+            "not fit the telemetry schema. 'undefined' when no LLM planning ran. Use "
+            "sanitize_pii_llm_model_for_telemetry()."
         ),
     )
     pii_locale: str = Field(
