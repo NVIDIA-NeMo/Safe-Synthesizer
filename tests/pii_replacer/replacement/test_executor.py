@@ -1285,6 +1285,22 @@ class TestKnownValueMatching:
         assert result.dataframe.at[0, "notes"] == f"{replacement.lower()} called, then {replacement} left"
         assert len(generator.requests) == 1
 
+    @pytest.mark.parametrize("original", [" Kenneth", "Kenneth "])
+    def test_structured_value_with_surrounding_spaces_is_not_replaced_by_itself(self, original: str) -> None:
+        class _TrimmedOriginalFirstGenerator(_RecordingGenerator):
+            def generate(self, request: ReplacementGenerationRequest) -> str:
+                self.requests.append(request)
+                return request.original_value.strip() if len(self.requests) == 1 else "Grace"
+
+        notes = "then Kenneth left"
+        dataframe = pd.DataFrame({"first_name": [original], "notes": [notes]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", notes, "Kenneth", EntityType.FIRST_NAME)])
+
+        result = _execute(dataframe, plan, _TrimmedOriginalFirstGenerator(), free_text_detector=detector)
+
+        assert result.dataframe.iloc[0].tolist() == ["Grace", "then Grace left"]
+
     def test_detected_values_replace_missed_occurrences_in_the_same_record_only(self) -> None:
         dataframe = pd.DataFrame(
             {

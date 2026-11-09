@@ -29,9 +29,10 @@ def generated_value_is_valid(request: ReplacementGenerationRequest, value: str) 
 
     A replacement must differ from its original ignoring letter case, because a reused replacement may be
     written in the case of each occurrence it replaces: ``Ada`` accepted for ``ADA`` would be written back
-    as ``ADA``.
+    as ``ADA``. Surrounding whitespace is ignored too: ``Kenneth`` for `` Kenneth`` keeps the real name,
+    and free text, which never has the padding, would reuse it for every ``Kenneth``.
     """
-    if not value or value.casefold() == request.original_value.casefold():
+    if not value or value.strip().casefold() == request.original_value.strip().casefold():
         return False
     if request.entity_type is EntityType.CREDIT_DEBIT_CARD:
         return is_luhn_valid(value)

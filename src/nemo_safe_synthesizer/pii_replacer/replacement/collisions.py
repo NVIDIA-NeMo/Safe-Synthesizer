@@ -5,7 +5,7 @@
 
 Every replacement follows the same rules:
 
-1. It differs from its own original, ignoring letter case. This rule is strict.
+1. It differs from its own original, ignoring letter case and surrounding whitespace. This rule is strict.
 2. In an identifier-like column whose original values are all distinct, such as a key column,
    replacements stay distinct too, ignoring case. When retries cannot find an unused value, an earlier
    replacement is repeated and counted so the caller can warn. A new replacement there also avoids the
@@ -195,6 +195,6 @@ def _inherits_original_name_part(request: ReplacementGenerationRequest, candidat
     """Return whether ``candidate`` is a name part equal to its original and read from a full-name dependency."""
     return (
         request.entity_type in _NAME_PART_ENTITY_TYPES
-        and candidate.casefold() == request.original_value.casefold()
+        and candidate.strip().casefold() == request.original_value.strip().casefold()
         and any(entity_type is EntityType.FULL_NAME for entity_type, _ in request.effective_dependency_tuple)
     )
