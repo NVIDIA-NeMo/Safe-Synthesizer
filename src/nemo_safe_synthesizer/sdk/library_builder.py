@@ -36,6 +36,7 @@ from ..telemetry import (
     bucket_records,
     sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
+    sanitize_pii_llm_model_for_telemetry,
 )
 from .config_builder import ConfigBuilder
 
@@ -99,7 +100,8 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
     Resolves where planning runs the same way plan discovery does, without
     launching a server. The model goes through the same
     ``sanitize_model_for_telemetry`` check as ``training.pretrained_model``, so
-    local model paths are reported as ``"local_path"``. A local server reports
+    local model paths are reported as ``"local_path"``, and a repo ID the
+    telemetry schema does not accept is reported as ``"other"``. A local server reports
     its profile's ``model_id`` rather than its served name, which can be any label.
     """
     if plan_source != "auto_discovery":
@@ -112,8 +114,8 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
     except ParameterError:
         return "invalid", "undefined"
     if isinstance(inference, LocalServerRequest):
-        return "local", sanitize_model_for_telemetry(inference.profile.model_id)
-    return "endpoint", sanitize_model_for_telemetry(inference.model_id)
+        return "local", sanitize_pii_llm_model_for_telemetry(inference.profile.model_id)
+    return "endpoint", sanitize_pii_llm_model_for_telemetry(inference.model_id)
 
 
 def _build_telemetry_event(
