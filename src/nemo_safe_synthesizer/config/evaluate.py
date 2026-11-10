@@ -108,17 +108,18 @@ class WindowGroupMIAParameters(TimeSeriesMetricParameters):
         default=10,
         ge=2,
         description=(
-            "Number of consecutive observations compared as one window; windows start every half window. "
-            "Shorter windows detect partial copies in shorter sequences, and longer windows detect copies "
-            "blurred by noise. Scores computed with different windows are not directly comparable."
+            "Number of consecutive observations compared as one window. Training and holdout windows use a "
+            "stride of half the window_size, and synthetic windows use a stride of 1. Shorter windows detect "
+            "partial copies in shorter sequences, and longer windows detect copies blurred by noise. Scores "
+            "computed with different windows are not directly comparable."
         ),
     )
     max_windows: int = Field(
         default=1000,
         ge=WINDOW_GROUP_MIA_MIN_WINDOWS,
         description=(
-            "Maximum training and holdout windows compared, each, using a reproducible sample balanced "
-            "across groups to bound runtime. Fewer windows make the score noisier; the score needs at "
+            "Maximum training and holdout windows compared, each, using a reproducible sample across groups "
+            "to bound runtime. Fewer windows make the score noisier but faster to compute. The score needs at "
             f"least {WINDOW_GROUP_MIA_MIN_WINDOWS} of each."
         ),
     )

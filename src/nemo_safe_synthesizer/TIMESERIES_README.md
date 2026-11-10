@@ -133,7 +133,7 @@ evaluation:
       max_groups: 128      # reproducible sample of shared groups above this count
     window_group_mia:
       value_columns: null  # null combines numeric training columns, up to max_columns, into each window
-      window_size: 10      # consecutive values compared as one window; windows start every half window
+      window_size: 10      # consecutive values compared as one window, with a training and holdout stride of half of it
       max_windows: 1000    # reproducible sample of training and holdout windows, each, above this count
       max_columns: 12      # reproducible sample of automatically selected columns above this count
 ```

@@ -26,23 +26,23 @@ The right column shows how close each training window (blue) and each holdout
 window (gray) comes to its nearest synthetic window.
 Windows left of the dashed line are flagged as suspiciously close.
 
-![One training series in blue against three synthetic datasets. Fresh groups from the same process, in orange, score 10.0, and their training and holdout distances overlap. Fresh groups with 20% of points pasted from training, in red, score 2.4, and a spike of training windows sits at distance 0. A copy of the training data with noise of 0.3 standard deviations, in red, scores 0.6, and the training distances sit well left of the holdout distances.](assets/window-mia-copies.png)
+![One training series in blue against three synthetic datasets. Fresh groups from the same process, in orange, score 10.0, and their training and holdout distances overlap. Fresh groups with 20% of points pasted from training, in red, score 1.9, and a spike of training windows sits at distance 0. A copy of the training data with noise of 0.3 standard deviations, in red, scores 0.1, and the training distances sit well left of the holdout distances.](assets/window-mia-copies.png)
 
 - Synthetic A is new data from the same process. Training and holdout windows
   are equally close to it, so the histograms overlap and it scores 10.0.
 - Synthetic B is new data with 20% of its points pasted from training, shaded
-  in the plot. The pasted windows sit at distance 0, so it scores 2.4.
+  in the plot. The pasted windows sit at distance 0, so it scores 1.9.
 - Synthetic C is the training data with a little noise added. No window is an
   exact copy, but every training window has a close twin that holdout windows
-  lack, so it scores 0.6.
+  lack, so it scores 0.1.
 
 ## Reading the score
 
 The score runs from 0 to 10, and higher means stronger protection. A score near
 10 means training windows are no closer to the synthetic data than holdout
 windows, after allowing for chance. The more of the training data the synthetic
-data copies, the lower the score. A full copy scores about 0.5, the lowest
-possible score, because the flag threshold always flags 5% of holdout windows.
+data copies, the lower the score. A score of 0 means every training window is
+flagged, as with a full copy of the training data.
 
 Exact copies lower the score whenever a larger share of training windows than
 holdout windows has an exact match in the synthetic data. Continuous values
@@ -54,14 +54,14 @@ tiers, taken from the [example scenarios](#example-scenarios):
 
 - About 8 to 10 means nothing is copied, as with fresh groups (about 9.8),
   shuffled training rows (about 9.5), or a constant series (about 9.5).
-- About 5 to 8 means a small share is copied, as with 5% of points pasted from
-  training (about 5.5).
-- About 2 to 5 means a large share is copied or closely imitated, as with one
-  whole group out of 10 (about 3.5), 20% of points (about 2.3), or every group
-  with noise of half a standard deviation (about 2.1).
-- About 0 to 2 means the synthetic data reproduces the training data, exactly,
-  with tiny noise, shifted by a few steps, or with values missing (about 0.5 to
-  0.7).
+- About 4 to 8 means a small share is copied, as with 5% of points pasted from
+  training (about 5.2).
+- About 1 to 4 means a large share is copied or closely imitated, as with one
+  whole group out of 10 (about 3.1), 20% of points (about 1.9), or every group
+  with noise of half a standard deviation (about 1.7).
+- About 0 to 1 means the synthetic data reproduces the training data, exactly,
+  with tiny noise, shifted by a few steps, or with values missing (about 0.0 to
+  0.2).
 
 Use these tiers as a guide. How much copying is acceptable depends on the use
 case. Data shared outside an organization may need no detectable copying, while
@@ -81,7 +81,7 @@ to see the charts, and select the info icon next to a chart title for a short
 reminder of how to read it. The score is reported on its own and is not part of
 the Data Privacy Score.
 
-![The Window Membership Inference Protection card in the HTML evaluation report, showing a score of 3.4 with the Distance to synthetic data, Groups flagged most, and Closest match charts.](assets/window-mia-report.png)
+![The Window Membership Inference Protection card in the HTML evaluation report, showing a score of 3.0 with the Distance to synthetic data, Groups flagged most, and Closest match charts.](assets/window-mia-report.png)
 
 This example has 20 training sensors and 2 holdout sensors, each with three
 numeric columns of 300 hourly points. Each synthetic sensor is new data, except
@@ -91,7 +91,7 @@ that a share of its points is pasted from the matching training sensor in
 
 The summary above the charts says what was compared and what the attack found.
 Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
-11.4% of training windows have an exact copy in the synthetic data.
+11.3% of training windows have an exact copy in the synthetic data.
 
 - Distance to synthetic data
   - This chart shows how close each training window (blue) and holdout window
@@ -100,7 +100,7 @@ Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
     flagged. In well-protected data the blue and gray bars overlap. Blue bars
     piled up at 0, or shifted left of the gray ones, mean training windows have
     close copies.
-  - In this example, a spike of blue bars at 0 is the 11.4% of training windows
+  - In this example, a spike of blue bars at 0 is the 11.3% of training windows
     copied exactly. The remaining blue bars overlap the gray ones, so the
     windows that weren't copied are no closer than holdout windows.
 - Groups flagged most
@@ -109,9 +109,9 @@ Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
     holdout flag rate, which is what chance alone produces. Bars turn redder
     the further they rise above it. Hover over a bar to see the group's share
     of exact copies.
-  - In this example, `sensor_15` and `sensor_17` lead at 32% each, and
-    `sensor_15` has 24% exact copies. Both are among the sensors with the most
-    pasted stretches. Some uncopied sensors, such as `sensor_02` at 18%, also
+  - In this example, `sensor_17` leads at 34%, followed by `sensor_15` at 31%.
+    Both have about 21% exact copies and are among the sensors with the most
+    pasted stretches. Some uncopied sensors, such as `sensor_02` at 16%, also
     sit above the line. With only two holdout groups the line is a rough
     reference, so look for groups that stand clearly above the rest.
 - Closest match
@@ -120,8 +120,8 @@ Here, 16.5% of training windows and 5.1% of holdout windows are flagged, and
     training window (blue) is drawn on top of it. Otherwise the training window
     stays hidden, so the report never shows training values that the synthetic
     data doesn't already contain.
-  - In this example, the closest match is an exact copy of a `sensor_12`
-    window, so the two lines coincide in every column.
+  - In this example, the closest match is an exact copy, so the two lines
+    coincide in every column.
 
 ### When the score is available
 
@@ -130,9 +130,7 @@ The score needs:
 - Grouped data, set by `data.group_training_examples_by`.
 - Groups at least `window_size` points long.
 - At least 20 training windows and 20 holdout windows.
-- At least two holdout groups. A single holdout group can happen to sit close
-  to the synthetic data, which hides a blurred copy and can make it score a
-  perfect 10.
+- At least two holdout groups.
 
 When these aren't met, the card skips the score. It still shows the share of
 training windows with an exact copy in the synthetic data and the Closest match
@@ -155,7 +153,7 @@ average score across 200 random datasets.
 Exact copies score about the same regardless of sequence length or holdout
 size. Blurred copies are judged against chance, so a smaller holdout makes them
 harder to see. A copy with noise of half a standard deviation averages about
-2.1 with 10 holdout groups and 2.7 with 2, and single runs vary more.
+1.7 with 10 holdout groups and 2.3 with 2, and single runs vary more.
 
 ## Configuration
 
@@ -194,17 +192,17 @@ Values are ordered by `time_series.timestamp_column` and split into sequences by
 
 - The metric runs one attack on numeric columns only. Transformed copies
   (rescaled, shifted in level, or run backward), copied stretches shorter than
-  `window_size`, and copied categorical or text sequences are not caught.
+  `window_size`, and copied categorical or text sequences are not detected.
 - Heavy noise hides copies. A copy blurred by noise as large as the data scores
   about 9.4, even though each synthetic value still correlates about 0.7 with
   the training value it came from.
 - Partial-column copies are mostly missed, because the uncopied columns dominate
   the distance. With one column copied exactly from every group, the score
-  averaged 6.8 with 2 columns, 9.2 with 6, and 9.6 with 12. Set `value_columns`
+  averaged 6.6 with 2 columns, 9.2 with 6, and 9.5 with 12. Set `value_columns`
   to a sensitive column to check it on its own.
 - The holdout must come from the same source as the training data. With every
   holdout value shifted by 1.5 standard deviations, fresh synthetic data
-  averaged 7.0, down from 9.8, and single runs went as low as 1.1.
+  averaged 6.9, down from 9.8, and single runs went as low as 0.6.
 
 ## Calculation
 
@@ -212,12 +210,14 @@ The metric first fills gaps in each numeric column of each group by linear
 interpolation, holding the first and last observed values beyond the ends. It
 then cuts every group into windows of \(w\) consecutive values (`window_size`),
 flattened across the \(c\) evaluated columns into \(D = w \cdot c\) values, and
-never crosses group boundaries. Training and holdout windows start every
-\(s = \lfloor w/2 \rfloor\) steps and are capped at `max_windows` each, with a
-reproducible sample shuffled within each group and taken round robin across
-groups. Synthetic windows start at every step, so a copy shifted off the
-training grid is still found, and are capped at 50,000. Every window value is
-standardized by the mean and standard deviation of the sampled training windows.
+never crosses group boundaries. Training and holdout windows use a stride of
+\(s = \lfloor w/2 \rfloor\) steps. Synthetic windows use a stride of 1, so a copy
+shifted off the training stride is still found. When a split has more windows
+than its cap, a reproducible sample is drawn uniformly from all of its windows,
+so longer groups contribute more. The cap is `max_windows` for training and
+holdout windows and 50,000 for synthetic windows. Each column is standardized
+separately at each step of the window, by the mean and standard deviation of
+that value over the sampled training windows.
 
 For every training and holdout window, the metric finds its nearest synthetic
 window by Euclidean distance \(d\). The report charts show \(d / \sqrt{D}\), the
@@ -242,9 +242,11 @@ metric estimates both:
    \[
    \sigma_B^2 = \frac{w}{s} \left( \frac{1}{k_T + \tfrac{1}{2}} - \frac{1}{n_T + 1} + \frac{1}{k_H + \tfrac{1}{2}} - \frac{1}{n_H + 1} \right),
    \]
-   the usual variance of a log ratio of two rates, multiplied by \(w / s\)
-   because windows that start every half window share points, so their flags
-   are correlated.
+   the usual variance of a log ratio of two rates, multiplied by \(w / s\),
+   the number of training or holdout windows that contain each point. Windows
+   that share points have correlated flags. The factor is a heuristic. It is
+   exact only if flags are fully correlated within blocks of \(w / s\) windows
+   and independent across blocks.
 2. Holdout offset. The holdout groups can sit closer to or farther from the
    synthetic data than the training groups for reasons unrelated to copying,
    which the binomial noise misses and which matters most with one or two
@@ -277,11 +279,12 @@ the privacy loss if those windows were certainly flagged and the rest were
 flagged at the holdout rate. The score uses whichever loss is larger:
 
 \[
-\text{score} = 10 \cdot e^{-\max(L',\ L_{\text{exact}})}
+\text{score} = 10 \cdot \frac{e^{-\max(L',\ L_{\text{exact}})} - \alpha}{1 - \alpha}
 \]
 
-Before the chance correction, the score is 10 times the holdout flag rate
-divided by the training flag rate, capped at 10. So 10 means the training flag
-rate is within chance of the holdout flag rate, and each unit of privacy loss
-beyond chance divides the score by \(e\). When every training window is
-flagged, the score is about \(10 \times 5\% = 0.5\).
+Before the chance correction, \(e^{-L}\) is the holdout flag rate divided by
+the training flag rate. It is 1 when the two rates match and falls to about
+\(\alpha\) when every training window is flagged. The rescaling maps these to
+10 and 0. An exact copy of every training window gives
+\(L_{\text{exact}} = \ln(1 / \alpha)\), so it also scores 0. Scores are clipped
+to the range 0 to 10.

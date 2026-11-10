@@ -161,7 +161,7 @@ def test_window_group_mia_scores_copied_training_data_near_zero(make_synthetic):
 
 @pytest.mark.parametrize(("points", "trials"), [(200, 4), (1000, 1)])
 def test_window_group_mia_scores_one_copied_group_of_ten_as_quoted_in_the_guide(points: int, trials: int):
-    # The user guide's tiers quote about 3.2 for one whole group of 10 copied.
+    # The user guide's tiers quote about 3.1 for one whole group of 10 copied.
     assert 2.5 <= _mean_score(_one_copied, points, trials, seed=26) <= 3.5
 
 

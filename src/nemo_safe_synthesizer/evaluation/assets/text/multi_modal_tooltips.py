@@ -78,12 +78,12 @@ tooltips = {
         to stretches of holdout sequences it never saw, the trace a generator leaves when it memorizes training data. Each window of consecutive
         values, across the numeric columns, is compared with its nearest synthetic window. Differences small enough to be explained by chance do
         not lower the score, so 10 means training windows are no easier to find in the synthetic data than unseen ones, and scores near 0 mean
-        the synthetic data copies training windows. It needs a group column and at least two holdout groups, and it is reported on its own
-        rather than as part of the Data Privacy Score. Any exact copy deserves a look, whatever the score.
+        the synthetic data copies training windows. It needs a group column and at least two holdout groups. It is reported on its own and is
+        not part of the Data Privacy Score. Any exact copy deserves a look, whatever the score.
     """,
     "window_group_mia_distance_info": """
         How close each training and holdout window comes to its nearest synthetic window, as the typical difference per value in training
-        standard deviations. Windows left of the dashed line are flagged. In well-protected synthetic data the blue and gray bars overlap; blue
+        standard deviations. Windows left of the dashed line are flagged. In well-protected synthetic data the blue and gray bars overlap. Blue
         bars piled up near 0 mean training windows were copied.
     """,
     "window_group_mia_groups_info": """
