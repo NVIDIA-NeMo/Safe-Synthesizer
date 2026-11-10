@@ -57,6 +57,7 @@ Located in `src/nemo_safe_synthesizer/config/time_series.py`, this configuration
 | `stop_timestamp` | `str \| int \| None` | `None` | Deterministic mode only: stop timestamp for generation, resolved from the common last timestamp of all groups. |
 
 Validation Rules:
+
 - When `is_timeseries=True`, at least one of `timestamp_column` or `timestamp_interval_seconds` must be provided.
 - When `is_timeseries=False`, `timestamp_column` cannot be set.
 - For grouped time series, `group_training_examples_by` (in data config) should also be set.
@@ -114,8 +115,6 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 | `invalid_fraction_threshold` | `float` | `0.95` | Threshold for invalid record fraction. Groups fail after `patience` consecutive batches exceeding this threshold. |
 | `patience` | `int` | `1` | Number of consecutive batches with high invalid fraction before a group fails. |
 | `num_records` | `int` | - | Target number of records (used for progress tracking, not to limit generation in time-series mode). |
-
-
 
 ### Evaluation Parameters (In Progress)
 
@@ -265,7 +264,7 @@ def _fill_context_with_records_generator(dataset):
 
 ### Class Hierarchy
 
-```
+```text
 TrainingExampleAssembler (ABC)
     ├── TabularDataExampleAssembler       # Standard tabular (shuffled)
     ├── SequentialExampleAssembler        # Time series (ordered, single-group examples)
@@ -284,7 +283,7 @@ All time series (including single-sequence) use parallel group generation.
 Single-sequence data is treated as 1 group via the pseudo-group column added
 during preprocessing.
 
-```
+```text
 TimeseriesBackend(VllmBackend)
     └── Parallel group generation (_generate_parallel_groups)
 ```
@@ -340,7 +339,7 @@ TimeseriesBackend(VllmBackend)
 
 All time series use parallel group generation (single-sequence is just 1 group):
 
-```
+```text
 1. Initialize GroupState for each group with a partial first record
 2. Compute expected records per group: (stop - start) / interval + 1 (for flexible
    groups this is the maximum source-group length, used only for progress)
@@ -371,7 +370,7 @@ Each group maintains independent state:
 class GroupState:
     group_id: TimeSeriesGroupValue
     prompt_state: RecordPromptState  # Prefix/history prompt state
-    expected_records: int          # Based on (stop - start) / interval
+    expected_records: int  # Based on (stop - start) / interval
     last_timestamp_seconds: int | None
     low_valid_fraction_count: int  # Counter for consecutive bad batches
     completed: bool
@@ -383,6 +382,7 @@ class GroupState:
 ### Stopping Conditions
 
 Per-Group Stopping:
+
 - Deterministic completion: A group completes when an accepted record reaches `stop_timestamp`.
 - Flexible completion: A group completes on the first accepted
   `_is_last_row=true` row or when `_time_idx` reaches the dataset-level safety
@@ -390,6 +390,7 @@ Per-Group Stopping:
 - Failure (low valid fraction): A group fails after `config.generation.patience` consecutive batches where invalid fraction >= `config.generation.invalid_fraction_threshold`. Failed groups produce no synthetic data; rows they accepted earlier are discarded.
 
 Global Stopping:
+
 - Natural completion: All groups processed (pending and active lists empty).
 - Per-group retry state is authoritative. A zero-valid result for one group does
   not trigger the generic global no-record stop while other parallel groups can
@@ -428,6 +429,7 @@ def extract_and_validate_timeseries_records(
 ```
 
 Validation Steps:
+
 1. Parse JSON and validate against schema.
 2. Check for large number issues.
 3. Verify timestamp column exists.
@@ -559,6 +561,7 @@ time_series:
 Decision: All time series (including single-sequence) use the grouped architecture via a pseudo-group column.
 
 Rationale:
+
 - Single code path simplifies maintenance and testing.
 - Single-sequence is just 1 group, no special-casing needed.
 - Parallel generation optimizations apply to all cases.
@@ -568,6 +571,7 @@ Rationale:
 Decision: Generate 5 samples per prompt and keep one per group.
 
 Rationale:
+
 - Time series generation is more constrained than tabular.
 - Multiple samples increase the chance of getting a valid continuation.
 - Deterministic groups keep the sample with the most valid records; a longer
@@ -582,6 +586,7 @@ Rationale:
 Decision: Process multiple groups simultaneously in the same batch.
 
 Rationale:
+
 - GPU utilization is maximized.
 - Independent groups have no cross-dependencies.
 - Reduces total wall-clock time significantly.
@@ -591,6 +596,7 @@ Rationale:
 Decision: Require all groups to have identical start and stop timestamps.
 
 Rationale:
+
 - Simplifies generation logic (fixed expected_records per group).
 - Many real-world applications have synchronized sensors.
 - Future: Could relax this for asynchronous time series.
@@ -600,6 +606,7 @@ Rationale:
 Decision: Sample token budget from [70%, 100%] of max for training examples.
 
 Rationale:
+
 - Prevents overfitting to fixed sequence lengths.
 - Creates variable-length examples for robustness.
 - 100% used for validation for consistency.
@@ -609,6 +616,7 @@ Rationale:
 Decision: Each training example contains records from exactly one group.
 
 Rationale:
+
 - Ensures model learns patterns within a group's sequence.
 - Prevents cross-group contamination during training.
 - Sequence continuation across example boundaries is natural.
@@ -618,6 +626,7 @@ Rationale:
 Decision: Number of records is determined by time range and interval, not target count.
 
 Rationale:
+
 - Ensures complete time coverage for each group.
 - `num_records` parameter is only for progress tracking.
 - Groups complete when stop timestamp is reached.

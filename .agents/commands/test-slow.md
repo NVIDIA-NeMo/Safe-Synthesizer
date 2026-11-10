@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Run all unit tests including slow
 ---
+
 Run all unit tests including slow tests (excludes e2e and smoke tests).
 
-* Run with: `mise run test:unit-slow`
-* Underlying command: `uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"`
+- Run with: `mise run test:unit-slow`
+- Underlying command: `uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"`

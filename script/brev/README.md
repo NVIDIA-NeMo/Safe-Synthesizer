@@ -172,6 +172,7 @@ notebook confirm the environment resolved correctly:
 
 ```python
 import sys
+
 print(sys.executable)  # expect $HOME/.nss-venv/bin/python
 ```
 

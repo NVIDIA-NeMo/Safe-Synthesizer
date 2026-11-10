@@ -53,36 +53,36 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 2. Set up the development environment:
 
-  ```bash
-   cd Safe-Synthesizer
+   ```bash
+    cd Safe-Synthesizer
 
-   # Install dev tools via mise (installs mise itself if missing)
-   make setup
+    # Install dev tools via mise (installs mise itself if missing)
+    make setup
 
-   # Install Python dependencies (choose one)
-   mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss engine # Engine dependencies only
-   mise run bootstrap-nss dev    # Minimal dev dependencies only
-  ```
+    # Install Python dependencies (choose one)
+    mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
+    mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
+    mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
+    mise run bootstrap-nss engine # Engine dependencies only
+    mise run bootstrap-nss dev    # Minimal dev dependencies only
+   ```
 
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
-  ```bash
-   # Add to your shell profile (~/.bashrc, ~/.zshrc)
-   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
-   printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
-  ```
+   ```bash
+    # Add to your shell profile (~/.bashrc, ~/.zshrc)
+    REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+    printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
+   ```
 
-  Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
+   Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
 
 4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.env.local` (git-ignored, auto-loaded by mise):
 
-  ```bash
-   # .env.local -- project-local overrides (git-ignored)
-   SS_WORKTREE_DIR="/path/to/worktrees"
-  ```
+   ```bash
+    # .env.local -- project-local overrides (git-ignored)
+    SS_WORKTREE_DIR="/path/to/worktrees"
+   ```
 
    Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
 
@@ -175,13 +175,10 @@ git reset --soft HEAD~1
 
 You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
 
-
 To avoid forgetting `--signoff` and `--gpg-sign` on future commits, configure this repo to GPG-sign automatically and create a short alias that adds DCO sign-off:
-
 
 !!! info "Git aliases"
     You can obviously choose your own aliases or set them elsewhere - this is just a suggestion so you do not have to think about it.
-
 
 ```bash
 # Automatic GPG signing on every commit (native git config)
@@ -217,7 +214,7 @@ This repository uses GitHub Rulesets to enforce consistent contribution standard
 
 All branches (except `main`) must follow this naming pattern:
 
-```
+```text
 <author>/<description>
 <author>/<issue-id>-<description>
 <author>/<type>/<description>
@@ -235,7 +232,6 @@ Valid types: `feature`, `bugfix`, `hotfix`, `release`, `docs`, `chore`, `test`
 
 Examples:
 
-
 | Branch Name                       | Valid               |
 | --------------------------------- | ------------------- |
 | `jsmith/add-login-feature`        | ✅                   |
@@ -246,12 +242,11 @@ Examples:
 | `feature/add-login`               | ❌ Missing author    |
 | `JSmith/123-Add-Login`            | ❌ Must be lowercase |
 
-
 ### Conventional Commits
 
 All commits merged to `main` must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-```
+```text
 <type>(<scope>): <description>
 ```
 
@@ -270,7 +265,6 @@ Rules:
 
 Valid types:
 
-
 | Type       | Description                                      |
 | ---------- | ------------------------------------------------ |
 | `feat`     | New feature                                      |
@@ -285,9 +279,7 @@ Valid types:
 | `chore`    | Maintenance tasks                                |
 | `revert`   | Reverting previous commits                       |
 
-
 Examples:
-
 
 | Commit Message                            | Valid                    |
 | ----------------------------------------- | ------------------------ |
@@ -299,14 +291,11 @@ Examples:
 | `fix - resolve bug`                       | ❌ Wrong format           |
 | `FIX: resolve bug`                        | ❌ Type must be lowercase |
 
-
 > Since we use squash merging, your PR title should follow this format as it becomes the commit message.
-
 
 ### Branch Protection
 
 The `main` branch has the following protections:
-
 
 | Rule                            | Setting      |
 | ------------------------------- | ------------ |
@@ -350,7 +339,7 @@ Most internal issues will be `Task`.
 
 Issues are tracked in the Safe Synthesizer Development GitHub project. Priority and effort estimates live as project fields, not labels, so backlog and prioritization views can sort and group on them directly.
 
-- `Priority` -- relative urgency for backlog ordering. 
+- `Priority` -- relative urgency for backlog ordering.
 - `Size` -- rough effort estimate.
 
 Set both in the [project view](https://github.com/orgs/NVIDIA-NeMo/projects/74) or expand the Projects drop-down on the right pane for PRs and issues.

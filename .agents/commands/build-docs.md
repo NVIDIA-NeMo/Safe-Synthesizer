@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Build documentation site
 ---
+
 Build the MkDocs Material documentation site.
 
-* Run with: `mise run docs:build`
-* Underlying command: `uv run --frozen --group docs mkdocs build`
-* Output: `site/` directory
+- Run with: `mise run docs:build`
+- Underlying command: `uv run --frozen --group docs mkdocs build`
+- Output: `site/` directory

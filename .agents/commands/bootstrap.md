@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Bootstrap development environment
 ---
+
 Set up the development environment from scratch.
 
 1. Install development tools (uv, ruff, ty, yq, etc.):

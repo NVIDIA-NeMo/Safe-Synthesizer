@@ -7,9 +7,10 @@
 
 Citation:
 
-Larson, S., Mahendran, A., Peper, J. J., Clarke, C., Lee, A., Hill, P., Kummerfeld, J. K., Leach, K., Laurenzano, M. A., Tang, L., & Mars, J. (2019). An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction. In *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)*. https://www.aclweb.org/anthology/D19-1131
+Larson, S., Mahendran, A., Peper, J. J., Clarke, C., Lee, A., Hill, P., Kummerfeld, J. K., Leach, K., Laurenzano, M. A., Tang, L., & Mars, J. (2019). An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction. In *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)*. <https://www.aclweb.org/anthology/D19-1131>
 
 ### Document Summaries (`doc_summaries.csv`)
+
 Synthetic document summaries generated with [NeMo Data Designer](https://github.com/NVIDIA-NeMo/DataDesigner) (Apache 2.0), with `nvidia/nemotron-3-nano-30b-a3b` model.
 
 ### Dow Jones Index (`dow_jones_index_group_size_8.csv`)

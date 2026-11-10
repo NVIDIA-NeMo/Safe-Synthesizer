@@ -6,7 +6,7 @@ This file documents third-party code included in or adapted for nemo_safe_synthe
 
 Files in `privacy/dp_transformers/` have been adapted from Microsoft's dp-transformers library.
 
-Repository: https://github.com/microsoft/dp-transformers
+Repository: <https://github.com/microsoft/dp-transformers>
 
 ### Adapted files
 
@@ -17,7 +17,7 @@ Repository: https://github.com/microsoft/dp-transformers
 
 License: MIT
 
-```.text
+```text .text
 MIT License
 
 Copyright (c) Microsoft Corporation.
