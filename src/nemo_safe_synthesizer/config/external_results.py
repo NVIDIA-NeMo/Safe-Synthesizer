@@ -68,7 +68,8 @@ class SafeSynthesizerSummary(NSSBaseModel):
     Token-field invariants (when all referenced fields are populated):
 
     * ``num_non_record_tokens == num_completion_tokens
-      - num_valid_record_tokens - num_invalid_record_tokens``
+      - num_valid_record_tokens - num_invalid_record_tokens
+      - num_discarded_sample_tokens``
       (clamped to 0 if slight tokenizer-boundary drift makes the
       subtraction negative).
     * ``tokens_per_prompt == num_completion_tokens / num_prompts``.
@@ -148,6 +149,11 @@ class SafeSynthesizerSummary(NSSBaseModel):
 
     num_non_record_tokens: int | None = Field(default=None, description="Tokens not part of any recognized record.")
 
+    num_discarded_sample_tokens: int | None = Field(
+        default=None,
+        description="Tokens discarded unused: the extra time-series samples per prompt and rows past a series' end.",
+    )
+
     valid_record_token_fraction: float | None = Field(
         default=None, description="Fraction of total completion tokens in valid records."
     )
@@ -194,6 +200,7 @@ class SafeSynthesizerSummary(NSSBaseModel):
             "gen/num_valid_record_tokens": self.num_valid_record_tokens,
             "gen/num_invalid_record_tokens": self.num_invalid_record_tokens,
             "gen/num_non_record_tokens": self.num_non_record_tokens,
+            "gen/num_discarded_sample_tokens": self.num_discarded_sample_tokens,
             "gen/valid_record_token_fraction": self.valid_record_token_fraction,
             "gen/tokens_per_prompt": self.tokens_per_prompt,
             "gen/tokens_per_second": self.tokens_per_second,

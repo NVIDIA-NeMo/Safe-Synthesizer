@@ -298,6 +298,20 @@ TimeseriesBackend(VllmBackend)
   retained and completes the group; later rows in the same completion are
   discarded. If no marker appears, generation stops at the dataset-level
   maximum source-group length.
+- Rows Past a Series' End: Rows generated after a series' end (the stop
+  timestamp, or an accepted end marker or length cap) are discarded like the
+  extra samples. In fixed-interval mode a row exactly at the stop timestamp is
+  kept, and a group also completes when its rows jump past the stop. If data
+  actions reject a tentative flexible end marker, the rows after it are invalid
+  because the sequence did not end there.
+- Kept-Sample Statistics: Only the sample kept for each group counts toward
+  statistics. Discarded samples and rows stay out of the counts: prompts are
+  still counted, but those rows count as neither valid nor invalid, and their
+  tokens are reported as `discarded_sample_tokens` instead of non-record tokens. The
+  per-batch valid fraction, the invalid-fraction strike, error statistics, the
+  saved results, and W&B metrics all describe kept samples. When no sample
+  continues a group in a batch, none is discarded: every sample's invalid rows
+  count, so error statistics show why all of them failed.
 - Internal Control Cleanup: `_time_idx`, `_is_last_row`, and any pseudo-group
   column are removed before returning final synthetic data.
 - Partial-Record Initialization: Every group starts with an incomplete JSON
@@ -324,7 +338,7 @@ TimeseriesBackend(VllmBackend)
 2. Token-Prompt Assembly: Reproduce the training prompt and sequence special-token boundary, then append the prefix or history bytes.
 3. Batch Generation: Clamp completion length to the remaining context and generate multiple candidate suffixes (default 5) per prompt for each active group.
 4. Record Reconstruction: During the first iteration, prepend the JSON-only prefix before parsing each candidate.
-5. Response Selection: Apply data actions and post-processing checks to every response, then keep one per group. Deterministic groups keep the response with the most accepted rows; flexible groups keep the first response whose accepted rows end with the final-row marker, otherwise the first response with an accepted row. A response rejected by data actions therefore never displaces another valid response.
+5. Response Selection: Apply data actions and post-processing checks to every response, then keep one per group. Deterministic groups keep the response with the most accepted rows; flexible groups keep the first response whose accepted rows end with the final-row marker, otherwise the first response with an accepted row. A response rejected by data actions therefore never displaces another valid response. The other responses are emptied (see Kept-Sample Statistics).
 6. History Update: Switch from the prefix to a sliding history containing exact accepted record text.
 7. Repeat: Continue until each group completes. Deterministic groups complete at the stop timestamp; flexible groups complete at an accepted final-row marker or the maximum source-group length.
 
@@ -352,15 +366,49 @@ All time series use parallel group generation (single-sequence is just 1 group):
    e. For each group:
       - Validate chronological order against group's last timestamp
       - Apply data actions and post-processing checks to every response
-      - Retain one validated response (deterministic: most accepted rows; flexible: first with an end marker, else first valid) and discard others
-      - Update group state (history, last_timestamp)
+      - Cut accepted rows at the series' end (stop timestamp, end marker, or length cap)
+      - Retain one validated response (deterministic: most accepted rows, or one that jumped
+        past the stop; flexible: first with an end marker, else first valid) and empty the others
+      - Update group state (history, last_timestamp) from accepted rows only
       - Deterministic: check if stop timestamp reached (marks group complete)
       - Flexible: check for an accepted final-row marker or the length limit
       - Track low valid fraction; fail group after max retries
    f. Remove completed/failed groups from active list
    g. Save progress snapshots if thresholds are met
-   h. Log per-group progress summary
+   h. If any group completed or failed in this batch, log the job-wide
+      "Generation Summary" and "Error Statistics" tables
+   i. Log the "Batch Progress" and "Group Progress" tables, including groups that finished in this batch
 ```
+
+### Progress and Error Logs
+
+Time-series generation logs the same structured tables as tabular generation,
+through `logger.user.info` with `render_table`, in the same order: summary and
+error tables first, progress tables last. Like tabular generation, it also
+logs a periodic "Generation in progress" heartbeat and, when generation ends or
+fails, the "vLLM generation complete" observability event.
+
+- "Batch Progress", after every batch: speed, duration, samples per prompt,
+  valid records so far, active, finished, completed, failed, and total group
+  counts, and token throughput (`tokens_per_second` and
+  `valid_tokens_per_second`). Fixed-shape runs also report the expected record
+  total.
+- "Group Progress", after every batch: one row per group processed in the
+  batch, labeled by group ordinal, never by group value. Columns are the
+  status (`Active`, `Completed`, or `Failed`), the kept sample's
+  `num_valid_records` and `valid_record_fraction` (as a percentage), progress
+  (`accepted/expected` for fixed-shape groups, the accepted row count for
+  flexible groups), and retries (consecutive failed batches against
+  `patience`, for example `2/3`).
+  Per-batch strike and per-group failure details are logged at debug level
+  only, since the table already carries them.
+- "Generation Summary" and "Error Statistics", after every batch in which a
+  group completes or fails: the totals for the job so far (see Kept-Sample
+  Statistics). Unlike tabular generation, which logs these per batch, the tables
+  are cumulative, so a run with many parallel groups is not flooded with tables.
+  `use_detailed_logs` controls detailed error messages, as in tabular mode. The
+  last table is logged before failed groups' rows are discarded, so it shows
+  generation reasons rather than the end-of-run reclassification.
 
 ### GroupState Tracking
 
@@ -383,7 +431,7 @@ class GroupState:
 ### Stopping Conditions
 
 Per-Group Stopping:
-- Deterministic completion: A group completes when an accepted record reaches `stop_timestamp`.
+- Deterministic completion: A group completes when an accepted record reaches or passes `stop_timestamp`.
 - Flexible completion: A group completes on the first accepted
   `_is_last_row=true` row or when `_time_idx` reaches the dataset-level safety
   cap.
@@ -397,7 +445,9 @@ Global Stopping:
 - `num_records` remains a progress target and does not stop time-range-based
   generation.
 - The final status is `complete` only when every group completes; if any group
-  fails, the status is `incomplete`. `num_records` does not affect it.
+  fails, the status is `incomplete`. `num_records` does not affect it. An
+  incomplete run logs completed groups out of all groups, or, for a single
+  ungrouped sequence, accepted records out of the expected sequence length.
 - Generating again into the same workdir overwrites earlier output when the
   new run finishes, as for other generation modes. This includes the flexible
   artifacts `raw_generations.jsonl`, `flexible_timeseries_metrics.json`, and

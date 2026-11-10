@@ -209,7 +209,7 @@ def _format_table_value(key: str, value: object) -> str:
     """Format values for user-facing Rich tables."""
     if isinstance(value, float):
         is_fraction = key.endswith("_fraction") or (
-            0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+            0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds", "_per_second"))
         )
         return f"{value:.2%}" if is_fraction else f"{value:.2f}"
     if isinstance(value, Mapping):
