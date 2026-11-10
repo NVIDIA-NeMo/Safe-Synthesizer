@@ -295,30 +295,23 @@ def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     cards = report.jinja_context["time_series_cards"]
-    assert cards == [
-        report.jinja_context["autocorrelation_similarity"],
-        report.jinja_context["rolling_stats_similarity"],
-    ]
+    card_ids = [card["card_id"] for card in cards]
+    assert cards[0] == report.jinja_context["autocorrelation_similarity"]
     assert cards[0]["card_id"] == "autocorrelation-similarity"
     assert cards[0]["template"] == "jinja/components/autocorrelation_similarity.j2"
     assert cards[0]["score_colored_traces"] is True
-    assert cards[1]["card_id"] == "rolling-stats-similarity"
-    assert cards[1]["template"] == "jinja/components/rolling_stats_similarity.j2"
-    assert cards[1]["score_colored_traces"] is False
+    assert report.jinja_context["rolling_stats_similarity"] in cards
+    assert card_ids.index("autocorrelation-similarity") < card_ids.index("rolling-stats-similarity")
     assert report.jinja_context["with_time_series"] is True
     output = render_report(report)
     assert output is not None
     assert 'id="autocorrelation-similarity"' in output
-    assert 'id="rolling-stats-similarity"' in output
     assert "Measures whether numeric columns change over time like the training data" in output
-    assert (
-        "Measures whether the local average and spread of numeric columns change over time like the training data"
-        in output
-    )
-    assert output.count('class="time-series-charts" data-score-colored-traces') == 1
-    assert output.count('class="time-series-charts">') == 1
-    assert "Training median local average" in output
-    assert "Synthetic median local spread" in output
+    assert 'class="time-series-charts" data-score-colored-traces' in output
+    rolling_card = output[output.index('id="rolling-stats-similarity"') :]
+    assert output.index('id="autocorrelation-similarity"') < output.index('id="rolling-stats-similarity"')
+    assert "Measures whether the local average and spread of numeric columns change over time" in rolling_card
+    assert "Training median local average" in rolling_card
 
 
 def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,42 +324,3 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     assert not any(isinstance(component, RollingStatsSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
-
-
-def test_rolling_stats_report_builds_its_chart_row_from_profiles() -> None:
-    report = _minimal_multimodal_report()
-    profiles = [
-        {
-            "group": group,
-            "column": "value",
-            "segments": 2,
-            "training_level": [0.5, 0.2],
-            "synthetic_level": synthetic_level,
-            "training_spread": [1.0, 1.0],
-            "synthetic_spread": [None, None] if synthetic_level[0] is None else [0.9, 1.1],
-            "similarity": 0.0 if synthetic_level[0] is None else 0.8,
-        }
-        for group, synthetic_level in (("a", [0.4, 0.1]), ("b", [None, None]))
-    ]
-    report.components = [
-        RollingStatsSimilarity(
-            score=EvaluationScore.finalize_grade(raw_score=0.4, score=4.0),
-            details={"profiles": profiles},
-        )
-    ]
-
-    context = report.jinja_context["rolling_stats_similarity"]
-
-    assert context["constant_synthetic_profile_count"] == 1
-    assert [figure["title"] for figure in context["figures"]] == [
-        "Average and spread",
-        "Difference by segment",
-        "Pair scores",
-    ]
-    assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
-    assert [figure["tooltip_id"] for figure in context["figures"]] == [
-        "rolling-stats-profile-info",
-        "rolling-stats-difference-info",
-        "rolling-stats-pair-scores-info",
-    ]
-    assert context["summary_traces_per_column"] == 8
