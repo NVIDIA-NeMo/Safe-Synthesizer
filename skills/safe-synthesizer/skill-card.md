@@ -9,7 +9,7 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and data scientists use this skill to have an agent help them run, configure, troubleshoot, and inspect outputs from NeMo Safe Synthesizer, including CLI and SDK runs, differential privacy settings, parameter overrides, generation or OOM failures, artifacts, logs, and evaluation metrics. <br>
+Developers and data engineers use this skill to have an agent help them run, configure, troubleshoot, and inspect outputs from NeMo Safe Synthesizer, including CLI/SDK pipeline runs, differential privacy settings, config overrides, generation and OOM failures, artifacts, logs, and evaluation metrics. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
@@ -25,10 +25,10 @@ Risk: Review before execution as proposals could introduce incorrect or misleadi
 Mitigation: Review and scan skill before deployment. <br>
 
 ## Reference(s): <br>
-- [Run Safe Synthesizer](references/run.md) <br>
-- [Configure Safe Synthesizer](references/config.md) <br>
-- [Diagnose Safe Synthesizer](references/diagnose.md) <br>
-- [Inspect Safe Synthesizer Artifacts](references/artifacts.md) <br>
+- [references/run.md](references/run.md) <br>
+- [references/config.md](references/config.md) <br>
+- [references/diagnose.md](references/diagnose.md) <br>
+- [references/artifacts.md](references/artifacts.md) <br>
 - [Getting Started guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) <br>
 - [Running guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/) <br>
 - [Configuration guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/) <br>
@@ -43,7 +43,7 @@ Mitigation: Review and scan skill before deployment. <br>
 **Output Type(s):** [Shell commands, Code, Configuration instructions, Analysis] <br>
 **Output Format:** [Markdown with inline bash and Python code blocks] <br>
 **Output Parameters:** [1D] <br>
-**Other Properties Related to Output:** [None] <br>
+**Other Properties Related to Output:** [Answers start with the direct command, diagnosis, or file path, cite relevant docs paths, and include one next action.] <br>
 
 ## Evaluation Agents Used: <br>
 - Claude Code (`aws/anthropic/bedrock-claude-opus-5-5`) <br>
@@ -52,7 +52,7 @@ Mitigation: Review and scan skill before deployment. <br>
 
 
 ## Evaluation Tasks: <br>
-6 evaluation tasks (4 positive, 2 negative), 1 attempt per task, run in the `k8s-sandbox` environment with each task attempt in its own isolated sandbox pod. <br>
+6 evaluation tasks (4 positive, 2 negative); 1 attempt per task, each run in its own isolated sandbox pod (`k8s-sandbox`). Evaluated 2026-11-10 with evaluator version `1.6.9`; baseline is the same task attempted without the target skill. <br>
 
 ## Evaluation Metrics Used: <br>
 Reported benchmark dimensions: <br>
@@ -84,12 +84,12 @@ Recommended for publication based on the completed evaluation evidence in this r
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 96.0% — baseline ran, but no comparable score was available; uplift unavailable | 90.8% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 91.9% — baseline ran, but no comparable score was available; uplift unavailable | 89.1% — baseline ran, but no comparable score was available; uplift unavailable |
 | Security | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Correctness | 56.7% → 100.0% (+43.3 points) | 80.0% → 100.0% (+20.0 points) |
+| Correctness | 53.3% → 96.7% (+43.4 points) | 80.0% → 96.7% (+16.7 points) |
 | Discoverability | 100.0% — baseline ran, but no comparable score was available; uplift unavailable | 95.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 37.1% → 98.8% (+61.7 points) | 51.4% → 89.1% (+37.7 points) |
-| Efficiency | 81.2% — baseline ran, but no comparable score was available; uplift unavailable | 69.8% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 37.1% → 86.9% (+49.8 points) | 69.3% → 80.8% (+11.5 points) |
+| Efficiency | 75.8% — baseline ran, but no comparable score was available; uplift unavailable | 73.3% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -104,9 +104,9 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Agent | Dimension | Basis | Baseline → With skill (uplift) | Explanation |
 | --- | --- | --- | --- | --- |
 | claude-code | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| claude-code | Efficiency | Token-only comparison | 98.4% → 97.8% (-0.6 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| claude-code | Efficiency | Token-only comparison | 96.2% → 97.9% (+1.7 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 | codex | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| codex | Efficiency | Token-only comparison | 90.7% → 89.7% (-1.0 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| codex | Efficiency | Token-only comparison | 91.3% → 89.9% (-1.4 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 
 ### Tier Status
 
@@ -117,7 +117,7 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
 ## Skill Version(s): <br>
-0.7.0.post1+cu130 (source: pyproject.toml) <br>
+0.7.0.post1+cu130 (source: pyproject.toml); git SHA 64a837fb, committed 2026-11-10 <br>
 
 ## Ethical Considerations: <br>
 NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications. When downloaded or used in accordance with our terms of service, developers should work with their internal team to ensure this skill meets requirements for the relevant industry and use case and addresses unforeseen product misuse. <br>
