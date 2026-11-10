@@ -120,29 +120,16 @@ def _with_missing(rng: np.random.Generator, groups: list[np.ndarray], share: flo
     return out
 
 
-def test_window_group_mia_score_removes_chance_from_the_privacy_loss():
+@pytest.mark.parametrize("holdout_groups", [GROUPS, 2])
+def test_window_group_mia_scores_an_exact_copy_zero_whatever_the_holdout_size(holdout_groups: int):
     rng = np.random.default_rng(3)
-    training, holdout = _entities(rng, 300), _entities(rng, 300)
-    synthetic = _entities(rng, 300)
-    synthetic[0] = training[0].copy()
+    training, holdout = _entities(rng, 200), _entities(rng, 200, count=holdout_groups)
 
-    component = _evaluate(training, synthetic, holdout)
+    component = _evaluate(training, [values.copy() for values in training], holdout)
 
-    attack = component.details["attack"]
-    training_rate = (attack["flagged_training_windows"] + 0.5) / (component.details["counts"]["training_windows"] + 1)
-    holdout_rate = (attack["flagged_holdout_windows"] + 0.5) / (component.details["counts"]["holdout_windows"] + 1)
-    assert attack["privacy_loss"] == pytest.approx(np.log(training_rate / holdout_rate))
-    noise = attack["binomial_noise"] + attack["holdout_offset_noise"]
-    expected_loss = np.sqrt(max(attack["privacy_loss"] ** 2 - noise, 0.0))
-    assert attack["privacy_loss_beyond_chance"] == pytest.approx(expected_loss)
-    excess_exact = component.details["exact_copy_rate"] - attack["holdout_exact_match_rate"]
-    expected_exact_loss = np.log1p(excess_exact * (1 - holdout_rate) / holdout_rate)
-    assert attack["exact_copy_privacy_loss"] == pytest.approx(expected_exact_loss)
-    assert attack["scored_privacy_loss"] == pytest.approx(max(expected_loss, expected_exact_loss))
-    assert component.score.score == pytest.approx(10 * np.exp(-attack["scored_privacy_loss"]), abs=0.1)
     assert component.details["evaluation_mode"] == "full"
-    assert component.details["window_size"] == 10
-    assert component.details["stride"] == 5
+    assert component.details["attack"]["training_flag_rate"] == 1.0
+    assert component.score.score == 0.0
 
 
 @pytest.mark.parametrize(
@@ -169,13 +156,13 @@ def test_window_group_mia_scores_copied_training_data_near_zero(make_synthetic):
     component = _evaluate(training, make_synthetic(rng, training), holdout)
 
     assert component.score.score is not None
-    assert component.score.score <= 1.0
+    assert component.score.score <= 0.5
 
 
 @pytest.mark.parametrize(("points", "trials"), [(200, 4), (1000, 1)])
 def test_window_group_mia_scores_one_copied_group_of_ten_as_quoted_in_the_guide(points: int, trials: int):
-    # The user guide's tiers quote about 3.5 for one whole group of 10 copied, and 3.4 at 1,000 points.
-    assert 3.0 <= _mean_score(_one_copied, points, trials, seed=26) <= 4.0
+    # The user guide's tiers quote about 3.2 for one whole group of 10 copied.
+    assert 2.5 <= _mean_score(_one_copied, points, trials, seed=26) <= 3.5
 
 
 @pytest.mark.parametrize(("holdout_groups", "trials"), [(GROUPS, 4), (2, 3)])

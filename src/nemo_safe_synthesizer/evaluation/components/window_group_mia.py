@@ -92,11 +92,15 @@ class _FlagCounts:
     threshold: float
 
     @property
+    def holdout_rate(self) -> float:
+        """Share of holdout windows flagged, with half a window added so it stays above 0."""
+        return (self.flagged_holdout + 0.5) / (self.holdout + 1)
+
+    @property
     def privacy_loss(self) -> float:
         """``log(TPR / FPR)``, with half a window added to each flagged count so it stays finite."""
         training_rate = (self.flagged_training + 0.5) / (self.training + 1)
-        holdout_rate = (self.flagged_holdout + 0.5) / (self.holdout + 1)
-        return float(np.log(training_rate) - np.log(holdout_rate))
+        return float(np.log(training_rate) - np.log(self.holdout_rate))
 
     def binomial_noise(self, overlap: float) -> float:
         """Delta-method variance of ``privacy_loss`` for two binomial rates, times ``overlap``.
@@ -121,8 +125,19 @@ class _FlagCounts:
         values almost never arise by chance, so this loss is not reduced by
         the noise terms.
         """
-        holdout_rate = (self.flagged_holdout + 0.5) / (self.holdout + 1)
+        holdout_rate = self.holdout_rate
         return float(np.log1p(excess_exact_rate * (1 - holdout_rate) / holdout_rate))
+
+    def protection(self, loss: float) -> float:
+        """Map a privacy loss to 0--1, from 1 at no loss to 0 when every training window is flagged.
+
+        ``exp(-privacy_loss)`` is the holdout flag rate divided by the training
+        flag rate, which falls to the holdout flag rate when every training
+        window is flagged. That rate is rescaled to 0, and so is the largest
+        exact-copy loss, ``log(1 / holdout_rate)``.
+        """
+        holdout_rate = self.holdout_rate
+        return float(np.clip((np.exp(-loss) - holdout_rate) / (1 - holdout_rate), 0.0, 1.0))
 
 
 class WindowGroupMIA(TimeSeriesComponent):
@@ -133,7 +148,9 @@ class WindowGroupMIA(TimeSeriesComponent):
     of holdout windows. The privacy loss is the log ratio of the training and
     holdout flag rates; chance variation from the binomial counts and from the
     holdout groups' own offset is removed before scoring
-    ``10 * exp(-privacy_loss)``. Exact copies beyond the holdout's own
+    ``10 * (exp(-privacy_loss) - alpha) / (1 - alpha)``, where ``alpha`` is the
+    holdout flag rate, so 10 means equal flag rates and 0 means every training
+    window is flagged. Exact copies beyond the holdout's own
     exact-match rate set a floor on the privacy loss that chance can't remove,
     so a small holdout can't hide them. Without a group column or a usable
     holdout of at least two groups, the score is unavailable and only copy
@@ -351,7 +368,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         holdout_exact_rate = float(np.mean(holdout_distances == 0.0))
         exact_loss = flags.exact_copy_loss(max(details["exact_copy_rate"] - holdout_exact_rate, 0.0))
         scored_loss = max(debiased_loss, exact_loss)
-        protection = float(np.exp(-scored_loss))
+        protection = flags.protection(scored_loss)
         score = EvaluationScore.finalize_grade(raw_score=protection, score=10.0 * protection, is_privacy=True)
         score.notes = WindowGroupMIA._with_excluded_note(None, excluded_columns)
 
