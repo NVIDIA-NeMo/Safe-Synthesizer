@@ -23,10 +23,15 @@ __all__ = [
     "EvaluationParameters",
     "TimeSeriesEvaluationParameters",
     "TimeSeriesMetricParameters",
+    "WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS",
+    "WINDOW_GROUP_MIA_MIN_WINDOWS",
+    "WindowGroupMIAParameters",
 ]
 
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
+WINDOW_GROUP_MIA_MIN_WINDOWS = 20
+WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS = 2
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -82,6 +87,53 @@ class AutocorrelationSimilarityParameters(TimeSeriesMetricParameters):
     )
 
 
+class WindowGroupMIAParameters(TimeSeriesMetricParameters):
+    """Control window membership inference protection evaluation.
+
+    Timestamp ordering and sequence grouping use the top-level time-series and
+    data settings. The score needs grouped data and a holdout of at least
+    ``WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS`` whole groups, which the pipeline
+    creates when ``data.group_training_examples_by`` is set. Without them,
+    only copy diagnostics are reported.
+    """
+
+    metric_label: ClassVar[str] = "Window membership inference"
+
+    value_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Numeric value columns combined into each window. Defaults to all shared columns inferred as "
+            "numeric, up to max_columns. Changing this selection changes the meaning of the score."
+        ),
+    )
+    window_size: int = Field(
+        default=10,
+        ge=2,
+        description=(
+            "Number of consecutive observations compared as one window; windows start every half window. "
+            "Shorter windows detect partial copies in shorter sequences, and longer windows detect copies "
+            "blurred by noise. Scores computed with different windows are not directly comparable."
+        ),
+    )
+    max_windows: int = Field(
+        default=1000,
+        ge=WINDOW_GROUP_MIA_MIN_WINDOWS,
+        description=(
+            "Maximum training and holdout windows compared, each, using a reproducible sample balanced "
+            "across groups to bound runtime. Fewer windows make the score noisier; the score needs at "
+            f"least {WINDOW_GROUP_MIA_MIN_WINDOWS} of each."
+        ),
+    )
+    max_columns: int = Field(
+        default=12,
+        ge=1,
+        description=(
+            "Maximum automatically selected numeric columns combined into each window, chosen with a "
+            "reproducible sample to bound runtime. Explicit value_columns are always used in full."
+        ),
+    )
+
+
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration.
 
@@ -98,6 +150,10 @@ class TimeSeriesEvaluationParameters(Parameters):
     autocorrelation: AutocorrelationSimilarityParameters = Field(
         default_factory=AutocorrelationSimilarityParameters,
         description="Autocorrelation similarity metric parameters.",
+    )
+    window_group_mia: WindowGroupMIAParameters = Field(
+        default_factory=WindowGroupMIAParameters,
+        description="Window membership inference protection metric parameters.",
     )
 
 

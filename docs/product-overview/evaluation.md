@@ -108,6 +108,10 @@ Each time-series metric measures one specific temporal property, and not every p
 
 This score measures whether each synthetic numeric column keeps the persistence and periodicity of its training counterpart: how long values stay close to their recent past, and whether they rise and fall in the same repeating cycles, such as daily or weekly patterns. Focus on this metric when those patterns matter for your use case. We compare the autocorrelation at lags 1 to 20 for every group-column pair, after discounting the differences that sampling noise alone would produce. Synthetic data from the same process scores near 10, and shuffled or constant data scores near 0 when the training data has structure over time. See [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md) for example scenarios, a walkthrough of the report charts, and configuration.
 
+### Window Membership Inference Protection
+
+Window Membership Inference Protection (wMIP) measures whether the synthetic data reproduces stretches of the training sequences closely enough to reveal which sequences were used for training. This metric can expose privacy leakage when individual sequences are sensitive. We compare short windows of consecutive values from the training groups and from the holdout groups with their nearest synthetic window, and measure how much more often training windows are flagged as close, after discounting the difference that chance alone would produce. Synthetic data that copies nothing scores near 10, and synthetic data that copies training sequences scores near 0. It needs grouped data and a holdout of at least two whole groups ([when the score is available](../user-guide/time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)), appears in the Protection Metrics panel of the Data Privacy section of the report, and is reported separately from the Data Privacy Score (DPS). See [Window Membership Inference Protection](../user-guide/time-series-metrics/window-membership-inference-protection.md) for example scenarios, a walkthrough of the report charts, and configuration.
+
 ## Evaluation Reports
 
 Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. The report contains:
@@ -154,3 +158,4 @@ evaluation:
 
 - [Synthetic Data Quality](../user-guide/evaluating-data.md): See recommendations for increasing quality and privacy scores
 - [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md): Read and configure the time-series metric
+- [Window Membership Inference Protection](../user-guide/time-series-metrics/window-membership-inference-protection.md): Read and configure the time-series privacy metric

@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -12,8 +14,10 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.components.data_privacy_score import DataPrivacyScore
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
+from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
 from nemo_safe_synthesizer.evaluation.render import render_report
@@ -306,6 +310,17 @@ def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
     assert 'class="time-series-charts" data-score-colored-traces' in output
 
 
+def test_time_series_cards_are_split_by_report_section() -> None:
+    frame = pd.DataFrame({"time": range(60), "value": np.sin(np.arange(60) / 5)})
+
+    report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
+
+    context = report.jinja_context
+    assert context["time_series_cards"] == [context["autocorrelation_similarity"]]
+    assert context["data_privacy_time_series_cards"] == [context["window_membership_inference_protection"]]
+    assert context["data_privacy_time_series_cards"][0]["card_id"] == "window-group-mia"
+
+
 def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(multimodal_report_module, "TIME_SERIES_COMPONENTS", ())
     frame = pd.DataFrame({"time": range(60), "value": np.sin(np.arange(60) / 5)})
@@ -314,4 +329,109 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
+    assert report.jinja_context["data_privacy_time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
+
+
+def _rendered_numbers(html: str) -> set[float]:
+    """Every number in the HTML: Plotly's base64 typed arrays, decoded, and decimal literals."""
+    numbers = {float(value) for value in re.findall(r"-?\d+\.\d+(?:e[-+]?\d+)?", html)}
+    for dtype, data in re.findall(r'\{"dtype":"(\w+)","bdata":"([^"]+)"', html):
+        decoded = base64.b64decode(data.replace("\\u002f", "/"))
+        numbers.update(float(value) for value in np.frombuffer(decoded, dtype=np.dtype(dtype)))
+    return numbers
+
+
+def _window_group_mia_frame(groups: int, prefix: str, seed: int) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    parts = [
+        pd.DataFrame(
+            {
+                "entity": f"{prefix}{index}",
+                "time": np.arange(60),
+                "value": rng.normal(size=60).cumsum(),
+                "other": np.sin(np.arange(60) / 4 + rng.uniform(0, 6)),
+            }
+        )
+        for index in range(groups)
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_window_group_mia_metric_renders_in_the_data_privacy_section_after_row_level_membership_inference() -> None:
+    training = _window_group_mia_frame(10, "t", seed=1)
+    holdout = _window_group_mia_frame(5, "h", seed=2)
+    config = _time_series_config()
+    config.data.group_training_examples_by = "entity"
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), test=holdout, config=config)
+    report.components.append(
+        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0, is_privacy=True))
+    )
+
+    component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
+    assert component.score.score is not None
+    assert component.score.score < 1.0
+    context = report.jinja_context["window_membership_inference_protection"]
+    assert context["summary_traces_per_column"] == 2
+    assert component.details["closest_match"]["exact_copy"] is True
+    assert "Training window" in context["figures"][2]["html"]
+    output = render_report(report)
+    assert output is not None
+    time_series_panel = output.index("<h2>Time-Series Metrics</h2>")
+    assert time_series_panel < output.index('id="autocorrelation-similarity"') < output.index('id="data-privacy"')
+    assert (
+        output.index('id="data-privacy"')
+        < output.index('id="mia"')
+        < output.index('id="window-group-mia"')
+        < output.index('id="aia"')
+    )
+    assert output.count('id="window-group-mia"') == 1
+    assert "100.0% of training windows have an exact copy in the synthetic data." in " ".join(output.split())
+
+
+def test_window_group_mia_card_is_hidden_with_the_protection_metrics_panel() -> None:
+    training = _window_group_mia_frame(10, "t", seed=1)
+    holdout = _window_group_mia_frame(5, "h", seed=2)
+    config = _time_series_config()
+    config.data.group_training_examples_by = "entity"
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), test=holdout, config=config)
+
+    output = render_report(report)
+    assert output is not None
+    assert 'id="autocorrelation-similarity"' in output
+    assert 'id="data-privacy"' not in output
+    assert 'id="window-group-mia"' not in output
+
+
+def test_window_group_mia_report_hides_a_closest_training_window_that_is_not_an_exact_copy() -> None:
+    training = _window_group_mia_frame(10, "t", seed=4)
+    holdout = _window_group_mia_frame(5, "h", seed=5)
+    synthetic = _window_group_mia_frame(10, "t", seed=6)
+    config = _time_series_config()
+    config.data.group_training_examples_by = "entity"
+
+    report = MultimodalReport.from_dataframes(training, synthetic, test=holdout, config=config)
+    report.components.append(
+        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0, is_privacy=True))
+    )
+
+    component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
+    match = component.details["closest_match"]
+    assert match["exact_copy"] is False
+    assert "training_values" not in match
+    context = report.jinja_context["window_membership_inference_protection"]
+    assert context["summary_traces_per_column"] == 1
+    window = component.details["window_size"]
+    group = training[training["entity"] == match["group"]].sort_values("time")
+    training_window = group[component.details["columns"]].iloc[match["start"] : match["start"] + window]
+    output = render_report(report)
+    assert output is not None
+    # Only this card: Column Distribution Stability plots training values of its own.
+    card = output[output.index('id="window-group-mia"') : output.index('id="aia"')]
+    assert "Closest match shows only the synthetic window." in card
+    assert '"name":"Training window"' not in card
+    rendered_numbers = _rendered_numbers(card)
+    assert set(np.ravel(match["synthetic_values"])) <= rendered_numbers
+    assert not set(training_window.to_numpy().ravel()) & rendered_numbers

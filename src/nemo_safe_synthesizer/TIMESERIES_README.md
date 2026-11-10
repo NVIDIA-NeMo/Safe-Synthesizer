@@ -37,7 +37,7 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
   range and interval. Flexible generation learns a final-row marker, and the
   maximum observed group length is a hard limit for synthetic groups.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
-- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
+- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity, and whether it copies stretches of training sequences, with Window Membership Inference Protection.
 
 ---
 
@@ -120,7 +120,7 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 ### Evaluation Parameters (In Progress)
 
 Time-series evaluation is configured under `evaluation.time_series`, defined in `src/nemo_safe_synthesizer/config/evaluate.py`.
-Each metric has its own nested section; Autocorrelation Similarity is available today, and more metrics are being added.
+Each metric has its own nested section; Autocorrelation Similarity and Window Membership Inference Protection are available today, and more metrics are being added.
 
 ```yaml
 evaluation:
@@ -131,10 +131,15 @@ evaluation:
       max_lag: 20          # largest lag compared; capped for short sequences
       min_points: 4        # minimum finite observations in each sequence
       max_groups: 128      # reproducible sample of shared groups above this count
+    window_group_mia:
+      value_columns: null  # null combines numeric training columns, up to max_columns, into each window
+      window_size: 10      # consecutive values compared as one window; windows start every half window
+      max_windows: 1000    # reproducible sample of training and holdout windows, each, above this count
+      max_columns: 12      # reproducible sample of automatically selected columns above this count
 ```
 
 Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; each metric chooses only which value columns it evaluates, with `value_columns`.
-See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) for how to read the score and choose these values.
+See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) and the [Window Membership Inference Protection guide](../../docs/user-guide/time-series-metrics/window-membership-inference-protection.md) for how to read the scores and choose these values.
 
 ---
 
@@ -472,11 +477,21 @@ Purpose: Measures how well the synthetic data preserves temporal autocorrelation
 It compares training and synthetic autocorrelation profiles for each shared group and numeric column, discounts differences explained by sampling noise, and averages the pair similarities into a 0--10 score.
 See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the full calculation.
 
+### Window Membership Inference Protection
+
+Located in `src/nemo_safe_synthesizer/evaluation/components/window_group_mia.py`.
+
+Purpose: Measures privacy by checking whether the synthetic data sits closer to stretches of the training sequences than to stretches of holdout sequences it never saw.
+It compares short windows of consecutive values, across the numeric columns, from training and holdout groups with their nearest synthetic window, and scores the log ratio of their flag rates after discounting chance on a 0--10 scale.
+The score needs grouped data and a holdout of at least two whole groups. Without them, only copy diagnostics are reported (see the guide's [When the score is available](../../docs/user-guide/time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)).
+It is reported on its own and is not part of the Data Privacy Score.
+See `docs/user-guide/time-series-metrics/window-membership-inference-protection.md` for the full calculation.
+
 Auto-Enable: When `is_timeseries=True`, time-series evaluation runs even without explicit evaluation config.
 
 ### Integration with Multimodal Report
 
-The multimodal report runs every component in `TIME_SERIES_COMPONENTS` (in `multimodal_report.py`) when time-series evaluation is enabled, and renders each as a card in the Time-Series Metrics panel.
+The multimodal report runs every component in `TIME_SERIES_COMPONENTS` (in `multimodal_report.py`) when time-series evaluation is enabled, and renders each as a card in the Time-Series Metrics panel, or in the Data Privacy section's Protection Metrics panel when its `report_section` is `"data_privacy"`.
 It is enabled by default when `is_timeseries=True`, and can be turned off with `evaluation.time_series.enabled: false`.
 
 Shared pieces every time-series metric uses:
@@ -488,7 +503,7 @@ Shared pieces every time-series metric uses:
 ### Adding a time-series metric
 
 1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
-2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
+2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, including `report_section` when the card belongs under Data Privacy, and build its figures in `jinja_context` with `figure_rows`.
 3. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
 4. Add the component class to `TIME_SERIES_COMPONENTS`.
 5. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
@@ -657,6 +672,7 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
+| `evaluation/components/window_group_mia.py` | Window membership inference protection metric |
 | `evaluation/components/time_series_common.py` | Component base class and grouping and column helpers shared by time-series metrics |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |
