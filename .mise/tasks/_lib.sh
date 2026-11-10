@@ -22,6 +22,19 @@ resolve_python_version() {
   printf '%s\n' "${python_version}"
 }
 
+resolve_uv_version() {
+  local pyproject="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT is required}/pyproject.toml"
+  local uv_version
+
+  if ! uv_version="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["tool"]["uv"]["required-version"])' "${pyproject}")" \
+    || [[ -z "${uv_version}" ]]; then
+    echo "Error: cannot read [tool.uv] required-version from ${pyproject}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${uv_version}"
+}
+
 resolve_venv_path() {
   local venv_path="${UV_PROJECT_ENVIRONMENT:-${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT is required}/.venv}"
 

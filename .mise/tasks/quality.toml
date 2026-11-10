@@ -2,27 +2,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [format]
-description = "Format all tracked source files with dprint, Ruff, and the SPDX copyright fixer. Modifies files in place; run before committing."
+description = "Format and fix all source files with dprint (TOML), Ruff (Python and the Python in Markdown), rumdl (Markdown), and the SPDX copyright fixer. Modifies files in place; run before committing."
 run = [
-    "dprint fmt --incremental=false",
-    "bash tools/codestyle/format.sh",
+    "dprint fmt",
+    "ruff check --fix",
+    "ruff format",
+    "rumdl check --fix .",
     "uv run --script tools/codestyle/copyright_fixer.py .",
 ]
 
 ["check:format"]
-description = "Check TOML and Python formatting without modifying tracked files."
+description = "Check TOML, Python, and Python-in-Markdown formatting with dprint and Ruff without modifying tracked files."
 run = [
-    "dprint check --incremental=false",
-    "bash tools/codestyle/format.sh --check",
+    "dprint check",
+    "ruff format --check",
 ]
 
 ["check:lint"]
-description = "Check Python lint rules without modifying tracked files."
-run = "bash tools/codestyle/ruff_check.sh"
+description = "Check Python lint rules with Ruff and Markdown format and lint rules with rumdl without modifying tracked files."
+run = [
+    "ruff check",
+    "rumdl check .",
+]
 
 ["check:type"]
-description = "Run ty type checks through the repo wrapper. Requires Python dependencies installed; does not modify files."
-run = "bash tools/codestyle/typecheck.sh"
+description = "Run ty type checks under the root ty.toml. Requires Python dependencies installed; does not modify files."
+run = "ty check"
 
 ["check:lock"]
 description = "Verify generated CUDA metadata and uv.lock match their sources without modifying tracked files."

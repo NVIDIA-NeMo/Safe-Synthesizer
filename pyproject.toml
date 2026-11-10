@@ -209,8 +209,8 @@ cu130 = [
 # <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
 [tool.uv]
-# Version pinned in .mise.toml but keep here as a fallback constraint
-# Allow the patched 0.13.x line while staying below 0.14.0
+# The exact uv pin of the shared development baseline; it matches the uv
+# version in .mise.toml, and CI and containers read it from here.
 required-version = "0.13.5"
 
 cache-keys = [

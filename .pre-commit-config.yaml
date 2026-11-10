@@ -2,21 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
-exclude: |
-          (?x)(
-              CITATION.md|
-              CONTRIBUTING.md|
-              CODE_OF_CONDUCT.md|
-              design.md|
-              CLAUDE.md|
-              AGENTS.md|
-              CHANGELOG.md|
-              DCO|
-              LICENSE|
-              README.md|
-              SECURITY.md|
-              THIRD_PARTY.md
-          )$
+# The skills under .agents/skills/ are tracked although .gitignore lists them, so the
+# lint and format checks skip them; keep the hooks off them too.
+exclude: '^\.agents/skills/'
 
 
 repos:
@@ -74,16 +62,9 @@ repos:
         language: system
         files: '\.toml$'
 
-      - id: format
-        name: Run ruff (format + lint fix)
-        entry: bash tools/codestyle/format.sh
-        language: system
-        pass_filenames: true
-        types: [python]
-
       - id: typecheck
         name: Run ty typechecks
-        entry: bash tools/codestyle/typecheck.sh
+        entry: sh .house-tool.sh ty check
         language: system
         pass_filenames: false
         types: [python]
@@ -94,6 +75,21 @@ repos:
         language: system
         pass_filenames: true
         files: '\.(py|sh|md|yaml|yml)$'
+        exclude: |
+          (?x)(
+              CITATION.md|
+              CONTRIBUTING.md|
+              CODE_OF_CONDUCT.md|
+              design.md|
+              CLAUDE.md|
+              AGENTS.md|
+              CHANGELOG.md|
+              DCO|
+              LICENSE|
+              README.md|
+              SECURITY.md|
+              THIRD_PARTY.md
+          )$
 
       - id: uv-lock
         name: Check generated CUDA metadata and uv.lock

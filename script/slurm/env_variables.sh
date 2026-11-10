@@ -34,14 +34,16 @@ export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 # the login node. Override by exporting UV_CONCURRENT_DOWNLOADS first.
 export UV_CONCURRENT_DOWNLOADS="${UV_CONCURRENT_DOWNLOADS:-20}"
 # Python version for Slurm virtualenvs. Defaults to the repo's pinned version
-# (.python-version) so it tracks dependency/Python bumps automatically; override
-# by exporting NSS_PYTHON_VERSION before sourcing this file.
+# (.python-version at NSS_DIR, else in the checkout holding this file) so it
+# tracks dependency/Python bumps automatically; override by exporting
+# NSS_PYTHON_VERSION before sourcing this file.
 if [[ -z "${NSS_PYTHON_VERSION:-}" ]]; then
-    if [[ -f "${NSS_DIR}/.python-version" ]]; then
-        NSS_PYTHON_VERSION="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
-    else
-        NSS_PYTHON_VERSION="3.13"
+    _nss_python_version_file="${NSS_DIR}/.python-version"
+    if [[ ! -f "${_nss_python_version_file}" ]]; then
+        _nss_python_version_file="$(dirname "${BASH_SOURCE[0]}")/../../.python-version"
     fi
+    NSS_PYTHON_VERSION="$(tr -d '[:space:]' < "${_nss_python_version_file}")"
+    unset _nss_python_version_file
 fi
 export NSS_PYTHON_VERSION
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"

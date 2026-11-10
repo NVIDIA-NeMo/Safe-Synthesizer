@@ -8,11 +8,15 @@ set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 container_cmd="$(resolve_container_cmd)"
+python_version="$(resolve_python_version)"
+uv_version="$(resolve_uv_version)"
 
 "${container_cmd}" build \
   --platform "${CONTAINER_GPU_PLATFORM:-linux/amd64}" \
   --tag "${CONTAINER_GPU_IMAGE_DEV:-nss-gpu-dev:latest}" \
   --target dev \
+  --build-arg "PYTHON_VERSION=${python_version}" \
+  --build-arg "UV_VERSION=${uv_version}" \
   --build-arg "CONTAINER_EXTRA=${CONTAINER_GPU_EXTRA:-cu129}" \
   --build-arg "CONTAINER_VARIANT=${CONTAINER_GPU_VARIANT:-${CONTAINER_GPU_EXTRA:-cu129}}" \
   --build-arg "PACKAGE_VERSION=${CONTAINER_GPU_PACKAGE_VERSION:-}" \
