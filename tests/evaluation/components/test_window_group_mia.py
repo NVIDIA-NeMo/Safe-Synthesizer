@@ -296,9 +296,14 @@ def test_window_group_mia_needs_twenty_holdout_windows_for_a_score():
 
     component = _evaluate(training, _entities(rng, 100), _entities(rng, 40, count=2))
 
+    counts = component.details["counts"]
+    assert counts["holdout_windows"] < 20 <= counts["training_windows"]
     assert component.score.score is None
     assert component.score.notes is not None
-    assert "at least 20 training and 20 holdout windows and found 190 training and 14 holdout" in component.score.notes
+    assert (
+        f"found {counts['training_windows']} training and {counts['holdout_windows']} holdout windows"
+        in component.score.notes
+    )
     assert component.details["evaluation_mode"] == "copy_diagnostics_only"
 
 
@@ -353,6 +358,19 @@ def test_window_group_mia_window_cap_finds_copies_in_the_groups_that_sort_last()
     assert component.details["exact_copy_rate"] >= 0.1
     assert component.score.score is not None
     assert component.score.score < 5.0
+
+
+def test_window_group_mia_skips_groups_with_a_column_of_fewer_than_two_finite_values():
+    rng = np.random.default_rng(28)
+    training = _entities(rng, 100)
+    training[0][:, 1] = np.nan
+    training[1][:, 1] = np.nan
+    training[1][50, 1] = 1.0
+
+    component = _evaluate(training, _entities(rng, 100), _entities(rng, 100))
+
+    assert component.details["evaluation_mode"] == "full"
+    assert {row["group"] for row in component.details["per_group"]} == {f"train-{index}" for index in range(2, GROUPS)}
 
 
 def test_window_group_mia_column_cap_uses_a_reproducible_sample():

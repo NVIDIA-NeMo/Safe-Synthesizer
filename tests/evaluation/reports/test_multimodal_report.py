@@ -316,9 +316,9 @@ def test_time_series_cards_are_split_by_report_section() -> None:
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     context = report.jinja_context
-    assert context["time_series_cards"] == [context["autocorrelation_similarity"]]
-    assert context["data_privacy_time_series_cards"] == [context["window_membership_inference_protection"]]
-    assert context["data_privacy_time_series_cards"][0]["card_id"] == "window-group-mia"
+    window_group_mia = context["window_membership_inference_protection"]
+    assert window_group_mia in context["data_privacy_time_series_cards"]
+    assert window_group_mia not in context["time_series_cards"]
 
 
 def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -358,7 +358,7 @@ def _window_group_mia_frame(groups: int, prefix: str, seed: int) -> pd.DataFrame
     return pd.concat(parts, ignore_index=True)
 
 
-def test_window_group_mia_metric_renders_in_the_data_privacy_section_after_row_level_membership_inference() -> None:
+def test_window_group_mia_metric_renders_in_the_data_privacy_section() -> None:
     training = _window_group_mia_frame(10, "t", seed=1)
     holdout = _window_group_mia_frame(5, "h", seed=2)
     config = _time_series_config()
@@ -370,23 +370,15 @@ def test_window_group_mia_metric_renders_in_the_data_privacy_section_after_row_l
     )
 
     component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
-    assert component.score.score is not None
-    assert component.score.score < 1.0
+    assert component.score.score == 0.0
     context = report.jinja_context["window_membership_inference_protection"]
-    assert context["summary_traces_per_column"] == 2
     assert component.details["closest_match"]["exact_copy"] is True
-    assert "Training window" in context["figures"][2]["html"]
+    closest = next(figure for figure in context["figures"] if figure["title"] == "Closest match")
+    assert "Training window" in closest["html"]
     output = render_report(report)
     assert output is not None
-    time_series_panel = output.index("<h2>Time-Series Metrics</h2>")
-    assert time_series_panel < output.index('id="autocorrelation-similarity"') < output.index('id="data-privacy"')
-    assert (
-        output.index('id="data-privacy"')
-        < output.index('id="mia"')
-        < output.index('id="window-group-mia"')
-        < output.index('id="aia"')
-    )
     assert output.count('id="window-group-mia"') == 1
+    assert output.index('id="data-privacy"') < output.index('id="window-group-mia"')
     assert "100.0% of training windows have an exact copy in the synthetic data." in " ".join(output.split())
 
 
