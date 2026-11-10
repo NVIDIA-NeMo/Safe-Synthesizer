@@ -8,6 +8,7 @@ source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 tool_root="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
 container_cmd="$(resolve_container_cmd)"
+python_version="$(resolve_python_version)"
 
 shopt -s nullglob
 wheels=("${tool_root}"/dist/*.whl)
@@ -19,6 +20,7 @@ fi
 "${container_cmd}" build \
   --platform "${CONTAINER_TEST_PLATFORM:-linux/amd64}" \
   --progress=plain \
+  --build-arg "PYTHON_VERSION=${python_version}" \
   --file "${CONTAINER_TEST_FILE:-containers/Dockerfile.test_ci}" \
   --target wheel-install \
   --tag "${CONTAINER_WHEEL_INSTALL_IMAGE:-nss-wheel-install:latest}" \

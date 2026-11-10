@@ -5,6 +5,7 @@
 #MISE alias="container-build-gpu-multiarch"
 
 set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 if [[ -z "${CONTAINER_GPU_REGISTRY:-}" ]]; then
   echo "CONTAINER_GPU_REGISTRY is required for multi-arch builds. Multi-platform manifests must be pushed to a registry." >&2
@@ -21,10 +22,15 @@ if ! docker buildx version >/dev/null 2>&1; then
   exit 1
 fi
 
+python_version="$(resolve_python_version)"
+uv_version="$(resolve_uv_version)"
+
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --tag "${CONTAINER_GPU_REGISTRY}/${CONTAINER_GPU_IMAGE:-nss-gpu:latest}" \
   --target runtime \
+  --build-arg "PYTHON_VERSION=${python_version}" \
+  --build-arg "UV_VERSION=${uv_version}" \
   --build-arg "CONTAINER_EXTRA=${CONTAINER_GPU_EXTRA:-cu129}" \
   --build-arg "CONTAINER_VARIANT=${CONTAINER_GPU_VARIANT:-${CONTAINER_GPU_EXTRA:-cu129}}" \
   --build-arg "PACKAGE_VERSION=${CONTAINER_GPU_PACKAGE_VERSION:-}" \

@@ -91,7 +91,7 @@ jobs:
       - name: Check formatting
         run: mise run check:format
 
-      - name: Check lint rules
+      - name: Check Python and Markdown lint rules
         run: mise run check:lint
 
       - name: Check copyright headers
@@ -219,16 +219,21 @@ jobs:
       - name: Run unit tests with coverage
         run: mise run test:ci
 
+      # Coverage is uploaded once, from the leg that runs the development Python.
+      - name: Read development Python minor version
+        id: dev-python
+        run: echo "minor=$(cut -d. -f1,2 .python-version)" >> "$GITHUB_OUTPUT"
+
       - name: Upload coverage report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == steps.dev-python.outputs.minor
         with:
           name: coverage-report
           path: coverage.json
           retention-days: 30
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == steps.dev-python.outputs.minor
         with:
           files: coverage.json
           token: ${{ secrets.CODECOV_TOKEN }}

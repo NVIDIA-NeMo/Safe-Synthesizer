@@ -98,10 +98,6 @@ jobs:
       fail-fast: false
       matrix:
         cuda-extra: [cu129, cu130]
-    env:
-      # Keep in sync with the gpu-smoke-test matrix. Torch wheels are built per
-      # Python version, so each version is installed once to cache its wheels.
-      PYTHON_VERSIONS: "3.11 3.12 3.13 3.14"
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,11 +106,18 @@ jobs:
           # uv-dynamic-versioning reads the wheel version from git tags.
           fetch-depth: 0
 
-      # GPU jobs install with the mise-pinned uv; use the same version so the
-      # cache layout matches. The uv version is not part of the cache key.
-      - name: Read pinned uv version
-        id: uv-version
-        run: echo "version=$(sed -n 's/^uv = "\(.*\)"$/\1/p' .mise.toml)" >> "$GITHUB_OUTPUT"
+      # Torch wheels are built per Python version, so each supported version is
+      # installed once to cache its wheels. The supported minors are the Python
+      # classifiers in pyproject.toml, which match the gpu-smoke-test matrix.
+      - name: Read supported Python versions
+        id: python-versions
+        run: |
+          versions="$(sed -n 's/^ *"Programming Language :: Python :: \(3\.[0-9]*\)",$/\1/p' pyproject.toml | xargs)"
+          if [[ -z "${versions}" ]]; then
+            echo "::error::No Python classifiers in pyproject.toml"
+            exit 1
+          fi
+          echo "versions=${versions}" >> "$GITHUB_OUTPUT"
 
       # The inputs that feed the cache key (enable-cache, cache-suffix,
       # cache-dependency-glob, and no python-version) must match
@@ -125,7 +128,6 @@ jobs:
         id: uv-key
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: ${{ steps.uv-version.outputs.version }}
           enable-cache: true
           restore-cache: false
           save-cache: false
@@ -157,7 +159,6 @@ jobs:
         if: steps.lookup.outputs.hit != 'true'
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: ${{ steps.uv-version.outputs.version }}
           enable-cache: true
           restore-cache: false
           cache-suffix: ${{ matrix.cuda-extra }}
@@ -177,6 +178,7 @@ jobs:
         if: steps.lookup.outputs.hit != 'true'
         env:
           CUDA: ${{ matrix.cuda-extra }}
+          PYTHON_VERSIONS: ${{ steps.python-versions.outputs.versions }}
           NSS_INSTALLER_ISOLATED: "1"
           PRIVATE_DEP_GROUPS: "test"
         run: |
@@ -320,14 +322,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Both legs run the development Python from .python-version.
         include:
-          - python-version: "3.13"
-            cuda-extra: cu129
+          - cuda-extra: cu129
             required: true
           # Non-required until a run of green nightly cu130 results validates the rollout;
           # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
-          - python-version: "3.13"
-            cuda-extra: cu130
+          - cuda-extra: cu130
             required: false
     steps:
       - name: checkout
@@ -339,7 +340,6 @@ jobs:
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
         with:
-          python-version: ${{ matrix.python-version }}
           cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests

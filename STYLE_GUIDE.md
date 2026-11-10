@@ -839,7 +839,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### TOML
 
-- Format TOML with `mise run format`; dprint configuration lives in `dprint.json`.
+- Format TOML with `mise run format`; dprint configuration lives in `dprint.json`, which the shared development baseline writes.
 - Use four spaces for multiline arrays and keep inline-table spacing formatter-controlled.
 - Spaces around `=` for key-value pairs
 - Comments: `# comment` with inline comments for dependency pins
