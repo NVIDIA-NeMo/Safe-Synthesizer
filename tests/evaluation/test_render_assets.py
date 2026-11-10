@@ -77,6 +77,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "themeDeepStructurePlot" in javascript
     assert "[TRAINING_COLOR, SYNTHETIC_COLOR]" in javascript
     assert "rebuildDistributionCharts" in javascript
+    assert 'trace.meta === "binned"' in javascript
     assert "--distribution-chart-height: 120px" in stylesheet
     assert "grid-auto-rows: var(--distribution-chart-height)" in stylesheet
     assert "height: var(--distribution-chart-height)" in stylesheet

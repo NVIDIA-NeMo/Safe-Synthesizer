@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -315,3 +318,146 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
+
+
+_PRIVACY_WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet"]
+_RARE_CATEGORY = "rare_tier_unique"
+
+
+def _privacy_frames(seed: int = 11, rows: int = 300) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Training and synthetic frames with distinctive 6-decimal values and one rare training category."""
+    rng = np.random.default_rng(seed)
+
+    def text(count: int) -> list[str]:
+        return [
+            " ".join(
+                " ".join(rng.choice(_PRIVACY_WORDS, size=rng.integers(3, 9))).capitalize() + "."
+                for _ in range(rng.integers(1, 4))
+            )
+            for _ in range(count)
+        ]
+
+    def frame(rare: bool) -> pd.DataFrame:
+        segment = rng.choice(["retail", "smb", "corporate"], rows).astype(object)
+        if rare:
+            segment[7] = _RARE_CATEGORY
+        return pd.DataFrame(
+            {
+                "amount": np.round(rng.uniform(1000, 9000, rows), 6) + 0.123457,
+                "balance": np.round(rng.normal(5000, 1500, rows), 6) + 0.654321,
+                "visits": rng.integers(0, 40, rows),
+                "segment": segment,
+                "notes": text(rows),
+            }
+        )
+
+    return frame(rare=True), frame(rare=False)
+
+
+def _plotly_payloads(html: str) -> list[tuple[bool, np.ndarray]]:
+    """Decode every numeric array in the report's Plotly figure data.
+
+    Returns:
+        Pairs of whether the array belongs to a marker scatter trace (the
+        principal component dot plots, which plot one point per record by
+        design) and the decoded array.
+    """
+    decoder = json.JSONDecoder()
+    arrays: list[tuple[bool, np.ndarray]] = []
+
+    def collect(value: Any, dots: bool) -> None:
+        if isinstance(value, dict):
+            if "bdata" in value and "dtype" in value:
+                decoded = np.frombuffer(base64.b64decode(value["bdata"]), dtype=np.dtype(value["dtype"]))
+                arrays.append((dots, decoded))
+                return
+            for item in value.values():
+                collect(item, dots)
+        elif isinstance(value, list):
+            numbers = [item for item in value if isinstance(item, int | float) and not isinstance(item, bool)]
+            if numbers:
+                arrays.append((dots, np.asarray(numbers, dtype=float)))
+            for item in value:
+                if isinstance(item, dict | list):
+                    collect(item, dots)
+
+    start = 0
+    while (index := html.find("Plotly.newPlot(", start)) != -1:
+        position = index + len("Plotly.newPlot(")
+        while html[position].isspace():
+            position += 1
+        start = position
+        if html[position] != '"':
+            continue
+        _, position = decoder.raw_decode(html, position)
+        while html[position].isspace() or html[position] == ",":
+            position += 1
+        data, start = decoder.raw_decode(html, position)
+        for trace in data:
+            collect(trace, trace.get("type") == "scatter" and trace.get("mode") == "markers")
+    return arrays
+
+
+def _assert_no_training_values(html: str, training: pd.DataFrame, columns: list[str]) -> None:
+    arrays = _plotly_payloads(html)
+    assert arrays, "expected Plotly figure data in the report"
+    for column in columns:
+        values = np.round(training[column].to_numpy(dtype=float), 6)
+        for _, array in arrays:
+            assert not np.isin(np.round(array.astype(float), 6), values).any(), column
+        assert not any(f"{value:.6f}" in html for value in values), column
+    assert all(array.size < len(training) for dots, array in arrays if not dots)
+
+
+def test_report_charts_carry_no_training_values_or_rare_categories() -> None:
+    training, synthetic = _privacy_frames()
+    config = SafeSynthesizerParameters(
+        evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False, pii_replay_enabled=False)
+    )
+
+    report = MultimodalReport.from_dataframes(training, synthetic, config=config)
+    html = render_report(report)
+
+    assert html is not None
+    _assert_no_training_values(html, training, ["amount", "balance"])
+    assert _RARE_CATEGORY not in html
+    for field in report.jinja_context["column_distribution_stability"]["evaluation_fields"]:
+        assert "training_distribution" not in field
+        assert "synthetic_distribution" not in field
+        assert "unique_values_list" not in field["training_field_features"]
+        assert "unique_values_list" not in field["synthetic_field_features"]
+    scores = {component.name: component.score.score for component in report.components}
+    assert scores["Column Distribution Stability"] == 9.0
+    assert scores["Column Correlation Stability"] == 8.3
+    assert scores["Deep Structure Stability"] == 8.2
+    assert scores["Text Structure Similarity"] == 10.0
+    assert scores["Synthetic Quality Score"] == 8.7
+
+
+def test_time_series_report_charts_carry_no_training_values() -> None:
+    rng = np.random.default_rng(3)
+    training = pd.DataFrame(
+        {
+            "g": np.repeat(["a", "b"], 150),
+            "time": np.tile(np.arange(150), 2),
+            "value": np.round(rng.normal(100, 15, 300), 6) + 0.123457,
+        }
+    )
+    synthetic = training.copy()
+    synthetic["value"] = np.round(rng.normal(100, 15, 300), 6)
+    config = SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by="g"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+        evaluation=EvaluationParameters(
+            mia_enabled=False,
+            aia_enabled=False,
+            pii_replay_enabled=False,
+            time_series=TimeSeriesEvaluationParameters(enabled=True),
+        ),
+    )
+
+    html = render_report(MultimodalReport.from_dataframes(training, synthetic, config=config))
+
+    assert html is not None
+    assert 'id="autocorrelation-similarity"' in html
+    _assert_no_training_values(html, training, ["value"])

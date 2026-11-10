@@ -487,7 +487,8 @@ function rebuildDistributionCharts(container) {
             font: {color: "rgba(255,255,255,0.7)", family: "NVIDIA Sans, system-ui, sans-serif", size: 8},
             height: 120,
             margin: {l: 25, r: 5, t: 25, b: 30},
-            barmode: chart.traces.some((trace) => trace.type === "histogram") ? "overlay" : "group",
+            // Binned numeric bars overlap like a histogram; category bars sit side by side.
+            barmode: chart.traces.some((trace) => trace.meta === "binned") ? "overlay" : "group",
             bargap: 0.15,
             bargroupgap: 0.1,
             showlegend: false,
