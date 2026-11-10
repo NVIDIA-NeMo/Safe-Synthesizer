@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# ty reads this file, never [tool.ty] in pyproject.toml. The shared development baseline sets some
+# keys here, which the baseline requires; every other key belongs to this repository.
+
+[rules]
+# Platform-specific imports (e.g. vLLM on macOS) use ty: ignore[unresolved-import]
+# that appear unused when the package is installed. Suppress the noise.
+unused-ignore-comment = "ignore"
+
+[environment]
+extra-paths = ["typings"]
+
+[src]
+# Below is a list of excluded directories from ty typechecks.
+exclude = [
+    ".uv_cache", # Cache Dir in CI
+    "./docs/**/*.ipynb",
+    "./src/nemo_safe_synthesizer/pii_replacer/",
+]

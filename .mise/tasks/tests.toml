@@ -10,7 +10,7 @@ run = [
 
 ["test:github-cli"]
 description = "Run GitHub CLI helper tests with the helper's PEP 723 dependencies plus pytest."
-run = 'uv run --no-project --with-requirements .agents/skills/github-cli/scripts/gh_pr_helper.py --with pytest pytest -q .agents/skills/github-cli/tests'
+run = "uv run --no-project --with-requirements .agents/skills/github-cli/scripts/gh_pr_helper.py --with pytest pytest -q .agents/skills/github-cli/tests"
 
 ["test:unit-slow"]
 description = "Run all unit tests including slow tests, excluding e2e and smoke. Requires Python dependencies; may take longer than test."

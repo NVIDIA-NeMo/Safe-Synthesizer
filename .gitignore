@@ -79,3 +79,22 @@ wandb/
 
 # symbolic link to the nmp repo folder for uv dependency resolution.
 .nmp_repo
+# BEGIN managed: house
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+.venv/
+venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.cache/
+build/
+*.py[cod]
+.coverage
+htmlcov/
+.mypy_cache/
+.ty_cache/
+# END managed: house
