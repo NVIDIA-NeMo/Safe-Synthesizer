@@ -10,7 +10,7 @@ across all evaluated numeric columns at once, are compared with their nearest
 synthetic window. The score measures how much more often training windows
 are flagged as close than holdout windows are, after removing the difference
 expected from chance, on a 0--10 scale where 10 means no measurable
-memorization.
+memorization and 0 means every training window is flagged.
 """
 
 from __future__ import annotations
@@ -47,7 +47,6 @@ from .window_group_mia_figures import (
     generate_window_group_mia_closest_match_figure,
     generate_window_group_mia_distance_figure,
     generate_window_group_mia_group_figure,
-    window_group_mia_closest_traces_per_column,
 )
 
 logger = get_logger(__name__)
@@ -62,7 +61,11 @@ _MIN_SCALE = 1e-12
 
 @dataclass(frozen=True)
 class _Sequence:
-    """One group's numeric values in time order, with gaps filled by interpolation."""
+    """One group's numeric values in time order, with gaps filled by interpolation.
+
+    ``values`` has shape ``(steps, columns)``, one row per time step, before
+    any windows are cut from it.
+    """
 
     group: str | None
     values: NDArray[np.float64]
@@ -70,11 +73,16 @@ class _Sequence:
 
 @dataclass(frozen=True)
 class _Windows:
-    """Flattened windows with the group and starting position each came from."""
+    """Windows cut from sequences and flattened, with the group each came from.
+
+    ``values`` has shape ``(len(groups), window * columns)``. Each row is one
+    window flattened time-major, so its first ``columns`` values are the
+    window's first step. ``total`` counts the candidate windows before
+    sampling, so ``values.shape[0] == len(groups) <= total``.
+    """
 
     values: NDArray[np.float64]
     groups: list[str | None]
-    starts: list[int]
     total: int
 
     def __len__(self) -> int:
@@ -105,9 +113,15 @@ class _FlagCounts:
     def binomial_noise(self, overlap: float) -> float:
         """Delta-method variance of ``privacy_loss`` for two binomial rates, times ``overlap``.
 
-        Windows that start every half window share points, so their flags are
-        correlated; ``overlap`` is the number of windows that share each point.
+        ``overlap`` is ``window / stride`` for the training and holdout
+        windows, the number of those windows that contain each point.
         """
+        # A heuristic, not an exact accounting. Windows that share points have
+        # correlated flags. If flags were fully correlated within blocks of
+        # ``overlap`` windows and independent across blocks, the variance of each
+        # flag rate would be ``overlap`` times the independent-window variance.
+        # The true factor depends on how strongly the flags of overlapping
+        # windows are correlated, which is not estimated here.
         terms = (
             1 / (self.flagged_training + 0.5)
             - 1 / (self.training + 1)
@@ -119,11 +133,12 @@ class _FlagCounts:
     def exact_copy_loss(self, excess_exact_rate: float) -> float:
         """Privacy loss implied by exact copies alone, which chance can't explain.
 
-        If ``excess_exact_rate`` of the training windows are certainly flagged
-        and the rest are flagged at the holdout rate, the training flag rate is
-        ``x + (1 - x) * alpha`` against ``alpha``. Exact copies of continuous
-        values almost never arise by chance, so this loss is not reduced by
-        the noise terms.
+        If a share ``x`` (``excess_exact_rate``) of the training windows is
+        certainly flagged and the rest are flagged at the holdout rate
+        ``alpha``, the training flag rate divided by the holdout flag rate is
+        ``(x + (1 - x) * alpha) / alpha``. This returns its log. Exact copies of
+        continuous values almost never arise by chance, so this loss is not
+        reduced by the noise terms.
         """
         holdout_rate = self.holdout_rate
         return float(np.log1p(excess_exact_rate * (1 - holdout_rate) / holdout_rate))
@@ -146,20 +161,20 @@ class WindowGroupMIA(TimeSeriesComponent):
     Training and holdout windows are compared with their nearest synthetic
     window. A window is flagged when it is closer than all but the closest 5%
     of holdout windows. The privacy loss is the log ratio of the training and
-    holdout flag rates; chance variation from the binomial counts and from the
+    holdout flag rates. Chance variation from the binomial counts and from the
     holdout groups' own offset is removed before scoring
     ``10 * (exp(-privacy_loss) - alpha) / (1 - alpha)``, where ``alpha`` is the
     holdout flag rate, so 10 means equal flag rates and 0 means every training
-    window is flagged. Exact copies beyond the holdout's own
-    exact-match rate set a floor on the privacy loss that chance can't remove,
-    so a small holdout can't hide them. Without a group column or a usable
-    holdout of at least two groups, the score is unavailable and only copy
-    diagnostics are reported: with one holdout group, chance alone can
-    cancel the privacy loss of blurred copies and report a perfect score.
+    window is flagged. Exact copies beyond the holdout's own exact-match rate
+    set a floor on the privacy loss that chance can't remove, so a small
+    holdout can't hide them. Without a group column or a usable holdout of at
+    least two groups, the score is unavailable and only copy diagnostics are
+    reported. With one holdout group, chance alone can cancel the privacy loss
+    of blurred copies and report a perfect score.
 
     Attributes:
         name: Display name used in serialized evaluation results.
-        details: Attack counts, noise terms, copy diagnostics, sampling counts, and per-group summaries.
+        details: Flag rates, copy diagnostics, window counts, distances, and per-group summaries.
     """
 
     card_id: ClassVar[str] = "window-group-mia"
@@ -177,7 +192,7 @@ class WindowGroupMIA(TimeSeriesComponent):
     )
     details: dict[str, Any] = Field(
         default_factory=dict,
-        description="Attack counts, noise terms, copy diagnostics, sampling counts, and per-group summaries.",
+        description="Flag rates, copy diagnostics, window counts, distances, and per-group summaries.",
     )
 
     @cached_property
@@ -218,7 +233,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         context["figures"] = self.figure_rows(figures)
         match = details.get("closest_match") or {}
         context["summary_columns"] = details.get("columns", [])
-        context["summary_traces_per_column"] = window_group_mia_closest_traces_per_column(match)
+        context["summary_traces_per_column"] = 2 if "training_values" in match else 1
         if match:
             context["closest_match_distance_per_value"] = match["distance"] / np.sqrt(
                 details["window_size"] * len(details["columns"])
@@ -268,6 +283,11 @@ class WindowGroupMIA(TimeSeriesComponent):
     ) -> WindowGroupMIA:
         """Build windows for each split and score the attack, or report copy diagnostics only.
 
+        Training and holdout windows use a stride of half the window and are
+        capped at ``cfg.max_windows`` each. Synthetic windows use a stride of 1,
+        so a copy shifted off the training stride is still found, and are
+        capped at ``WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS``.
+
         Args:
             datasets: Training, synthetic, and holdout datasets.
             cfg: Resolved metric parameters.
@@ -280,128 +300,108 @@ class WindowGroupMIA(TimeSeriesComponent):
         timestamp_column = config.time_series.timestamp_column if config is not None else None
         group_column, group_error = resolve_group_column(datasets, config)
         if group_error is not None:
-            return WindowGroupMIA(score=EvaluationScore(notes=group_error))
+            return WindowGroupMIA._build_unavailable(group_error, {})
 
         columns, column_error, excluded_columns = select_value_columns(
             datasets, cfg.value_columns, timestamp_column, group_column, "window membership inference"
         )
         if column_error is not None:
-            return WindowGroupMIA(score=EvaluationScore(notes=column_error))
+            return WindowGroupMIA._build_unavailable(column_error, {})
         if not columns:
-            return WindowGroupMIA(
-                score=EvaluationScore(
-                    notes=WindowGroupMIA._with_excluded_note("No shared numeric value columns.", excluded_columns)
-                ),
-                details={"excluded_columns": excluded_columns},
+            return WindowGroupMIA._build_unavailable(
+                "No shared numeric value columns.", {"excluded_columns": excluded_columns}
             )
         if cfg.value_columns is None and len(columns) > cfg.max_columns:
             columns = sorted(random.Random(_SAMPLING_SEED).sample(columns, k=cfg.max_columns))
 
         window = cfg.window_size
         stride = max(window // 2, 1)
-        training = WindowGroupMIA._sequences(datasets.training, columns, group_column, timestamp_column)
-        synthetic = WindowGroupMIA._sequences(datasets.synthetic, columns, group_column, timestamp_column)
+        training = WindowGroupMIA._get_sequences(datasets.training, columns, group_column, timestamp_column)
+        holdout, holdout_reason = WindowGroupMIA._get_holdout_sequences(
+            datasets, columns, group_column, timestamp_column
+        )
+        synthetic = WindowGroupMIA._get_sequences(datasets.synthetic, columns, group_column, timestamp_column)
         training_windows = WindowGroupMIA._build_windows(training, window, stride, cfg.max_windows)
+        holdout_windows = (
+            None if holdout is None else WindowGroupMIA._build_windows(holdout, window, stride, cfg.max_windows)
+        )
         synthetic_windows = WindowGroupMIA._build_windows(synthetic, window, 1, WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS)
         details: dict[str, Any] = {
-            "timestamp_column": timestamp_column,
-            "group_column": group_column,
             "columns": columns,
             "excluded_columns": excluded_columns,
             "window_size": window,
-            "stride": stride,
+            "counts": WindowGroupMIA._count_windows(training_windows, synthetic_windows, holdout_windows),
         }
         if len(training_windows) == 0 or len(synthetic_windows) == 0:
             details["evaluation_mode"] = "unavailable"
-            details["counts"] = WindowGroupMIA._counts(training_windows, synthetic_windows)
-            return WindowGroupMIA(
-                score=EvaluationScore(
-                    notes=WindowGroupMIA._with_excluded_note(
-                        f"Training and synthetic data each need at least one complete {window}-step window.",
-                        excluded_columns,
-                    )
-                ),
-                details=details,
+            return WindowGroupMIA._build_unavailable(
+                f"Training and synthetic data each need at least one complete {window}-step window.", details
             )
 
-        mean, scale = WindowGroupMIA._standardizer(training_windows.values)
+        mean, scale = WindowGroupMIA._fit_standardizer(training_windows.values)
         support = (synthetic_windows.values - mean) / scale
-        training_squared, matches = WindowGroupMIA._nearest_with_index(
+        training_squared, matches = WindowGroupMIA._find_nearest_with_index(
             (training_windows.values - mean) / scale, support
         )
+        # The nearest squared distance is recomputed directly with the same
+        # standardization for both splits, so identical windows give exactly 0.
         details["exact_copy_rate"] = float(np.mean(training_squared == 0.0))
-        details["closest_match"] = WindowGroupMIA._closest_match(
+        details["closest_match"] = WindowGroupMIA._find_closest_match(
             training_windows, synthetic_windows, training_squared, matches, len(columns)
         )
         details["distances"] = {"training": np.sqrt(training_squared).tolist()}
 
-        holdout, holdout_reason = WindowGroupMIA._holdout_sequences(datasets, columns, group_column, timestamp_column)
-        holdout_windows = (
-            None if holdout is None else WindowGroupMIA._build_windows(holdout, window, stride, cfg.max_windows)
-        )
-        details["counts"] = WindowGroupMIA._counts(training_windows, synthetic_windows, holdout_windows)
-        if holdout_reason is None and holdout_windows is not None:
-            holdout_reason = WindowGroupMIA._too_few_windows(
+        if holdout_windows is not None:
+            holdout_reason = WindowGroupMIA._check_too_few_windows(
                 training_windows, holdout_windows
-            ) or WindowGroupMIA._too_few_holdout_groups(holdout_windows)
-        if holdout_reason is not None or holdout_windows is None:
+            ) or WindowGroupMIA._check_too_few_holdout_groups(holdout_windows)
+        if holdout_windows is None or holdout_reason is not None:
             details["evaluation_mode"] = "copy_diagnostics_only"
-            details["per_group"] = WindowGroupMIA._per_group(training_windows, training_squared, None)
-            return WindowGroupMIA(
-                score=EvaluationScore(
-                    notes=WindowGroupMIA._with_excluded_note(
-                        f"{holdout_reason} Reporting copy diagnostics only.", excluded_columns
-                    )
-                ),
-                details=details,
-            )
+            details["per_group"] = WindowGroupMIA._summarize_groups(training_windows, training_squared, None)
+            return WindowGroupMIA._build_unavailable(f"{holdout_reason} Reporting copy diagnostics only.", details)
 
         holdout_values = (holdout_windows.values - mean) / scale
-        holdout_squared = WindowGroupMIA._nearest(holdout_values, support)
+        holdout_squared = WindowGroupMIA._find_nearest(holdout_values, support)
         details["distances"]["holdout"] = np.sqrt(holdout_squared).tolist()
-        flags = WindowGroupMIA._flag_counts(training_squared, holdout_squared)
-        overlap = window / stride
-        offset = WindowGroupMIA._holdout_offset(training, holdout_values, mean, scale, window, stride, cfg.max_windows)
+        flags = WindowGroupMIA._count_flags(training_squared, holdout_squared)
+        offset = WindowGroupMIA._estimate_holdout_offset(
+            training, holdout_values, mean, scale, window, stride, cfg.max_windows
+        )
         loss = flags.privacy_loss
-        noise = flags.binomial_noise(overlap) + offset
+        noise = flags.binomial_noise(window / stride) + offset
         debiased_loss = float(np.sqrt(max(loss**2 - noise, 0.0))) if loss > 0 else 0.0
         holdout_exact_rate = float(np.mean(holdout_squared == 0.0))
         exact_loss = flags.exact_copy_loss(max(details["exact_copy_rate"] - holdout_exact_rate, 0.0))
-        scored_loss = max(debiased_loss, exact_loss)
-        protection = flags.protection(scored_loss)
+        protection = flags.protection(max(debiased_loss, exact_loss))
         score = EvaluationScore.finalize_grade(raw_score=protection, score=10.0 * protection, is_privacy=True)
-        score.notes = WindowGroupMIA._with_excluded_note(None, excluded_columns)
+        score.notes = excluded_columns_note(excluded_columns)
 
         details.update(
             {
                 "evaluation_mode": "full",
                 "attack": {
                     "threshold": float(np.sqrt(flags.squared_threshold)),
-                    "flagged_training_windows": flags.flagged_training,
-                    "flagged_holdout_windows": flags.flagged_holdout,
                     "training_flag_rate": flags.flagged_training / flags.training,
                     "holdout_flag_rate": flags.flagged_holdout / flags.holdout,
-                    "privacy_loss": loss,
-                    "binomial_noise": flags.binomial_noise(overlap),
-                    "holdout_offset_noise": offset,
                     "privacy_loss_beyond_chance": debiased_loss,
                     "holdout_exact_match_rate": holdout_exact_rate,
                     "exact_copy_privacy_loss": exact_loss,
-                    "scored_privacy_loss": scored_loss,
                 },
-                "per_group": WindowGroupMIA._per_group(training_windows, training_squared, flags.squared_threshold),
+                "per_group": WindowGroupMIA._summarize_groups(
+                    training_windows, training_squared, flags.squared_threshold
+                ),
             }
         )
         return WindowGroupMIA(score=score, details=details)
 
     @staticmethod
-    def _with_excluded_note(note: str | None, excluded_columns: list[str]) -> str | None:
-        """Append the note naming numeric training columns left out of evaluation, if any."""
-        notes = [part for part in (note, excluded_columns_note(excluded_columns)) if part]
-        return " ".join(notes) if notes else None
+    def _build_unavailable(reason: str, details: dict[str, Any]) -> WindowGroupMIA:
+        """Return a component without a score, noting ``reason`` and any numeric columns left out."""
+        notes = [reason, excluded_columns_note(details.get("excluded_columns", []))]
+        return WindowGroupMIA(score=EvaluationScore(notes=" ".join(note for note in notes if note)), details=details)
 
     @staticmethod
-    def _holdout_sequences(
+    def _get_holdout_sequences(
         datasets: EvaluationDatasets,
         columns: list[str],
         group_column: str | None,
@@ -419,29 +419,28 @@ class WindowGroupMIA(TimeSeriesComponent):
         missing = [column for column in [group_column, *columns] if column not in holdout]
         if missing:
             return None, "The holdout data is missing columns: " + ", ".join(repr(column) for column in missing) + "."
-        return WindowGroupMIA._sequences(holdout, columns, group_column, timestamp_column), None
+        return WindowGroupMIA._get_sequences(holdout, columns, group_column, timestamp_column), None
 
     @staticmethod
-    def _too_few_windows(training: _Windows, holdout: _Windows) -> str | None:
+    def _check_too_few_windows(training: _Windows, holdout: _Windows) -> str | None:
+        """Return a user-facing reason if either split has too few windows to score, otherwise None."""
         if min(len(training), len(holdout)) >= WINDOW_GROUP_MIA_MIN_WINDOWS:
             return None
         return (
-            f"The score needs at least {WINDOW_GROUP_MIA_MIN_WINDOWS} training and holdout windows; "
-            f"found {len(training)} training and {len(holdout)} holdout windows."
+            f"The score needs at least {WINDOW_GROUP_MIA_MIN_WINDOWS} training and {WINDOW_GROUP_MIA_MIN_WINDOWS} "
+            f"holdout windows and found {len(training)} training and {len(holdout)} holdout windows."
         )
 
     @staticmethod
-    def _too_few_holdout_groups(holdout: _Windows) -> str | None:
+    def _check_too_few_holdout_groups(holdout: _Windows) -> str | None:
+        """Return a user-facing reason if the holdout windows come from too few groups, otherwise None."""
         groups = len(set(holdout.groups))
         if groups >= WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS:
             return None
-        return (
-            f"The score needs at least {WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS} holdout groups; found {groups}. "
-            f"With {groups} holdout {'group' if groups == 1 else 'groups'}, chance can hide copying."
-        )
+        return f"The score needs at least {WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS} holdout groups and found {groups}."
 
     @staticmethod
-    def _sequences(
+    def _get_sequences(
         df: pd.DataFrame,
         columns: list[str],
         group_column: str | None,
@@ -478,8 +477,13 @@ class WindowGroupMIA(TimeSeriesComponent):
         return filled
 
     @staticmethod
-    def _window_starts(values: NDArray[np.float64], window: int, stride: int) -> NDArray[np.int64]:
-        """Starting positions, every ``stride`` steps, of windows with every value finite."""
+    def _find_window_starts(values: NDArray[np.float64], window: int, stride: int) -> NDArray[np.int64]:
+        """Starting positions, every ``stride`` steps, of windows with every value finite.
+
+        After ``_interpolate``, only columns with fewer than two finite values
+        still hold non-finite values, so this skips every window of a group
+        with such a column.
+        """
         if len(values) < window:
             return np.empty(0, dtype=np.int64)
         complete = np.isfinite(values).all(axis=1).astype(int)
@@ -494,44 +498,41 @@ class WindowGroupMIA(TimeSeriesComponent):
         The sample is uniform over all candidate windows across groups, so
         longer groups contribute more windows and group names don't affect
         which windows are chosen. Windows are returned in the order of
-        ``sequences``, then by start, flattened time-major across columns.
+        ``sequences``, then by start.
         """
-        per_sequence = [WindowGroupMIA._window_starts(sequence.values, window, stride) for sequence in sequences]
+        per_sequence = [WindowGroupMIA._find_window_starts(sequence.values, window, stride) for sequence in sequences]
         offsets = np.cumsum([0, *(len(starts) for starts in per_sequence)])
         total = int(offsets[-1])
         chosen = np.arange(total)
         if total > limit:
             chosen = np.sort(np.random.default_rng(_SAMPLING_SEED).choice(total, limit, replace=False))
         if not len(chosen):
-            return _Windows(values=np.empty((0, 0)), groups=[], starts=[], total=total)
+            return _Windows(values=np.empty((0, 0)), groups=[], total=total)
         indices = np.searchsorted(offsets, chosen, side="right") - 1
-        starts = [
-            int(per_sequence[index][position - offsets[index]]) for index, position in zip(indices, chosen, strict=True)
-        ]
         steps = np.arange(window)
         rows = [
-            sequences[index].values[start + steps].reshape(-1) for index, start in zip(indices, starts, strict=True)
+            sequences[index].values[per_sequence[index][position - offsets[index]] + steps].reshape(-1)
+            for index, position in zip(indices, chosen, strict=True)
         ]
-        return _Windows(
-            values=np.vstack(rows),
-            groups=[sequences[index].group for index in indices],
-            starts=starts,
-            total=total,
-        )
+        return _Windows(values=np.vstack(rows), groups=[sequences[index].group for index in indices], total=total)
 
     @staticmethod
-    def _standardizer(training: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Center and scale every window feature by the sampled training windows."""
+    def _fit_standardizer(training: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Return the mean and scale of each flattened window value over the sampled training windows.
+
+        Each flattened position is one column at one step of the window, so
+        every column is standardized separately at each step.
+        """
         scale = training.std(axis=0)
         return training.mean(axis=0), np.where(scale <= _MIN_SCALE, 1.0, scale)
 
     @staticmethod
-    def _nearest(query: NDArray[np.float64], support: NDArray[np.float64]) -> NDArray[np.float64]:
+    def _find_nearest(query: NDArray[np.float64], support: NDArray[np.float64]) -> NDArray[np.float64]:
         """Squared Euclidean distance from each query window to its nearest support window."""
-        return WindowGroupMIA._nearest_with_index(query, support)[0]
+        return WindowGroupMIA._find_nearest_with_index(query, support)[0]
 
     @staticmethod
-    def _nearest_with_index(
+    def _find_nearest_with_index(
         query: NDArray[np.float64], support: NDArray[np.float64]
     ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
         """Squared distance from each query window to its nearest support window, and that window's index.
@@ -554,7 +555,8 @@ class WindowGroupMIA(TimeSeriesComponent):
         return squared, indices
 
     @staticmethod
-    def _flag_counts(training: NDArray[np.float64], holdout: NDArray[np.float64]) -> _FlagCounts:
+    def _count_flags(training: NDArray[np.float64], holdout: NDArray[np.float64]) -> _FlagCounts:
+        """Count the windows at or below the holdout's flag-rate quantile of squared distance."""
         threshold = float(np.quantile(holdout, WINDOW_GROUP_MIA_FLAG_RATE))
         return _FlagCounts(
             flagged_training=int(np.sum(training <= threshold)),
@@ -565,7 +567,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         )
 
     @staticmethod
-    def _holdout_offset(
+    def _estimate_holdout_offset(
         training: list[_Sequence],
         holdout: NDArray[np.float64],
         mean: NDArray[np.float64],
@@ -585,7 +587,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         usable = [
             i
             for i, sequence in enumerate(training)
-            if len(WindowGroupMIA._window_starts(sequence.values, window, stride))
+            if len(WindowGroupMIA._find_window_starts(sequence.values, window, stride))
         ]
         if len(usable) < 2:
             return 0.0
@@ -602,18 +604,18 @@ class WindowGroupMIA(TimeSeriesComponent):
             if len(member_windows) == 0 or len(reference_windows) == 0:
                 continue
             support = (reference_windows.values - mean) / scale
-            flags = WindowGroupMIA._flag_counts(
-                WindowGroupMIA._nearest((member_windows.values - mean) / scale, support),
-                WindowGroupMIA._nearest(holdout, support),
+            flags = WindowGroupMIA._count_flags(
+                WindowGroupMIA._find_nearest((member_windows.values - mean) / scale, support),
+                WindowGroupMIA._find_nearest(holdout, support),
             )
             excess.append(flags.privacy_loss**2 - flags.binomial_noise(window / stride))
         return max(float(np.mean(excess)), 0.0) if excess else 0.0
 
     @staticmethod
-    def _counts(
+    def _count_windows(
         training_windows: _Windows,
         synthetic_windows: _Windows,
-        holdout_windows: _Windows | None = None,
+        holdout_windows: _Windows | None,
     ) -> dict[str, int]:
         """Window counts per split, before and after sampling, and the holdout groups with windows."""
         counts = {
@@ -628,7 +630,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         return counts
 
     @staticmethod
-    def _per_group(
+    def _summarize_groups(
         windows: _Windows, squared: NDArray[np.float64], squared_threshold: float | None
     ) -> list[dict[str, Any]]:
         """Summarize each training group's windows: count, exact copies, and flags."""
@@ -637,19 +639,19 @@ class WindowGroupMIA(TimeSeriesComponent):
             by_group.setdefault(group, []).append(float(distance))
         summaries = []
         for group, values in sorted(by_group.items(), key=lambda item: str(item[0])):
-            group_distances = np.array(values)
+            group_squared = np.array(values)
             summary: dict[str, Any] = {
                 "group": group,
                 "windows": len(values),
-                "exact_copy_rate": float(np.mean(group_distances == 0.0)),
+                "exact_copy_rate": float(np.mean(group_squared == 0.0)),
             }
             if squared_threshold is not None:
-                summary["flag_rate"] = float(np.mean(group_distances <= squared_threshold))
+                summary["flag_rate"] = float(np.mean(group_squared <= squared_threshold))
             summaries.append(summary)
         return summaries
 
     @staticmethod
-    def _closest_match(
+    def _find_closest_match(
         training: _Windows,
         synthetic: _Windows,
         squared: NDArray[np.float64],
@@ -666,8 +668,6 @@ class WindowGroupMIA(TimeSeriesComponent):
         index = int(np.argmin(squared))
         match = int(matches[index])
         closest: dict[str, Any] = {
-            "group": training.groups[index],
-            "start": training.starts[index],
             "distance": float(np.sqrt(squared[index])),
             "exact_copy": bool(squared[index] == 0.0),
             "synthetic_values": synthetic.values[match].reshape(-1, column_count).T.tolist(),

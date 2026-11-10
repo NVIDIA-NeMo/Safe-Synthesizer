@@ -23,8 +23,6 @@ __all__ = [
     "EvaluationParameters",
     "TimeSeriesEvaluationParameters",
     "TimeSeriesMetricParameters",
-    "WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS",
-    "WINDOW_GROUP_MIA_MIN_WINDOWS",
     "WindowGroupMIAParameters",
 ]
 

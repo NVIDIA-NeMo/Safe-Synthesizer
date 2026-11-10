@@ -25,13 +25,7 @@ _DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [
 _FIGURE_HEIGHT = 340
 _DISTANCE_BINS = 30
 _DISTANCE_RANGE_QUANTILE = 0.99
-
-WINDOW_GROUP_MIA_GROUP_MAX_ROWS = 12
-
-
-def window_group_mia_closest_traces_per_column(match: Mapping[str, Any]) -> int:
-    """Traces per value column in the closest-match figure: training and synthetic, or synthetic only."""
-    return 2 if "training_values" in match else 1
+_GROUP_MAX_ROWS = 12
 
 
 def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.Figure:
@@ -111,12 +105,9 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
 
 
 def generate_window_group_mia_group_figure(
-    per_group: Sequence[Mapping[str, Any]],
-    holdout_flag_rate: float,
-    *,
-    max_rows: int = WINDOW_GROUP_MIA_GROUP_MAX_ROWS,
+    per_group: Sequence[Mapping[str, Any]], holdout_flag_rate: float
 ) -> go.Figure:
-    """Plot the share of each training group's windows that are flagged, most-flagged groups first.
+    """Plot the share of each training group's windows that are flagged, for the 12 most-flagged groups.
 
     Bars shade from white at the holdout flag rate, which is what chance
     alone produces, to red when every window of the group is flagged. The
@@ -127,7 +118,6 @@ def generate_window_group_mia_group_figure(
     Args:
         per_group: ``WindowGroupMIA.details["per_group"]`` from a full evaluation.
         holdout_flag_rate: Share of holdout windows flagged.
-        max_rows: Largest number of groups to plot.
 
     Returns:
         A Plotly horizontal bar figure.
@@ -138,7 +128,7 @@ def generate_window_group_mia_group_figure(
     flagged = [item for item in per_group if "flag_rate" in item]
     if not flagged:
         raise DataError("At least one group summary with a flag rate is required.")
-    rows = sorted(flagged, key=lambda item: (-float(item["flag_rate"]), str(item["group"])))[:max_rows]
+    rows = sorted(flagged, key=lambda item: (-float(item["flag_rate"]), str(item["group"])))[:_GROUP_MAX_ROWS]
     rows.reverse()
     rates = np.array([float(item["flag_rate"]) for item in rows])
     excess = np.clip((rates - holdout_flag_rate) / max(1.0 - holdout_flag_rate, 1e-12), 0.0, 1.0)
@@ -196,10 +186,10 @@ def generate_window_group_mia_closest_match_figure(details: Mapping[str, Any]) -
     The training window is plotted only when the match stores its values,
     which ``WindowGroupMIA`` does only for exact copies, so the report never
     shows training values that the synthetic data doesn't already contain.
-    Each value column contributes ``window_group_mia_closest_traces_per_column``
-    consecutive traces, training then synthetic, in ``details["columns"]``
-    order, and only the first column is visible so the report can switch
-    columns by trace index.
+    Each value column contributes two consecutive traces, training then
+    synthetic, or only the synthetic trace when the training window is
+    hidden. Columns follow ``details["columns"]`` order, and only the first
+    column is visible so the report can switch columns by trace index.
 
     Args:
         details: ``WindowGroupMIA.details`` with ``closest_match`` and ``columns``.

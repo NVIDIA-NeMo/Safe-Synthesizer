@@ -423,9 +423,6 @@ def test_window_group_mia_report_hides_a_closest_training_window_that_is_not_an_
     assert "training_values" not in match
     context = report.jinja_context["window_membership_inference_protection"]
     assert context["summary_traces_per_column"] == 1
-    window = component.details["window_size"]
-    group = training[training["entity"] == match["group"]].sort_values("time")
-    training_window = group[component.details["columns"]].iloc[match["start"] : match["start"] + window]
     output = render_report(report)
     assert output is not None
     # Only this card: Column Distribution Stability plots training values of its own.
@@ -434,4 +431,4 @@ def test_window_group_mia_report_hides_a_closest_training_window_that_is_not_an_
     assert '"name":"Training window"' not in card
     rendered_numbers = _rendered_numbers(card)
     assert set(np.ravel(match["synthetic_values"])) <= rendered_numbers
-    assert not set(training_window.to_numpy().ravel()) & rendered_numbers
+    assert not set(training[component.details["columns"]].to_numpy().ravel()) & rendered_numbers

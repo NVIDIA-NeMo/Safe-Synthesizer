@@ -11,7 +11,6 @@ from nemo_safe_synthesizer.evaluation.components.window_group_mia_figures import
     generate_window_group_mia_closest_match_figure,
     generate_window_group_mia_distance_figure,
     generate_window_group_mia_group_figure,
-    window_group_mia_closest_traces_per_column,
 )
 
 _EXACT_MATCH: dict[str, object] = {
@@ -64,12 +63,12 @@ def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over
         for index, rate in enumerate([0.05, 0.5, 1.0, 0.2])
     ]
 
-    figure = generate_window_group_mia_group_figure(per_group, 0.05, max_rows=3)
+    figure = generate_window_group_mia_group_figure(per_group, 0.05)
 
     bars = figure.data[0]
-    assert list(bars.x) == pytest.approx([20.0, 50.0, 100.0])
-    assert list(figure.layout.yaxis.ticktext) == ["g3", "g1", "g2"]
-    assert list(bars.marker.color) == pytest.approx(np.clip((np.array([0.2, 0.5, 1.0]) - 0.05) / 0.95, 0, 1))
+    assert list(bars.x) == pytest.approx([5.0, 20.0, 50.0, 100.0])
+    assert list(figure.layout.yaxis.ticktext) == ["g0", "g3", "g1", "g2"]
+    assert list(bars.marker.color) == pytest.approx(np.clip((np.array([0.05, 0.2, 0.5, 1.0]) - 0.05) / 0.95, 0, 1))
     assert tuple(figure.layout.xaxis.range) == (0, 100)
     assert figure.layout.shapes[0].x0 == pytest.approx(5.0)
 
@@ -82,7 +81,6 @@ def test_group_figure_requires_flag_rates():
 def test_closest_match_figure_draws_both_windows_for_an_exact_copy_with_first_column_visible():
     figure = generate_window_group_mia_closest_match_figure(_DETAILS)
 
-    assert window_group_mia_closest_traces_per_column(_EXACT_MATCH) == 2
     assert len(figure.data) == 4
     assert [trace.visible for trace in figure.data] == [True, True, False, False]
     assert [trace.name for trace in figure.data[:2]] == ["Training window", "Synthetic window"]
@@ -95,7 +93,6 @@ def test_closest_match_figure_draws_only_the_synthetic_window_when_it_is_not_an_
 
     figure = generate_window_group_mia_closest_match_figure({**_DETAILS, "closest_match": match})
 
-    assert window_group_mia_closest_traces_per_column(match) == 1
     assert [trace.name for trace in figure.data] == ["Synthetic window", "Synthetic window"]
     assert [trace.visible for trace in figure.data] == [True, False]
     assert list(figure.data[1].y) == pytest.approx([10.5, 12.5])

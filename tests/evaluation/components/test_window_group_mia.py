@@ -298,7 +298,7 @@ def test_window_group_mia_needs_twenty_holdout_windows_for_a_score():
 
     assert component.score.score is None
     assert component.score.notes is not None
-    assert "at least 20 training and holdout windows; found 190 training and 14 holdout" in component.score.notes
+    assert "at least 20 training and 20 holdout windows and found 190 training and 14 holdout" in component.score.notes
     assert component.details["evaluation_mode"] == "copy_diagnostics_only"
 
 
@@ -314,8 +314,7 @@ def test_window_group_mia_needs_two_holdout_groups_for_a_score():
     assert component.details["evaluation_mode"] == "copy_diagnostics_only"
     assert component.details["counts"]["holdout_groups_with_windows"] == 1
     assert component.score.notes == (
-        "The score needs at least 2 holdout groups; found 1. With 1 holdout group, chance can hide copying. "
-        "Reporting copy diagnostics only."
+        "The score needs at least 2 holdout groups and found 1. Reporting copy diagnostics only."
     )
     assert component.details["exact_copy_rate"] == pytest.approx(1 / GROUPS)
     assert "attack" not in component.details
