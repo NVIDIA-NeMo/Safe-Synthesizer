@@ -568,6 +568,8 @@ mise run check ::: test  # local pre-PR gate: static checks + unit tests
 
 We use `dprint` for TOML, `ruff` for Python formatting and linting (including the Python in Markdown), `rumdl` for Markdown, and `ty` for type checking. Their settings live in `dprint.json`, `ruff.toml`, `.rumdl.toml`, and `ty.toml`; the shared development baseline writes `dprint.json` and `.rumdl.toml` and sets common keys in `ruff.toml` and `ty.toml`.
 
+Some configuration comes from a development baseline shared with other NVIDIA NeMo repositories: `.house.toml`, `.house-tool.sh`, `.rumdl.toml`, `dprint.json`, `ty.toml`, the `managed: house` block in `.gitignore`, and the tool pins in `.mise.toml`. Maintainers update it periodically. Change those files through a PR as usual, but a later baseline upgrade may undo a change, so mention it in the PR.
+
 CI calls the same tools through atomic read-only `check:*` tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` aggregates the read-only static checks. The standard local gate is the explicit `mise run check ::: test`; no shorthand alias is defined. Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the Mise tasks.
 
 Useful task graph commands:

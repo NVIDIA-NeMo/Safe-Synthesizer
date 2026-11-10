@@ -425,7 +425,7 @@ def extract_and_validate_timeseries_records(
     time_column: str,
     interval_seconds: int | None,
     time_format: str,
-) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
+) -> tuple[list[dict], list[str], list[tuple[str, str]]]: ...
 ```
 
 Validation Steps:

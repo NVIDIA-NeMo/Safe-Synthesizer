@@ -122,15 +122,17 @@ Even though `.python-version` pins Python 3.13 for local development and CI defa
 ```python
 from typing import Self, Sequence
 
+
 # Before
-def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer":
+def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer": ...
+
 
 # After
-def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
+def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self: ...
+
 
 # Or
-def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self:
-
+def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self: ...
 ```
 
 - `X | Y` not `Optional[X]` or `Union[X, Y]`
@@ -527,14 +529,14 @@ See [Data modeling](#data-modeling) for when to use `Field(description=...)` vs 
 Fields without defaults, with defaults, and with `Field()` all follow the same pattern:
 
 ```python
-    model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
+model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
 
-    is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
+is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
 
-    base_max_seq_length: int | None = Field(
-        default=None,
-        description="Context window size before RoPE scaling.",
-    )
+base_max_seq_length: int | None = Field(
+    default=None,
+    description="Context window size before RoPE scaling.",
+)
 ```
 
 #### Before and after
