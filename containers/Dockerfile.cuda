@@ -25,6 +25,10 @@
 #     run --data-source /workspace/data/input.csv
 #
 # uv Docker best practices: https://docs.astral.sh/uv/guides/integration/docker/
+#
+# script/slurm/build_image.sh builds the Slurm cluster image without Docker
+# from the same uv.lock and extras. Keep the two in sync when changing extras,
+# uv settings, or system packages.
 
 ARG PYTHON_VERSION=3.13
 ARG PYTHON_IMAGE=python:${PYTHON_VERSION}-slim-bookworm
