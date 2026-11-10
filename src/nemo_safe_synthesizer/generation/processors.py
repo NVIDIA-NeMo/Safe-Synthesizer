@@ -6,13 +6,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from ..config import SafeSynthesizerParameters
 from ..config.generate import ValidationParameters
 from ..data_processing.record_utils import (
     ParsedRecord,
     ParsedResponse,
+    RecordDict,
     check_if_records_are_ordered,
     extract_and_validate_records,
     extract_and_validate_timeseries_records,
@@ -328,10 +329,12 @@ class GroupedDataProcessor(Processor):
                     # ``valid_parsed`` aliases the underlying ParsedRecord.parsed dicts,
                     # so sorting a fresh list doesn't reorder the ParsedRecord objects.
                     # Instead, sort the valid subset of group_records in-place by order_by.
+                    # Valid records always carry ``parsed`` (ParsedRecord invariant).
+                    order_by = self.order_by
                     valid_indices = [i for i, r in enumerate(group_records) if r.is_valid]
                     valid_sorted = sorted(
                         (group_records[i] for i in valid_indices),
-                        key=lambda r: r.parsed[self.order_by],
+                        key=lambda r: cast("RecordDict", r.parsed)[order_by],
                     )
                     for i, record in zip(valid_indices, valid_sorted, strict=True):
                         group_records[i] = record

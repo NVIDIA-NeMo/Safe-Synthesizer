@@ -135,9 +135,12 @@ class TextStructureSimilarity(Component):
                     logger.exception(f"Failed to calculate Text Structure stats for field {field}.")
                     continue
 
-            total_score = 0
-            for val in synthetic_statistics_dict.values():
-                total_score += val.text_statistic_score.score
+            total_score = 0.0
+            for field, val in synthetic_statistics_dict.items():
+                field_score = val.text_statistic_score.score if val.text_statistic_score is not None else None
+                if field_score is None:
+                    raise ValueError(f"Text structure score is unavailable for field {field}.")
+                total_score += field_score
             if len(synthetic_statistics_dict) > 0:
                 score = total_score / len(synthetic_statistics_dict)
                 text_statistic_score = EvaluationScore.finalize_grade(score, score)

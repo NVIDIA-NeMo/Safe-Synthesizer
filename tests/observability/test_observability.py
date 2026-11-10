@@ -638,8 +638,8 @@ class TestGetLogger:
     @staticmethod
     def _record_callsite(record: logging.LogRecord) -> tuple[str, int]:
         match record.msg:
-            case {"filename": filename, "lineno": lineno}:
-                return str(filename), int(lineno)
+            case {"filename": filename, "lineno": int() as lineno}:
+                return str(filename), lineno
             case _:
                 return record.filename, record.lineno
 
