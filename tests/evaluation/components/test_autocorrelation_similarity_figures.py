@@ -48,6 +48,31 @@ def test_summary_figure_groups_traces_by_column_with_lowest_scoring_column_visib
     assert not figure.layout.updatemenus
 
 
+def test_summary_figure_medians_leave_out_pairs_without_synthetic_acf():
+    profiles = [
+        _profile("a", "value", [0.5, 0.4], [0.5, 0.4], 1.0),
+        _profile("b", "value", [0.3, 0.2], [0.3, 0.2], 1.0),
+        _profile("c", "value", [-0.9, -0.9], [None, None], 0.0),
+    ]
+
+    figure = generate_autocorrelation_summary_figure(profiles)
+
+    training_median = next(trace for trace in figure.data if trace.name == "Training median ACF")
+    assert list(training_median.y) == pytest.approx([0.4, 0.3])
+
+
+def test_summary_figure_keeps_trace_layout_when_every_pair_lacks_synthetic_acf():
+    profiles = [
+        _profile("a", "constant", [0.5, 0.4], [None, None], 0.0),
+        _profile("a", "value", [0.5, 0.4], [0.5, 0.4], 1.0),
+    ]
+
+    figure = generate_autocorrelation_summary_figure(profiles)
+
+    assert len(figure.data) == 8
+    assert len(figure.data[1].x) == 0
+
+
 def test_lag_error_figure_averages_only_paired_finite_lags():
     figure = generate_autocorrelation_lag_error_figure(_SUMMARY_PROFILES)
 

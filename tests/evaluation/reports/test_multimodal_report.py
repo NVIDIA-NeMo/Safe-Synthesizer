@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -315,3 +316,35 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
+
+
+def test_time_series_report_renders_when_a_columns_synthetic_values_are_all_constant() -> None:
+    rng = np.random.default_rng(0)
+    training = pd.concat(
+        [
+            pd.DataFrame({"g": group, "time": range(100), "x": rng.normal(size=100), "y": rng.normal(size=100)})
+            for group in ("a", "b")
+        ],
+        ignore_index=True,
+    )
+    synthetic = training.copy()
+    synthetic["y"] = 1.0
+    config = SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by="g"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+        evaluation=EvaluationParameters(
+            mia_enabled=False,
+            aia_enabled=False,
+            pii_replay_enabled=False,
+            time_series=TimeSeriesEvaluationParameters(enabled=True),
+        ),
+    )
+
+    report = MultimodalReport.from_dataframes(training, synthetic, config=config)
+
+    autocorrelation = next(item for item in report.components if isinstance(item, AutocorrelationSimilarity))
+    constant = [item for item in autocorrelation.details["profiles"] if item["column"] == "y"]
+    assert [item["similarity"] for item in constant] == [0.0, 0.0]
+    output = render_report(report)
+    assert output is not None
+    assert 'id="autocorrelation-similarity"' in output
