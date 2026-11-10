@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -13,12 +15,12 @@ from nemo_safe_synthesizer.evaluation.components.window_group_mia_figures import
     generate_window_group_mia_group_figure,
 )
 
-_EXACT_MATCH: dict[str, object] = {
+_EXACT_MATCH: dict[str, Any] = {
     "exact_copy": True,
     "training_values": [[1.0, 2.0], [10.0, 11.0]],
     "synthetic_values": [[1.0, 2.0], [10.0, 11.0]],
 }
-_DETAILS = {
+_DETAILS: dict[str, Any] = {
     "window_size": 2,
     "columns": ["temperature", "pressure"],
     "distances": {"training": [0.0, 2.0, 4.0], "holdout": [2.0, 4.0, 6.0]},
@@ -68,7 +70,9 @@ def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over
 
 @pytest.mark.parametrize("exact_copy", [True, False])
 def test_closest_match_figure_draws_the_training_window_only_for_an_exact_copy(exact_copy: bool):
-    match = _EXACT_MATCH if exact_copy else {"exact_copy": False, "synthetic_values": [[1.5, 2.5], [10.5, 12.5]]}
+    match: dict[str, Any] = (
+        _EXACT_MATCH if exact_copy else {"exact_copy": False, "synthetic_values": [[1.5, 2.5], [10.5, 12.5]]}
+    )
 
     figure = generate_window_group_mia_closest_match_figure({**_DETAILS, "closest_match": match})
 
