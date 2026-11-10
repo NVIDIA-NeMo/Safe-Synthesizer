@@ -27,7 +27,7 @@ from ..observability import get_logger
 from .records.json_types import JsonSchema, JsonValue, is_json_object
 
 RECORD_REGEX_PATTERN = r"{.+?}(?:\r?\n|$)"
-RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\r?\n|$)"
+RECORD_REGEX_PATTERN_LOOKAHEAD = r"{.+?}(?=\r?\n|$)"
 
 logger = get_logger()
 
@@ -189,7 +189,7 @@ def normalize_record_keys(record: RawRecordMapping) -> RecordDict:
 
 def extract_records_from_jsonl_string(jsonl_string: str) -> list[str]:
     """Extract and return tabular records from the given JSONL string."""
-    return re.findall(RECORD_REGEX_PATTEN_LOOKAHEAD, jsonl_string)
+    return re.findall(RECORD_REGEX_PATTERN_LOOKAHEAD, jsonl_string)
 
 
 def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> list[str]:
