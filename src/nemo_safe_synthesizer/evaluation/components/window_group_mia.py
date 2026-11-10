@@ -83,13 +83,13 @@ class _Windows:
 
 @dataclass(frozen=True)
 class _FlagCounts:
-    """Training and holdout windows at or below the holdout's flag-rate distance quantile."""
+    """Training and holdout windows at or below the holdout's flag-rate quantile of squared distance."""
 
     flagged_training: int
     training: int
     flagged_holdout: int
     holdout: int
-    threshold: float
+    squared_threshold: float
 
     @property
     def holdout_rate(self) -> float:
@@ -326,14 +326,14 @@ class WindowGroupMIA(TimeSeriesComponent):
 
         mean, scale = WindowGroupMIA._standardizer(training_windows.values)
         support = (synthetic_windows.values - mean) / scale
-        training_distances, matches = WindowGroupMIA._nearest_with_index(
+        training_squared, matches = WindowGroupMIA._nearest_with_index(
             (training_windows.values - mean) / scale, support
         )
-        details["exact_copy_rate"] = float(np.mean(training_distances == 0.0))
+        details["exact_copy_rate"] = float(np.mean(training_squared == 0.0))
         details["closest_match"] = WindowGroupMIA._closest_match(
-            training_windows, synthetic_windows, training_distances, matches, len(columns)
+            training_windows, synthetic_windows, training_squared, matches, len(columns)
         )
-        details["distances"] = {"training": training_distances.tolist()}
+        details["distances"] = {"training": np.sqrt(training_squared).tolist()}
 
         holdout, holdout_reason = WindowGroupMIA._holdout_sequences(datasets, columns, group_column, timestamp_column)
         holdout_windows = (
@@ -346,7 +346,7 @@ class WindowGroupMIA(TimeSeriesComponent):
             ) or WindowGroupMIA._too_few_holdout_groups(holdout_windows)
         if holdout_reason is not None or holdout_windows is None:
             details["evaluation_mode"] = "copy_diagnostics_only"
-            details["per_group"] = WindowGroupMIA._per_group(training_windows, training_distances, None)
+            details["per_group"] = WindowGroupMIA._per_group(training_windows, training_squared, None)
             return WindowGroupMIA(
                 score=EvaluationScore(
                     notes=WindowGroupMIA._with_excluded_note(
@@ -357,15 +357,15 @@ class WindowGroupMIA(TimeSeriesComponent):
             )
 
         holdout_values = (holdout_windows.values - mean) / scale
-        holdout_distances = WindowGroupMIA._nearest(holdout_values, support)
-        details["distances"]["holdout"] = holdout_distances.tolist()
-        flags = WindowGroupMIA._flag_counts(training_distances, holdout_distances)
+        holdout_squared = WindowGroupMIA._nearest(holdout_values, support)
+        details["distances"]["holdout"] = np.sqrt(holdout_squared).tolist()
+        flags = WindowGroupMIA._flag_counts(training_squared, holdout_squared)
         overlap = window / stride
         offset = WindowGroupMIA._holdout_offset(training, holdout_values, mean, scale, window, stride, cfg.max_windows)
         loss = flags.privacy_loss
         noise = flags.binomial_noise(overlap) + offset
         debiased_loss = float(np.sqrt(max(loss**2 - noise, 0.0))) if loss > 0 else 0.0
-        holdout_exact_rate = float(np.mean(holdout_distances == 0.0))
+        holdout_exact_rate = float(np.mean(holdout_squared == 0.0))
         exact_loss = flags.exact_copy_loss(max(details["exact_copy_rate"] - holdout_exact_rate, 0.0))
         scored_loss = max(debiased_loss, exact_loss)
         protection = flags.protection(scored_loss)
@@ -376,7 +376,7 @@ class WindowGroupMIA(TimeSeriesComponent):
             {
                 "evaluation_mode": "full",
                 "attack": {
-                    "threshold": flags.threshold,
+                    "threshold": float(np.sqrt(flags.squared_threshold)),
                     "flagged_training_windows": flags.flagged_training,
                     "flagged_holdout_windows": flags.flagged_holdout,
                     "training_flag_rate": flags.flagged_training / flags.training,
@@ -389,7 +389,7 @@ class WindowGroupMIA(TimeSeriesComponent):
                     "exact_copy_privacy_loss": exact_loss,
                     "scored_privacy_loss": scored_loss,
                 },
-                "per_group": WindowGroupMIA._per_group(training_windows, training_distances, flags.threshold),
+                "per_group": WindowGroupMIA._per_group(training_windows, training_squared, flags.squared_threshold),
             }
         )
         return WindowGroupMIA(score=score, details=details)
@@ -527,30 +527,31 @@ class WindowGroupMIA(TimeSeriesComponent):
 
     @staticmethod
     def _nearest(query: NDArray[np.float64], support: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Euclidean distance from each query window to its nearest support window."""
+        """Squared Euclidean distance from each query window to its nearest support window."""
         return WindowGroupMIA._nearest_with_index(query, support)[0]
 
     @staticmethod
     def _nearest_with_index(
         query: NDArray[np.float64], support: NDArray[np.float64]
     ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-        """Distance from each query window to its nearest support window, and that window's index.
+        """Squared distance from each query window to its nearest support window, and that window's index.
 
         The nearest window is found with the inner-product form in chunks, then
-        its distance is recomputed directly so exact copies come out as exactly 0.
+        its squared distance is recomputed directly so exact copies come out as
+        exactly 0.
         """
         support_norms = np.einsum("ij,ij->i", support, support)
-        distances = np.empty(len(query))
+        squared = np.empty(len(query))
         indices = np.empty(len(query), dtype=np.int64)
         for start in range(0, len(query), _DISTANCE_CHUNK):
             block = query[start : start + _DISTANCE_CHUNK]
             # macOS Accelerate raises spurious divide-by-zero warnings in matmul on finite input.
             with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
-                squared = support_norms[None, :] - 2.0 * block @ support.T
-            best = np.argmin(squared, axis=1)
+                partial = support_norms[None, :] - 2.0 * block @ support.T
+            best = np.argmin(partial, axis=1)
             indices[start : start + _DISTANCE_CHUNK] = best
-            distances[start : start + _DISTANCE_CHUNK] = np.sqrt(np.sum((block - support[best]) ** 2, axis=1))
-        return distances, indices
+            squared[start : start + _DISTANCE_CHUNK] = np.sum((block - support[best]) ** 2, axis=1)
+        return squared, indices
 
     @staticmethod
     def _flag_counts(training: NDArray[np.float64], holdout: NDArray[np.float64]) -> _FlagCounts:
@@ -560,7 +561,7 @@ class WindowGroupMIA(TimeSeriesComponent):
             training=len(training),
             flagged_holdout=int(np.sum(holdout <= threshold)),
             holdout=len(holdout),
-            threshold=threshold,
+            squared_threshold=threshold,
         )
 
     @staticmethod
@@ -627,10 +628,12 @@ class WindowGroupMIA(TimeSeriesComponent):
         return counts
 
     @staticmethod
-    def _per_group(windows: _Windows, distances: NDArray[np.float64], threshold: float | None) -> list[dict[str, Any]]:
+    def _per_group(
+        windows: _Windows, squared: NDArray[np.float64], squared_threshold: float | None
+    ) -> list[dict[str, Any]]:
         """Summarize each training group's windows: count, exact copies, and flags."""
         by_group: dict[str | None, list[float]] = {}
-        for group, distance in zip(windows.groups, distances, strict=True):
+        for group, distance in zip(windows.groups, squared, strict=True):
             by_group.setdefault(group, []).append(float(distance))
         summaries = []
         for group, values in sorted(by_group.items(), key=lambda item: str(item[0])):
@@ -640,8 +643,8 @@ class WindowGroupMIA(TimeSeriesComponent):
                 "windows": len(values),
                 "exact_copy_rate": float(np.mean(group_distances == 0.0)),
             }
-            if threshold is not None:
-                summary["flag_rate"] = float(np.mean(group_distances <= threshold))
+            if squared_threshold is not None:
+                summary["flag_rate"] = float(np.mean(group_distances <= squared_threshold))
             summaries.append(summary)
         return summaries
 
@@ -649,7 +652,7 @@ class WindowGroupMIA(TimeSeriesComponent):
     def _closest_match(
         training: _Windows,
         synthetic: _Windows,
-        distances: NDArray[np.float64],
+        squared: NDArray[np.float64],
         matches: NDArray[np.int64],
         column_count: int,
     ) -> dict[str, Any]:
@@ -660,13 +663,13 @@ class WindowGroupMIA(TimeSeriesComponent):
         carry training values into the report otherwise. Values are in the
         data's own units, after gaps are filled, as ``values[column][step]``.
         """
-        index = int(np.argmin(distances))
+        index = int(np.argmin(squared))
         match = int(matches[index])
         closest: dict[str, Any] = {
             "group": training.groups[index],
             "start": training.starts[index],
-            "distance": float(distances[index]),
-            "exact_copy": bool(distances[index] == 0.0),
+            "distance": float(np.sqrt(squared[index])),
+            "exact_copy": bool(squared[index] == 0.0),
             "synthetic_values": synthetic.values[match].reshape(-1, column_count).T.tolist(),
         }
         if closest["exact_copy"]:
