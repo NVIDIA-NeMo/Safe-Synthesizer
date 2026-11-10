@@ -8,10 +8,15 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.evaluate import RollingStatsSimilarityParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.evaluation.components.time_series_common import (
+    PairResult,
+    evaluate_pairs,
     group_frame,
+    prepare_values,
     resolve_group_column,
     select_value_columns,
     shared_groups,
@@ -22,6 +27,25 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import Eval
 
 def _datasets(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> EvaluationDatasets:
     return EvaluationDatasets.from_dataframes(training_df, synthetic_df, enable_sampling=False)
+
+
+def _grouped_config() -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by="group"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+    )
+
+
+def _score_by_column(similarities: dict[str, float | None]):
+    """Return a pair scorer that gives each column a fixed similarity and skips columns mapped to ``None``."""
+
+    def score_pair(training: pd.Series, synthetic: pd.Series) -> PairResult:
+        similarity = similarities[str(training.name)]
+        if similarity is None:
+            return None, "unusable"
+        return {"similarity": similarity}, None
+
+    return score_pair
 
 
 def _frame(points: int = 200, seed: int = 0) -> pd.DataFrame:
@@ -164,6 +188,99 @@ def test_group_frame_sorts_stably_by_timestamp():
     ordered = group_frame(frame, "group", "A", "time")
 
     assert ordered["value"].tolist() == [1, 2, 0]
+
+
+@pytest.mark.parametrize("dtype", [pd.Int64Dtype(), pd.Float64Dtype()], ids=["Int64", "Float64"])
+def test_prepare_values_treats_nullable_missing_values_as_gaps(dtype: pd.Int64Dtype | pd.Float64Dtype):
+    values = pd.Series([1, pd.NA, 3, pd.NA], dtype=dtype)
+
+    np.testing.assert_array_equal(prepare_values(values), [1.0, np.nan, 3.0, np.nan])
+
+
+def test_prepare_values_treats_non_finite_and_non_numeric_values_as_gaps():
+    values = pd.Series([1.0, np.inf, -np.inf, "text", 2.0], dtype=object)
+
+    np.testing.assert_array_equal(prepare_values(values), [1.0, np.nan, np.nan, np.nan, 2.0])
+
+
+def test_evaluate_pairs_averages_scored_pairs_and_leaves_skipped_pairs_out():
+    frame = _frame()
+
+    score, details = evaluate_pairs(
+        _datasets(frame, frame.copy()),
+        _grouped_config(),
+        RollingStatsSimilarityParameters(),
+        _score_by_column({"alpha": 0.2, "count": None, "zeta": 0.6}),
+    )
+
+    assert score.score == 4.0
+    assert score.notes == "Skipped 2 unusable group/column comparisons."
+    assert {(item["group"], item["column"]) for item in details["skipped"]} == {("A", "count"), ("B", "count")}
+
+
+def test_evaluate_pairs_only_scores_configured_value_columns():
+    frame = _frame()
+
+    score, details = evaluate_pairs(
+        _datasets(frame, frame.copy()),
+        _grouped_config(),
+        RollingStatsSimilarityParameters(value_columns=["zeta"]),
+        _score_by_column({"alpha": 0.0, "count": 0.0, "zeta": 0.9}),
+    )
+
+    assert score.score == 9.0
+    assert {item["column"] for item in details["profiles"]} == {"zeta"}
+
+
+def test_evaluate_pairs_samples_groups_reproducibly_above_the_cap():
+    frame = pd.DataFrame({"group": np.repeat(list("ABCDEF"), 4), "value": np.arange(24.0)})
+    cfg = RollingStatsSimilarityParameters(max_groups=2)
+    score_pair = _score_by_column({"value": 0.5})
+
+    first = evaluate_pairs(_datasets(frame, frame.copy()), _grouped_config(), cfg, score_pair)
+    second = evaluate_pairs(_datasets(frame, frame.copy()), _grouped_config(), cfg, score_pair)
+
+    assert first == second
+    score, details = first
+    assert len({item["group"] for item in details["profiles"]}) == 2
+    assert score.notes == "Evaluated 2 of 6 shared groups using a reproducible sample."
+
+
+@pytest.mark.parametrize(
+    ("synthetic_value", "similarity"),
+    [
+        pytest.param([f"v{index}" for index in range(12)], 1.0, id="no_columns_remain"),
+        pytest.param(list(range(12)), None, id="no_pair_is_usable"),
+    ],
+)
+def test_evaluate_pairs_names_left_out_columns_when_unavailable(synthetic_value: list, similarity: float | None):
+    training_df = pd.DataFrame({"value": range(12), "count": range(12)})
+    synthetic_df = training_df.assign(value=synthetic_value, count=[f"n{index}" for index in range(12)])
+
+    score, details = evaluate_pairs(
+        _datasets(training_df, synthetic_df),
+        None,
+        RollingStatsSimilarityParameters(),
+        _score_by_column({"value": similarity}),
+    )
+
+    assert score.score is None
+    assert score.notes is not None
+    assert "count" in score.notes
+    assert "count" in details["excluded_columns"]
+
+
+def test_evaluate_pairs_returns_unexpected_failures_as_notes():
+    frame = _frame()
+
+    def fail(training: pd.Series, synthetic: pd.Series) -> PairResult:
+        raise RuntimeError("unexpected metric failure")
+
+    score, details = evaluate_pairs(_datasets(frame, frame.copy()), None, RollingStatsSimilarityParameters(), fail)
+
+    assert score.score is None
+    assert score.notes == "unexpected metric failure"
+    assert details == {}
 
 
 def test_summaries_average_by_key_in_stable_order():

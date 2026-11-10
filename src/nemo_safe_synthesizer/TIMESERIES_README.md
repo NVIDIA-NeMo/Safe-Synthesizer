@@ -494,14 +494,15 @@ It is enabled by default when `is_timeseries=True`, and can be turned off with `
 
 Shared pieces every time-series metric uses:
 
-- `evaluation/components/time_series_common.py`: the `TimeSeriesComponent` base class with the card attributes, plus grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries.
+- `evaluation/components/time_series_common.py`: the `TimeSeriesComponent` base class with the card attributes, plus grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries. It also holds `evaluate_pairs`, the evaluation flow for metrics that score each group and column pair, and the helpers that convert values to floats with gaps.
+- `evaluation/components/time_series_common_figures.py`: the Pair scores chart, the column order the charts share, and column label shortening.
 - `evaluation/assets/jinja/components/time_series_charts.j2`: `comparison_notes` and `chart_grid` macros for the card body.
 - `TimeSeriesValueColumnCheck` in `preflight/checks/dataframe.py`: validates `value_columns` for every `TimeSeriesMetricParameters` field.
 
 ### Adding a time-series metric
 
 1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
-2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
+2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. A metric that scores each group and column pair passes its pair scorer to `evaluate_pairs`. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
 3. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
 4. Add the component class to `TIME_SERIES_COMPONENTS`.
 5. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
@@ -671,6 +672,7 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
 | `evaluation/components/rolling_stats_similarity.py` | Rolling statistics evaluation metric |
-| `evaluation/components/time_series_common.py` | Component base class and grouping and column helpers shared by time-series metrics |
+| `evaluation/components/time_series_common.py` | Component base class, pair evaluation flow, and grouping, column, and value helpers shared by time-series metrics |
+| `evaluation/components/time_series_common_figures.py` | Pair scores chart and column order shared by time-series metrics |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |

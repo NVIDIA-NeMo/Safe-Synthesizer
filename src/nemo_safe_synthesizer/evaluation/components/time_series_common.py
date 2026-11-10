@@ -5,21 +5,23 @@
 
 Every time-series metric resolves the same grouping column, selects the same
 numeric value columns, walks the same shared groups in the same order, and
-renders as one card in the report's Time-Series Metrics panel. Keeping that
-logic here means a fix applies to every metric at once.
+renders as one card in the report's Time-Series Metrics panel. Metrics that
+score each group and column pair separately also share ``evaluate_pairs``.
+Keeping that logic here means a fix applies to every metric at once.
 """
 
 from __future__ import annotations
 
 import random
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import cached_property
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from numpy.typing import NDArray
 from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
@@ -27,10 +29,31 @@ from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.assets.text.multi_modal_tooltips import tooltips
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...observability import get_logger
 from .component import Component
+
+logger = get_logger(__name__)
+
+_GROUP_SELECTION_SEED = 2112
+_CONSTANT_TOLERANCE_FACTOR = 32.0
 
 FigureSpec = tuple[str, go.Figure, bool, str]
 """Chart title, figure, whether it gets the column select, and its tooltip key."""
+
+PairResult = tuple[dict[str, Any] | None, str | None]
+"""Profile details and ``None`` for a scored pair, or ``None`` and the reason it was skipped."""
+
+PairScorer = Callable[[pd.Series, pd.Series], PairResult]
+"""Compare one ordered training and synthetic sequence for the same group and column."""
+
+
+class PairMetricParameters(Protocol):
+    """Metric parameters ``evaluate_pairs`` reads."""
+
+    metric_label: ClassVar[str]
+    value_columns: list[str] | None
+    max_groups: int
 
 
 class TimeSeriesComponent(Component):
@@ -82,6 +105,162 @@ class TimeSeriesComponent(Component):
             }
             for title, figure, column_select, tooltip_key in figures
         ]
+
+
+def evaluate_pairs(
+    datasets: EvaluationDatasets,
+    config: SafeSynthesizerParameters | None,
+    cfg: PairMetricParameters,
+    score_pair: PairScorer,
+) -> tuple[EvaluationScore, dict[str, Any]]:
+    """Score every shared group and value column pair and average the similarities.
+
+    Groups above ``cfg.max_groups`` are sampled reproducibly. Pairs that
+    ``score_pair`` skips are reported in ``details`` and do not count toward
+    the score. Evaluation failures are returned in the score notes instead of
+    aborting the full evaluation pipeline.
+
+    Args:
+        datasets: Training and synthetic datasets to compare.
+        config: Optional top-level configuration used for inherited columns.
+        cfg: Resolved metric parameters.
+        score_pair: Metric-specific comparison of one pair.
+
+    Returns:
+        The score on a 0-10 scale, or an unscored result with explanatory
+        notes, and the diagnostic details the report renders.
+    """
+    # Optional metrics must fail independently so one diagnostic cannot
+    # prevent the rest of the evaluation report from being produced.
+    try:
+        return _evaluate_pairs(datasets, config, cfg, score_pair)
+    except Exception as exc:
+        logger.exception(f"Failed to compute {cfg.metric_label} Similarity.")
+        return EvaluationScore(notes=str(exc)), {}
+
+
+def _evaluate_pairs(
+    datasets: EvaluationDatasets,
+    config: SafeSynthesizerParameters | None,
+    cfg: PairMetricParameters,
+    score_pair: PairScorer,
+) -> tuple[EvaluationScore, dict[str, Any]]:
+    """Run ``evaluate_pairs`` without failure isolation."""
+    label = cfg.metric_label.lower()
+    timestamp_column = config.time_series.timestamp_column if config is not None else None
+    group_column, group_error = resolve_group_column(datasets, config)
+    if group_error is not None:
+        return EvaluationScore(notes=group_error), {}
+
+    columns, column_error, excluded_columns = select_value_columns(
+        datasets, cfg.value_columns, timestamp_column, group_column, label
+    )
+    if column_error is not None:
+        return EvaluationScore(notes=column_error), {}
+    if not columns:
+        return _unavailable("No shared numeric value columns.", excluded_columns)
+
+    groups, missing_training, missing_synthetic, shared_group_count = shared_groups(
+        datasets.training, datasets.synthetic, group_column, cfg.max_groups, _GROUP_SELECTION_SEED
+    )
+    if not groups:
+        return _unavailable("No shared groups to evaluate.", excluded_columns)
+    omitted_groups = shared_group_count - len(groups)
+    sample_note = None
+    if omitted_groups:
+        sample_note = f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
+
+    profiles: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for group_value in groups:
+        training_group = group_frame(datasets.training, group_column, group_value, timestamp_column)
+        synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column)
+        group_label = None if group_column is None else str(group_value)
+        for column in columns:
+            result, reason = score_pair(training_group[column], synthetic_group[column])
+            if result is None:
+                skipped.append({"group": group_label, "column": column, "reason": reason})
+            else:
+                profiles.append({"group": group_label, "column": column, **result})
+
+    diagnostics = {
+        "counts": {
+            "groups": len(groups),
+            "shared_groups": shared_group_count,
+            "omitted_shared_groups": omitted_groups,
+            "columns": len(columns),
+            "evaluated_profiles": len(profiles),
+            "skipped": len(skipped),
+        },
+        "group_selection": {
+            "shared_groups": shared_group_count,
+            "evaluated_groups": len(groups),
+            "omitted_shared_groups": omitted_groups,
+            "policy": "seeded_random_sample" if omitted_groups else "all_shared_groups",
+        },
+        "skipped": skipped,
+        "groups_only_in_training": missing_training,
+        "groups_only_in_synthetic": missing_synthetic,
+    }
+    if not profiles:
+        note = f"No usable group/column {label} profiles."
+        return _unavailable(note if sample_note is None else f"{note} {sample_note}", excluded_columns, diagnostics)
+
+    similarity = float(np.mean([item["similarity"] for item in profiles]))
+    score = EvaluationScore.finalize_grade(raw_score=similarity, score=10.0 * similarity)
+    skipped_note = f"Skipped {len(skipped)} unusable group/column comparisons." if skipped else None
+    notes = [note for note in (skipped_note, sample_note, excluded_columns_note(excluded_columns)) if note]
+    if notes:
+        score.notes = " ".join(notes)
+
+    details = {
+        "evaluation_mode": "per_group" if group_column else "global",
+        "timestamp_column": timestamp_column,
+        "group_column": group_column,
+        **diagnostics,
+        "per_group": summaries(profiles, "group"),
+        "per_column": summaries(profiles, "column"),
+        "profiles": profiles,
+        "excluded_columns": excluded_columns,
+    }
+    return score, details
+
+
+def _unavailable(
+    note: str,
+    excluded_columns: list[str],
+    details: dict[str, Any] | None = None,
+) -> tuple[EvaluationScore, dict[str, Any]]:
+    """Return an unscored result whose notes and details still name left-out columns."""
+    excluded_note = excluded_columns_note(excluded_columns)
+    return (
+        EvaluationScore(notes=note if excluded_note is None else f"{note} {excluded_note}"),
+        {**(details or {}), "excluded_columns": excluded_columns},
+    )
+
+
+def prepare_values(values: pd.Series) -> NDArray[np.float64]:
+    """Convert a series to floats while preserving missing and non-finite positions as ``NaN`` gaps."""
+    numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+    return np.where(np.isfinite(numeric_values), numeric_values, np.nan)
+
+
+def profile_details(values: NDArray[np.float64]) -> list[float | None]:
+    """Convert a profile vector into JSON-safe full-precision details, with ``None`` for non-finite entries."""
+    return [float(value) if np.isfinite(value) else None for value in values]
+
+
+def is_effectively_constant(values: NDArray[np.float64]) -> bool:
+    """Return whether finite variation is negligible relative to value scale."""
+    finite_values = values[np.isfinite(values)]
+    if finite_values.size == 0:
+        return True
+    scale = float(np.max(np.abs(finite_values)))
+    if scale == 0.0:
+        return True
+    normalized_std = float(np.std(finite_values / scale))
+    tolerance = _CONSTANT_TOLERANCE_FACTOR * np.finfo(float).eps
+    return bool(normalized_std <= tolerance)
 
 
 def excluded_columns_note(excluded: list[str]) -> str | None:

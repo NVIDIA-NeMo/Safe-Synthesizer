@@ -27,33 +27,25 @@ from scipy.signal import lfilter
 from ...config.evaluate import RollingStatsSimilarityParameters
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from ...evaluation.data_model.evaluation_score import EvaluationScore
-from ...observability import get_logger
 from .rolling_stats_similarity_figures import (
-    ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS,
+    ROLLING_STATS_FIGURE_HEIGHT,
     ROLLING_STATS_SEGMENTS,
     ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN,
-    generate_rolling_stats_pair_score_figure,
     generate_rolling_stats_profile_figure,
     generate_rolling_stats_segment_difference_figure,
-    order_rolling_stats_columns,
 )
 from .time_series_common import (
     FigureSpec,
+    PairResult,
     TimeSeriesComponent,
-    excluded_columns_note,
-    group_frame,
-    resolve_group_column,
-    select_value_columns,
-    shared_groups,
-    summaries,
+    evaluate_pairs,
+    is_effectively_constant,
+    prepare_values,
+    profile_details,
 )
-
-logger = get_logger(__name__)
+from .time_series_common_figures import PAIR_SCORE_MAX_COLUMNS, generate_pair_score_figure, order_columns_by_score
 
 _MIN_WINDOW = 3
-_GROUP_SELECTION_SEED = 2112
-_CONSTANT_TOLERANCE_FACTOR = 32.0
 # Floor for segment noise, in squared training standard deviations, so noise-free
 # deterministic sequences still compare cleanly.
 _NOISE_FLOOR = 1e-12
@@ -133,16 +125,16 @@ class RollingStatsSimilarity(TimeSeriesComponent):
                 ),
                 (
                     "Pair scores",
-                    generate_rolling_stats_pair_score_figure(profiles, self.score.score),
+                    generate_pair_score_figure(profiles, self.score.score, height=ROLLING_STATS_FIGURE_HEIGHT),
                     False,
                     "rolling_stats_pair_scores_info",
                 ),
             ]
-            summary_columns = order_rolling_stats_columns(profiles)
+            summary_columns = order_columns_by_score(profiles)
         context["figures"] = self.figure_rows(figures)
         context["summary_columns"] = summary_columns
         context["summary_traces_per_column"] = ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN
-        context["pair_score_column_count"] = min(len(summary_columns), ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS)
+        context["pair_score_column_count"] = min(len(summary_columns), PAIR_SCORE_MAX_COLUMNS)
         context["evaluated_profile_count"] = len(profiles)
         context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
         context["evaluated_column_count"] = len({item["column"] for item in profiles})
@@ -171,13 +163,13 @@ class RollingStatsSimilarity(TimeSeriesComponent):
             A component containing the score, diagnostic details, and notes.
         """
         cfg = RollingStatsSimilarity._resolve_config(config)
-        # Optional metrics must fail independently so one diagnostic cannot
-        # prevent the rest of the evaluation report from being produced.
-        try:
-            return RollingStatsSimilarity._evaluate(evaluation_datasets, cfg, config)
-        except Exception as exc:
-            logger.exception("Failed to compute Rolling Stats Similarity.")
-            return RollingStatsSimilarity(score=EvaluationScore(notes=str(exc)))
+        score, details = evaluate_pairs(
+            evaluation_datasets,
+            config,
+            cfg,
+            lambda training, synthetic: RollingStatsSimilarity._pair_score(training, synthetic, cfg),
+        )
+        return RollingStatsSimilarity(score=score, details=details)
 
     @staticmethod
     def _resolve_config(config: SafeSynthesizerParameters | None) -> RollingStatsSimilarityParameters:
@@ -187,156 +179,11 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         return config.evaluation.time_series.rolling_stats
 
     @staticmethod
-    def _evaluate(
-        datasets: EvaluationDatasets,
-        cfg: RollingStatsSimilarityParameters,
-        config: SafeSynthesizerParameters | None,
-    ) -> RollingStatsSimilarity:
-        """Compute per-group/column segment profiles and aggregate the component score.
-
-        Args:
-            datasets: Training and synthetic datasets to compare.
-            cfg: Resolved rolling statistics metric parameters.
-            config: Optional top-level configuration used for inherited columns.
-
-        Returns:
-            A scored component, or an unavailable component with explanatory
-            notes when no usable comparison remains.
-        """
-        timestamp_column = config.time_series.timestamp_column if config is not None else None
-        group_column, group_error = resolve_group_column(datasets, config)
-        if group_error is not None:
-            return RollingStatsSimilarity(score=EvaluationScore(notes=group_error))
-
-        columns, column_error, excluded_columns = select_value_columns(
-            datasets, cfg.value_columns, timestamp_column, group_column, "rolling stats"
-        )
-        if column_error is not None:
-            return RollingStatsSimilarity(score=EvaluationScore(notes=column_error))
-        if not columns:
-            return RollingStatsSimilarity._unavailable("No shared numeric value columns.", excluded_columns)
-
-        groups, missing_training, missing_synthetic, shared_group_count = shared_groups(
-            datasets.training,
-            datasets.synthetic,
-            group_column,
-            cfg.max_groups,
-            _GROUP_SELECTION_SEED,
-        )
-        if not groups:
-            return RollingStatsSimilarity._unavailable("No shared groups to evaluate.", excluded_columns)
-        omitted_groups = shared_group_count - len(groups)
-        group_selection = {
-            "shared_groups": shared_group_count,
-            "evaluated_groups": len(groups),
-            "omitted_shared_groups": omitted_groups,
-            "policy": "seeded_random_sample" if omitted_groups else "all_shared_groups",
-        }
-
-        profiles: list[dict[str, Any]] = []
-        skipped: list[dict[str, Any]] = []
-        for group_value in groups:
-            training_group = group_frame(datasets.training, group_column, group_value, timestamp_column)
-            synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column)
-            group_label = None if group_column is None else str(group_value)
-            for column in columns:
-                result, reason = RollingStatsSimilarity._pair_score(
-                    training_group[column], synthetic_group[column], cfg
-                )
-                RollingStatsSimilarity._record_pair_result(profiles, skipped, group_label, column, result, reason)
-
-        counts = {
-            "groups": len(groups),
-            "shared_groups": shared_group_count,
-            "omitted_shared_groups": omitted_groups,
-            "columns": len(columns),
-            "evaluated_profiles": len(profiles),
-            "skipped": len(skipped),
-        }
-        if not profiles:
-            unavailable_note = "No usable group/column rolling statistics profiles."
-            if omitted_groups:
-                unavailable_note += (
-                    f" Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
-                )
-            return RollingStatsSimilarity._unavailable(
-                unavailable_note,
-                excluded_columns,
-                {
-                    "counts": counts,
-                    "group_selection": group_selection,
-                    "skipped": skipped,
-                    "groups_only_in_training": missing_training,
-                    "groups_only_in_synthetic": missing_synthetic,
-                },
-            )
-
-        similarity = float(np.mean([item["similarity"] for item in profiles]))
-        score = EvaluationScore.finalize_grade(raw_score=similarity, score=10.0 * similarity)
-        notes: list[str] = []
-        if skipped:
-            notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
-        if omitted_groups:
-            notes.append(f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample.")
-        excluded_note = excluded_columns_note(excluded_columns)
-        if excluded_note is not None:
-            notes.append(excluded_note)
-        if notes:
-            score.notes = " ".join(notes)
-
-        details = {
-            "evaluation_mode": "per_group" if group_column else "global",
-            "timestamp_column": timestamp_column,
-            "group_column": group_column,
-            "window_size": cfg.window_size,
-            "min_points": cfg.min_points,
-            "segments": ROLLING_STATS_SEGMENTS,
-            "counts": counts,
-            "group_selection": group_selection,
-            "per_group": summaries(profiles, "group"),
-            "per_column": summaries(profiles, "column"),
-            "profiles": profiles,
-            "skipped": skipped,
-            "excluded_columns": excluded_columns,
-            "groups_only_in_training": missing_training,
-            "groups_only_in_synthetic": missing_synthetic,
-        }
-        return RollingStatsSimilarity(score=score, details=details)
-
-    @staticmethod
-    def _unavailable(
-        note: str,
-        excluded_columns: list[str],
-        details: dict[str, Any] | None = None,
-    ) -> RollingStatsSimilarity:
-        """Return an unscored component whose notes and details still name left-out columns."""
-        excluded_note = excluded_columns_note(excluded_columns)
-        return RollingStatsSimilarity(
-            score=EvaluationScore(notes=note if excluded_note is None else f"{note} {excluded_note}"),
-            details={**(details or {}), "excluded_columns": excluded_columns},
-        )
-
-    @staticmethod
-    def _record_pair_result(
-        profiles: list[dict[str, Any]],
-        skipped: list[dict[str, Any]],
-        group_label: str | None,
-        column: str,
-        result: dict[str, Any] | None,
-        reason: str | None,
-    ) -> None:
-        """Record one successful or skipped group-and-column comparison."""
-        if result is None:
-            skipped.append({"group": group_label, "column": column, "reason": reason})
-            return
-        profiles.append({"group": group_label, "column": column, **result})
-
-    @staticmethod
     def _pair_score(
         training: pd.Series,
         synthetic: pd.Series,
         cfg: RollingStatsSimilarityParameters,
-    ) -> tuple[dict[str, Any] | None, str | None]:
+    ) -> PairResult:
         """Compare one training and synthetic sequence segment by segment.
 
         Both sequences are standardized by the training mean and standard
@@ -358,13 +205,13 @@ class RollingStatsSimilarity(TimeSeriesComponent):
             Profile details and ``None`` on success, or ``None`` and a
             human-readable skip reason when the comparison is unusable.
         """
-        training_values = RollingStatsSimilarity._prepare_values(training)
-        synthetic_values = RollingStatsSimilarity._prepare_values(synthetic)
+        training_values = prepare_values(training)
+        synthetic_values = prepare_values(synthetic)
         training_count = int(np.sum(np.isfinite(training_values)))
         synthetic_count = int(np.sum(np.isfinite(synthetic_values)))
         if training_count < cfg.min_points:
             return None, f"The training sequence needs at least {cfg.min_points} finite observations."
-        if RollingStatsSimilarity._is_effectively_constant(training_values):
+        if is_effectively_constant(training_values):
             return None, "The training sequence is constant or indistinguishable from constant at its numeric scale."
 
         synthetic_missing = synthetic_count < cfg.min_points
@@ -378,31 +225,27 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         training_profile = RollingStatsSimilarity._segment_profile((training_values - center) / scale, window, segments)
         if not RollingStatsSimilarity._has_finite_segment(training_profile):
             return None, "No segment of the training sequence has enough finite values to measure."
-        base = {"window": window, "segments": segments}
         if synthetic_missing:
-            return RollingStatsSimilarity._synthetic_failure(base, training_profile, _MOSTLY_MISSING_REASON), None
-        if RollingStatsSimilarity._is_effectively_constant(synthetic_values):
-            return RollingStatsSimilarity._synthetic_failure(base, training_profile, _CONSTANT_REASON), None
+            return RollingStatsSimilarity._synthetic_failure(window, training_profile, _MOSTLY_MISSING_REASON), None
+        if is_effectively_constant(synthetic_values):
+            return RollingStatsSimilarity._synthetic_failure(window, training_profile, _CONSTANT_REASON), None
 
         synthetic_profile = RollingStatsSimilarity._segment_profile(
             (synthetic_values - center) / scale, window, segments
         )
         if not RollingStatsSimilarity._has_finite_segment(synthetic_profile):
-            return RollingStatsSimilarity._synthetic_failure(base, training_profile, _MOSTLY_MISSING_REASON), None
+            return RollingStatsSimilarity._synthetic_failure(window, training_profile, _MOSTLY_MISSING_REASON), None
         if not RollingStatsSimilarity._shares_a_segment(training_profile, synthetic_profile):
             return None, "No segment of the sequence has values in both training and synthetic data."
         error = RollingStatsSimilarity._noise_aware_error(training_profile, synthetic_profile)
         return {
-            **base,
+            "window": window,
             "error": error,
             "similarity": 1.0 - error,
-            "level_noise": training_profile.level_noise + synthetic_profile.level_noise,
-            "spread_noise": training_profile.spread_noise + synthetic_profile.spread_noise,
-            "spread_reference": training_profile.mean_spread,
-            "training_level": RollingStatsSimilarity._profile_details(training_profile.level),
-            "synthetic_level": RollingStatsSimilarity._profile_details(synthetic_profile.level),
-            "training_spread": RollingStatsSimilarity._profile_details(training_profile.spread),
-            "synthetic_spread": RollingStatsSimilarity._profile_details(synthetic_profile.spread),
+            "training_level": profile_details(training_profile.level),
+            "synthetic_level": profile_details(synthetic_profile.level),
+            "training_spread": profile_details(training_profile.spread),
+            "synthetic_spread": profile_details(synthetic_profile.spread),
         }, None
 
     @staticmethod
@@ -648,17 +491,17 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         return float(np.clip(np.sqrt(max(excess, 0.0) / magnitude), 0.0, 1.0))
 
     @staticmethod
-    def _synthetic_failure(base: dict[str, Any], training_profile: _SegmentProfile, reason: str) -> dict[str, Any]:
+    def _synthetic_failure(window: int, training_profile: _SegmentProfile, reason: str) -> dict[str, Any]:
         """Return zero-similarity details for a synthetic sequence with no usable local average or spread."""
-        segments = base["segments"]
+        segments = len(training_profile.level)
         return {
-            **base,
+            "window": window,
             "error": 1.0,
             "similarity": 0.0,
             "reason": reason,
-            "training_level": RollingStatsSimilarity._profile_details(training_profile.level),
+            "training_level": profile_details(training_profile.level),
             "synthetic_level": [None] * segments,
-            "training_spread": RollingStatsSimilarity._profile_details(training_profile.spread),
+            "training_spread": profile_details(training_profile.spread),
             "synthetic_spread": [None] * segments,
         }
 
@@ -673,27 +516,3 @@ class RollingStatsSimilarity(TimeSeriesComponent):
         level = np.isfinite(training.level) & np.isfinite(synthetic.level)
         spread = np.isfinite(training.spread) & np.isfinite(synthetic.spread)
         return bool(np.any(level) or np.any(spread))
-
-    @staticmethod
-    def _prepare_values(values: pd.Series) -> NDArray[np.float64]:
-        """Convert a series to floats while preserving non-finite positions as gaps."""
-        numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
-        return np.where(np.isfinite(numeric_values), numeric_values, np.nan)
-
-    @staticmethod
-    def _profile_details(values: NDArray[np.float64]) -> list[float | None]:
-        """Convert segment averages into JSON-safe full-precision details."""
-        return [float(value) if np.isfinite(value) else None for value in values]
-
-    @staticmethod
-    def _is_effectively_constant(values: NDArray[np.float64]) -> bool:
-        """Return whether finite variation is negligible relative to value scale."""
-        finite_values = values[np.isfinite(values)]
-        if finite_values.size == 0:
-            return True
-        scale = float(np.max(np.abs(finite_values)))
-        if scale == 0.0:
-            return True
-        normalized_std = float(np.std(finite_values / scale))
-        tolerance = _CONSTANT_TOLERANCE_FACTOR * np.finfo(float).eps
-        return bool(normalized_std <= tolerance)

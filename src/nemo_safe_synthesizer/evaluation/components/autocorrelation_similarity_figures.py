@@ -17,21 +17,16 @@ import numpy as np
 import plotly.graph_objects as go
 
 from ...errors import DataError
+from .time_series_common_figures import DIFFERENCE_COLORSCALE, order_columns_by_score
 
 _TRAINING_COLOR = "#3b82f6"
 _SYNTHETIC_COLOR = "#f59e0b"
 _TRAINING_BAND_COLOR = "rgba(59, 130, 246, 0.2)"
 _SYNTHETIC_BAND_COLOR = "rgba(245, 158, 11, 0.2)"
-# Matches the Correlation Stability difference heatmap in multi_modal_toggle.js.
-_DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [0.75, "#f87171"], [1, "#dc2626"]]
 _LAG_DIFFERENCE_COLOR_MAX = 0.5
-_PAIR_SCORE_JITTER = 0.25
-_SUMMARY_FIGURE_HEIGHT = 300
-_LABEL_MAX_LENGTH = 10
-_LABEL_EDGE_LENGTH = 3
 
+AUTOCORRELATION_FIGURE_HEIGHT = 300
 AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN = 4
-AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS = 8
 
 
 def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
@@ -39,7 +34,7 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
 
     Each value column gets a median profile and an interquartile band for both
     datasets. Columns contribute ``AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN``
-    consecutive traces in ``order_autocorrelation_columns`` order, and only the
+    consecutive traces in ``order_columns_by_score`` order, and only the
     first column is visible so the report can switch columns by trace index.
 
     Args:
@@ -51,10 +46,10 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     Raises:
         DataError: If no profiles are supplied.
     """
-    columns = order_autocorrelation_columns(profiles)
+    columns = order_columns_by_score(profiles)
     figure = go.Figure()
     for column_index, column in enumerate(columns):
-        column_profiles = [item for item in profiles if item["column"] == column]
+        column_profiles = [item for item in profiles if str(item["column"]) == column]
         visible = column_index == 0
         for key, name, line_color, band_color in (
             ("training_acf", "Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
@@ -87,7 +82,7 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
             )
     figure.update_layout(
         template="plotly_white",
-        height=_SUMMARY_FIGURE_HEIGHT,
+        height=AUTOCORRELATION_FIGURE_HEIGHT,
         showlegend=False,
         xaxis_title="Lag",
         yaxis_title="Autocorrelation",
@@ -132,7 +127,7 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
             customdata=support[valid],
             marker={
                 "color": mean_difference[valid],
-                "colorscale": _DIFFERENCE_COLORSCALE,
+                "colorscale": DIFFERENCE_COLORSCALE,
                 "cmin": 0.0,
                 "cmax": _LAG_DIFFERENCE_COLOR_MAX,
             },
@@ -142,7 +137,7 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
     )
     figure.update_layout(
         template="plotly_white",
-        height=_SUMMARY_FIGURE_HEIGHT,
+        height=AUTOCORRELATION_FIGURE_HEIGHT,
         showlegend=False,
         xaxis_title="Lag",
         yaxis_title="Mean |ACF difference|",
@@ -151,117 +146,6 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
     top = max(1.0, float(np.max(mean_difference[valid], initial=0.0)) * 1.05)
     figure.update_yaxes(range=[0.0, top])
     return figure
-
-
-def generate_autocorrelation_pair_score_figure(
-    profiles: Sequence[Mapping[str, Any]],
-    overall_score: float | None,
-    *,
-    max_columns: int = AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
-) -> go.Figure:
-    """Plot group and column pair scores on the report's 0-10 scale.
-
-    Only the ``max_columns`` lowest-scoring columns are plotted so each row
-    stays readable. Each row sits at an integer y position with seeded
-    vertical jitter, so long names are shortened only in the axis labels and
-    shortened names cannot merge rows. Dots shade from white at a score of 10
-    to red at 0.
-
-    Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
-        overall_score: Aggregate metric score drawn as a reference line.
-        max_columns: Largest number of value columns to plot.
-
-    Returns:
-        A Plotly strip figure with one marker trace per plotted value column.
-
-    Raises:
-        DataError: If no profiles are supplied.
-    """
-    columns = order_autocorrelation_columns(profiles)[:max_columns]
-    rows = [str(column) for column in reversed(columns)]
-    rng = np.random.default_rng(0)
-    figure = go.Figure()
-    for column in columns:
-        column_profiles = [item for item in profiles if item["column"] == column]
-        groups = ["all rows" if item["group"] is None else str(item["group"]) for item in column_profiles]
-        similarity = np.array([float(item["similarity"]) for item in column_profiles])
-        jitter = rng.uniform(-_PAIR_SCORE_JITTER, _PAIR_SCORE_JITTER, size=len(column_profiles))
-        figure.add_trace(
-            go.Scatter(
-                x=10 * similarity,
-                y=rows.index(str(column)) + jitter,
-                customdata=groups,
-                mode="markers",
-                marker={
-                    "color": 1 - similarity,
-                    "colorscale": _DIFFERENCE_COLORSCALE,
-                    "cmin": 0.0,
-                    "cmax": 1.0,
-                    "size": 7,
-                    "opacity": 0.9,
-                },
-                name=str(column),
-                hovertemplate="%{fullData.name}<br>group %{customdata}<br>score %{x:.1f}<extra></extra>",
-            )
-        )
-    if overall_score is not None:
-        figure.add_vline(
-            x=overall_score,
-            line={"color": "rgba(255,255,255,0.6)", "dash": "dash", "width": 1},
-            annotation_text=f"score {overall_score:.1f}",
-            annotation_position="top",
-        )
-    figure.update_layout(
-        template="plotly_white",
-        height=_SUMMARY_FIGURE_HEIGHT,
-        showlegend=False,
-        xaxis_title="Pair score",
-        margin={"l": 80, "r": 16, "t": 40, "b": 48},
-    )
-    figure.update_xaxes(range=[-0.25, 10.25])
-    figure.update_yaxes(
-        range=[-0.6, len(rows) - 0.4],
-        tickmode="array",
-        tickvals=list(range(len(rows))),
-        ticktext=[shorten_column_label(row) for row in rows],
-        zeroline=False,
-    )
-    return figure
-
-
-def shorten_column_label(name: str) -> str:
-    """Shorten a column name longer than 10 characters to its first and last 3.
-
-    Args:
-        name: Full column name.
-
-    Returns:
-        The name unchanged, or its first and last three characters joined by an ellipsis.
-    """
-    if len(name) <= _LABEL_MAX_LENGTH:
-        return name
-    return f"{name[:_LABEL_EDGE_LENGTH]}...{name[-_LABEL_EDGE_LENGTH:]}"
-
-
-def order_autocorrelation_columns(profiles: Sequence[Mapping[str, Any]]) -> list[str]:
-    """Return value columns ordered from lowest to highest mean pair similarity.
-
-    Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
-
-    Returns:
-        Column names, lowest mean pair similarity first, with names breaking ties.
-
-    Raises:
-        DataError: If no profiles are supplied.
-    """
-    if not profiles:
-        raise DataError("At least one autocorrelation profile is required.")
-    scores: dict[str, list[float]] = {}
-    for item in profiles:
-        scores.setdefault(str(item["column"]), []).append(float(item["similarity"]))
-    return sorted(scores, key=lambda column: (float(np.mean(scores[column])), column))
 
 
 def _profile_matrix(profiles: Sequence[Mapping[str, Any]], key: str) -> np.ndarray:
