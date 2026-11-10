@@ -14,8 +14,11 @@
 # because a deploy failed without it -- read it before simplifying anything.
 set -euo pipefail
 
-readonly UV_VERSION="0.13.4"
-readonly PYTHON_VERSION="3.13"
+# This script is pasted into the Brev console and runs without a checkout, so
+# it cannot read .python-version or [tool.uv] required-version; the follow
+# markers keep these at the development baseline's values.
+readonly UV_VERSION="0.13.4" # house: follow pasted into the Brev console; runs without a checkout
+readonly PYTHON_VERSION="3.13" # house: follow pasted into the Brev console; runs without a checkout
 # No .git suffix: this is only used to build archive URLs, not to clone.
 readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 readonly INSTALLER_URL="${REPO_URL}/releases/latest/download/install_nss.sh"
