@@ -120,7 +120,7 @@ class HuggingFaceBackend(TrainingBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
+        self.trainer_type = Trainer
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
         self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
@@ -495,7 +495,7 @@ class HuggingFaceBackend(TrainingBackend):
             per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
+        self.trainer_type = partial(
             OpacusDPTrainer,
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,

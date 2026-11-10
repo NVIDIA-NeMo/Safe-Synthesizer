@@ -38,7 +38,7 @@ from ...observability import get_logger
 from . import multi_modal_figures as figures
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
     from sentence_transformers import SentenceTransformer
 
@@ -46,7 +46,7 @@ logger = get_logger(__name__)
 
 
 @contextmanager
-def _suppress_ks_exact_fallback() -> Iterator[None]:
+def _suppress_ks_exact_fallback() -> Generator[None, None, None]:
     """Silence SciPy's notice that ``ks_2samp`` fell back to the asymptotic method.
 
     ``method="auto"`` attempts the exact calculation and falls back to the

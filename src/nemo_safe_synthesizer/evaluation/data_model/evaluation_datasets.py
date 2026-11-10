@@ -97,7 +97,7 @@ class EvaluationDatasets(BaseModel):
         return self.get_columns_of_type({FieldType.TEXT}, based_on)
 
     @model_validator(mode="after")
-    def validate(self) -> Self:
+    def validate_datasets(self) -> Self:
         # Expected raw input data:
         # training
         # synthetic

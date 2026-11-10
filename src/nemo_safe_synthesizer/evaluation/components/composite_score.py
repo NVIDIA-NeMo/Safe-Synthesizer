@@ -46,7 +46,7 @@ class CompositeScore(Component):
             if component.score.score:
                 total += component.score.score
                 total_components += 1
-            if component.score.grade and isinstance(component.score.grade, PrivacyGrade):
+            if isinstance(component.score.grade, PrivacyGrade):
                 is_privacy = True
         if total_components > 0:
             score = total / total_components
