@@ -20,8 +20,6 @@ __all__ = [
     "AutocorrelationSimilarityParameters",
     "DEFAULT_AUTOCORRELATION_MAX_LAG",
     "DEFAULT_AUTOCORRELATION_MIN_POINTS",
-    "DEFAULT_ROLLING_STATS_MIN_POINTS",
-    "DEFAULT_ROLLING_STATS_WINDOW_SIZE",
     "EvaluationParameters",
     "RollingStatsSimilarityParameters",
     "TimeSeriesEvaluationParameters",
@@ -30,8 +28,6 @@ __all__ = [
 
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
-DEFAULT_ROLLING_STATS_WINDOW_SIZE = 20
-DEFAULT_ROLLING_STATS_MIN_POINTS = 4
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -100,7 +96,7 @@ class RollingStatsSimilarityParameters(TimeSeriesMetricParameters):
     metric_label: ClassVar[str] = "Rolling Stats"
 
     window_size: int = Field(
-        default=DEFAULT_ROLLING_STATS_WINDOW_SIZE,
+        default=20,
         ge=3,
         description=(
             "Number of consecutive observations that count as local; variation faster than the window counts as "
@@ -108,7 +104,7 @@ class RollingStatsSimilarityParameters(TimeSeriesMetricParameters):
         ),
     )
     min_points: int = Field(
-        default=DEFAULT_ROLLING_STATS_MIN_POINTS,
+        default=4,
         ge=4,
         description=(
             "Minimum finite observations required in each training sequence; a synthetic sequence with fewer scores 0."
