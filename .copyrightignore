@@ -24,3 +24,6 @@ skills/*/skill-card.md
 
 # AI assistant config files
 CLAUDE.md
+
+# Generated files: tools/patch_dependabot.py writes constraints.txt whole
+constraints.txt
