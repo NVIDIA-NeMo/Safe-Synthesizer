@@ -119,7 +119,6 @@ def fixture_yaml_config_str() -> str:
 data:
   group_training_examples_by: null
   holdout: 0.05
-  max_holdout: 2000
   max_sequences_per_example: 2
   order_training_examples_by: null
   random_state: 872602

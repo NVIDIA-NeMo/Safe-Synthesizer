@@ -30,7 +30,6 @@ def test_nss_timeseries_train_and_generate(fixture_local_tinyllama_dir, fixture_
         num_records=5,
         lora_r=8,
         holdout=0,
-        max_holdout=0,
         is_timeseries=True,
         timestamp_column="timestamp",
         timestamp_interval_seconds=60,

@@ -513,7 +513,6 @@ uv run safe-synthesizer run --config $SHARED_DIR/smollm_grouped-utility.yaml --d
 data:
   group_training_examples_by: Cell_ID
   holdout: 0
-  max_holdout: 2000
 
 time_series:
   is_timeseries: true

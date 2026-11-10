@@ -166,7 +166,6 @@ def fixture_base_smoke_config(fixture_local_tinyllama_dir) -> SafeSynthesizerPar
         num_records=5,
         lora_r=8,
         holdout=0,
-        max_holdout=0,
     )
 
 
