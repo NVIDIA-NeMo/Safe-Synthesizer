@@ -73,6 +73,27 @@ tooltips = {
         One dot per group and numeric column, scored from 0 to 10. White dots near 10 match the training data's timing pattern, and redder dots further left do not.
         The dashed line is the overall score. Hover over a dot to see its column and group.
     """,
+    "rolling_stats_similarity_info": """
+        Rolling Stats Similarity checks whether the local average and the local spread of each numeric column change from the start to the end of the
+        synthetic sequences as they do in the training sequences, such as a steady rise, a jump partway through, or a spread that grows. Each group
+        and numeric column is scored separately and the scores are averaged. Differences small enough to be explained by chance do not lower the score,
+        so 10 means the local average and spread follow the training data and scores near 0 mean the synthetic data has lost or reversed them. A low
+        score does not mean the synthetic data is bad overall, only that it does not reproduce how these statistics change over time.
+    """,
+    "rolling_stats_profile_info": """
+        The local average (top) and local spread (bottom) of one numeric column, from the start to the end of the sequence, in training standard
+        deviations. Lines show the median across groups and bands cover the middle half of groups. In good synthetic data the orange and blue lines
+        overlap. Groups that change in opposite directions can cancel in the median, so check Difference by segment too. Use the dropdown to switch columns.
+    """,
+    "rolling_stats_difference_info": """
+        The average gap between training and synthetic local average (solid) and local spread (hatched) in each tenth of the sequence, with each
+        group-column pair compared with itself first. Short, pale bars are good. Tall, red bars mark where in the sequence the synthetic data drifts away
+        from the training data.
+    """,
+    "rolling_stats_pair_scores_info": """
+        One dot per group and numeric column, scored from 0 to 10. White dots near 10 match how the training data's local average and spread change
+        over time, and redder dots further left do not. The dashed line is the overall score. Hover over a dot to see its column and group.
+    """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
     records based on the values of the epsilon and delta parameters. Lower epsilon indicates higher levels of privacy. Note that while applying DP increases privacy,

@@ -288,3 +288,46 @@ def test_evaluation_report_uses_reference_icon_geometry() -> None:
     assert 'd="M13 5.293V14H3V2h6.707z' in icons  # Document
     assert 'd="m11.871 1.295.509 2.325' in icons  # CheckmarkBadge
     assert 'd="M5 5a3 3 0 0 1 6 0v2h1v7H4V7h1z' in icons  # LockClosed
+
+
+def _rolling_stats_context(constant_synthetic_profile_count: int) -> dict[str, object]:
+    return {
+        "rolling_stats_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": 2,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": 2,
+            "constant_synthetic_profile_count": constant_synthetic_profile_count,
+            "pair_score_column_count": 2,
+            "summary_columns": ["column_0", "column_1"],
+            "summary_traces_per_column": 8,
+            "figures": [
+                {
+                    "title": "Pair scores",
+                    "html": "<div>pairs</div>",
+                    "column_select": False,
+                    "tooltip_id": "rolling-stats-pair-scores-info",
+                    "tooltip": "Dots should be near 10.",
+                },
+            ],
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant or mostly missing synthetic values."),
+        (3, "3 pairs have constant or mostly missing synthetic values."),
+    ],
+)
+def test_rolling_stats_notes_constant_synthetic_pairs_missing_from_profile_charts(
+    constant_count: int, expected: str
+) -> None:
+    rendered = _render_template(
+        "jinja/components/rolling_stats_similarity.j2",
+        ctx=_rolling_stats_context(constant_synthetic_profile_count=constant_count),
+    )
+
+    assert expected in rendered
