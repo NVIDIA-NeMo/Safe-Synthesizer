@@ -187,6 +187,16 @@ produces values like `pmc-482913`:
 - `\` makes the next token or bracket literal, so `\#` writes `#`. A `]` without
   an opening `[` is rejected; write it as `\]`.
 
+A phone number keeps its country code and its area code, or a mobile number's
+network prefix, and gets random digits for the rest, so `(415) 555-2671`
+becomes a value like `(415) 830-4417`. Where the area code ends depends on the
+country, and at most half of the national number is kept. A number written
+without a country code is read as a number of the `locale`'s country. Without a
+pattern, the replacement is written like the original, including any extension.
+With a character mask, the mask's fixed characters are written and the area
+code fills the placeholders under it. A phone value without digits, such as
+`unknown` or `-`, is left unchanged.
+
 Date formats, for `date_of_birth`, use Python `strftime` codes such as
 `%m/%d/%Y` or `%B %d, %Y`. Prose and ordinal forms such as `December 10th` are
 not supported.
@@ -270,8 +280,8 @@ Nemotron-Personas are NVIDIA datasets of synthetic people, one per locale,
 whose names, sex, ethnic background, and addresses follow that locale's census
 distributions. The `nemotron-personas` sampler draws names and, for `en_US`,
 street addresses from them, so names look like the locale's real population
-and can match the record's gender and ethnic background. Emails and phone
-numbers come from Faker.
+and can match the record's gender and ethnic background. Emails come from
+Faker.
 
 Downloading a dataset requires an NGC API key and the NGC CLI. Data Designer's
 [person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)

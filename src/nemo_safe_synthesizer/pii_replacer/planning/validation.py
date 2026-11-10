@@ -28,6 +28,9 @@ from .patterns import compile_character_mask, compile_name_pattern
 
 logger = get_logger(__name__)
 
+_DISTINCT_MASK_ENTITY_TYPES = MASK_ALLOCATED_ENTITY_TYPES | {EntityType.PHONE_NUMBER}
+"""Entity types whose distinct originals need distinct replacements that fit a character mask."""
+
 __all__ = [
     "column_pattern_issue",
     "column_pattern_syntax_issue",
@@ -190,7 +193,7 @@ def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str
         ``"USER-9"`` returns an issue, while a column where values repeat does not.
     """
     pattern = spec.pattern
-    if pattern is None or spec.entity_type not in MASK_ALLOCATED_ENTITY_TYPES or spec.column_name not in df.columns:
+    if pattern is None or spec.entity_type not in _DISTINCT_MASK_ENTITY_TYPES or spec.column_name not in df.columns:
         return None
     values = df[spec.column_name].dropna().astype(str).tolist()
     if not all_distinct(values):

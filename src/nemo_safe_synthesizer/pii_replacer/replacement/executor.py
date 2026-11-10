@@ -284,7 +284,7 @@ class ReplacementExecutor:
         address_parts = self._address_parts.get(spec.column_name, {})
         for row_position in range(len(dataframe)):
             original = dataframe.iat[row_position, column_position]
-            if _is_blank(original):
+            if _has_nothing_to_replace(spec, original):
                 continue
             key = self._mapping_key(spec, row_position, canonicalize_scalar(original), group_identities)
             text = original_texts[row_position]
@@ -371,7 +371,7 @@ class ReplacementExecutor:
 
         for row_position in range(len(working)):
             original = working.iat[row_position, column_position]
-            if _is_blank(original):
+            if _has_nothing_to_replace(spec, original):
                 continue
             canonical_original = canonicalize_scalar(original)
             dependencies = _effective_dependencies(working, row_position, spec)
@@ -816,7 +816,7 @@ def _column_statistics(
                 kept_name_part_count=detected.kept_name_part_count,
             )
             continue
-        non_missing = [value for value in source.tolist() if not _is_blank(value)]
+        non_missing = [value for value in source.tolist() if not _has_nothing_to_replace(spec, value)]
         changed = sum(
             not _equal_scalars(before, after)
             for before, after in zip(source.tolist(), transformed[spec.column_name].tolist())
@@ -866,11 +866,28 @@ def _verify_result(original: pd.DataFrame, transformed: pd.DataFrame, plan: PiiR
 
 
 def _original_texts(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> list[str]:
-    """Return the text forms of the column's non-missing original values, as generators receive them."""
+    """Return the text forms of the column's original values to replace, as generators receive them."""
     column = dataframe[spec.column_name]
     return [
-        text for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True) if not _is_blank(value)
+        text
+        for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
+        if not _has_nothing_to_replace(spec, value)
     ]
+
+
+def _has_nothing_to_replace(spec: PiiColumnPlan, value: object) -> bool:
+    """Return whether a target cell is left as written: a blank cell, or a phone number without digits.
+
+    A phone value without digits, such as ``"unknown"`` or ``"-"``, is a placeholder rather than a
+    number, so replacing it would invent a phone number for someone who gave none.
+    """
+    if _is_blank(value):
+        return True
+    return (
+        spec.entity_type is EntityType.PHONE_NUMBER
+        and isinstance(value, str)
+        and not any(character.isdigit() for character in value)
+    )
 
 
 def _is_blank(value: object) -> bool:

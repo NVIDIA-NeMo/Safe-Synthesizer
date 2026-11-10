@@ -9,7 +9,7 @@ import re
 
 import phonenumbers
 
-__all__ = ["country_code_prefix", "phone_identity", "phone_in_layout", "phone_region"]
+__all__ = ["country_code_prefix", "kept_phone_digit_count", "phone_identity", "phone_in_layout", "phone_region"]
 
 _INTERNATIONAL_PREFIX = re.compile(r"[\s(]*(?:\+|00)\s*(?=[0-9])")
 """The ``+`` or ``00`` that starts an international phone number, before its country code."""
@@ -89,3 +89,34 @@ def country_code_prefix(phone: str) -> str:
         return ""
     end = match.end() + len(country_code)
     return phone[:end] if phone[match.end() : end] == country_code else ""
+
+
+def kept_phone_digit_count(phone: str, region: str | None) -> int:
+    """Return how many leading digits of ``phone`` a replacement keeps: its country code and area code.
+
+    The area code, or a mobile number's network prefix, is libphonenumber's national destination code,
+    so where it ends depends on the country. A national trunk prefix written before it, such as the UK's
+    leading ``0``, is kept with it. At most half of the national number is kept, so countries without
+    area codes, such as Singapore, where libphonenumber reports the first group instead, still get most
+    of their digits replaced. ``region`` reads a number written without a country code; when the number
+    cannot be read, or it has no area code, only a country code is kept.
+
+    Example:
+        ``kept_phone_digit_count("(415) 555-2671", "US")`` is 3, for ``415``;
+        ``kept_phone_digit_count("+44 20 7946 0958", None)`` is 4, for ``44`` and ``20``; and
+        ``kept_phone_digit_count("12345", "US")`` is 0.
+    """
+    country_code = country_code_prefix(phone)
+    country_code_digits = sum(character.isdigit() for character in country_code)
+    try:
+        number = phonenumbers.parse(phone, region)
+    except phonenumbers.NumberParseException:
+        return country_code_digits
+    national_number = phonenumbers.national_significant_number(number)
+    area_code_length = min(phonenumbers.length_of_national_destination_code(number), len(national_number) // 2)
+    # The national number starts after any trunk prefix; letters, as in 1-800-FLOWERS, leave it unfound.
+    written_digits = "".join(character for character in phone[len(country_code) :] if character.isdigit())
+    start = written_digits.find(national_number)
+    if start < 0 or area_code_length == 0:
+        return country_code_digits
+    return country_code_digits + start + area_code_length

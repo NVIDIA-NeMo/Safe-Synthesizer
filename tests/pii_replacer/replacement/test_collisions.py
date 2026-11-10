@@ -214,10 +214,12 @@ class TestCrossColumnSharing:
             PiiColumnPlan(column_name="work_phone", entity_type=EntityType.PHONE_NUMBER),
         )
 
-        result = _execute(dataframe, *specs, generator=_ScriptedGenerator("555.987.6543"))
+        generator = _ScriptedGenerator("(555) 246-8100", "555.987.6543")
 
-        assert result["work_phone"].tolist() == ["555.987.6543"]
-        assert result["phone"].iloc[0] != "555.987.6543"
+        result = _execute(dataframe, *specs, generator=generator)
+
+        assert result.to_dict("list") == {"phone": ["(555) 246-8100"], "work_phone": ["555.987.6543"]}
+        assert [request.pattern for request in generator.requests] == ["(###) ###-####", None]
 
 
 @pytest.mark.unit

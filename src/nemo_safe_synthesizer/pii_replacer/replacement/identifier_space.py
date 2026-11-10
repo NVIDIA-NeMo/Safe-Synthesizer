@@ -35,8 +35,12 @@ __all__ = [
     "number_space_for",
 ]
 
-MASK_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityType.API_KEY, EntityType.PHONE_NUMBER})
-"""Entity types whose character-mask pattern defines the whole replacement value space."""
+MASK_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityType.API_KEY})
+"""Entity types whose character-mask pattern defines the whole replacement value space.
+
+Phone numbers are not allocated: a replacement keeps its original's country code and area code, so each
+original draws from its own part of the mask, and the generator retries to avoid values already taken.
+"""
 
 NUMBER_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityType.API_KEY})
 """Entity types whose unpatterned, digit-only values are replaced from a numeric range."""

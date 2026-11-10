@@ -535,6 +535,9 @@ def _normalize_chunk_span(
     # nothing for a replacement to change.
     if entity_type is None or not any(character.isalnum() for character in value):
         return None, False
+    # A phone number span without digits, such as "my cell", names a number without giving it.
+    if entity_type is EntityType.PHONE_NUMBER and not any(character.isdigit() for character in value):
+        return None, False
     threshold = config.entity_thresholds[entity_type]
     if entity_type is EntityType.NATIONAL_ID and is_national_id is not None and is_national_id(value):
         threshold = config.checked_national_id_threshold

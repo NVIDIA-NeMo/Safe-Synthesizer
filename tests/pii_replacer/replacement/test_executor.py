@@ -491,6 +491,34 @@ class TestReplacementExecutor:
         assert len(group_a_numbers) == 1
         assert re.sub(r"[^0-9]", "", phone[2]) not in group_a_numbers
 
+    @pytest.mark.parametrize("pattern", [None, "(###) ###-####"])
+    def test_phone_values_without_digits_are_left_unchanged(self, pattern: str | None) -> None:
+        dataframe = pd.DataFrame({"phone": ["(415) 555-2671", "unknown", "-", None]})
+        plan = _plan(_target("phone", EntityType.PHONE_NUMBER, pattern=pattern))
+        generator = FakerReplacementGenerator(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), locale="en_US")
+
+        result = ReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(dataframe)
+
+        phones = result.dataframe["phone"].tolist()
+        assert re.fullmatch(r"\(415\) [0-9]{3}-[0-9]{4}", phones[0]) and phones[0] != "(415) 555-2671"
+        assert phones[1:3] == ["unknown", "-"]
+        assert phones[3] is None
+        assert result.column_statistics["phone"].detected_entity_counts == {"phone_number": 1}
+
+    def test_masked_phone_numbers_sharing_an_area_code_get_distinct_replacements(self) -> None:
+        originals = [f"(415) 555-{number:04d}" for number in range(200)]
+        plan = _plan(_target("phone", EntityType.PHONE_NUMBER, pattern="(###) ###-####"))
+        generator = FakerReplacementGenerator(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), locale="en_US")
+
+        replaced = ReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(
+            pd.DataFrame({"phone": originals})
+        )
+
+        phones = replaced.dataframe["phone"].tolist()
+        assert all(phone.startswith("(415) ") for phone in phones)
+        assert len(set(phones)) == len(phones)
+        assert not set(phones) & set(originals)
+
     def test_column_statistics_report_per_column_fallbacks_without_serializing_originals(self) -> None:
         dataframe = pd.DataFrame(
             {

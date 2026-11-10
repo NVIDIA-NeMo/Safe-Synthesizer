@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import re
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
@@ -13,10 +12,16 @@ from uuid import UUID
 from faker import Faker
 
 from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
-from ....errors import GenerationError, InternalError
+from ....errors import GenerationError, InternalError, ParameterError
 from ....observability import get_logger
-from ...phone_numbers import country_code_prefix
-from ...planning.patterns import render_character_mask, render_name_pattern
+from ...phone_numbers import kept_phone_digit_count, phone_in_layout, phone_region
+from ...planning.patterns import (
+    CharacterMaskPart,
+    compile_character_mask,
+    parse_character_mask,
+    render_character_mask,
+    render_name_pattern,
+)
 from ...sampler_catalog import PERSONA_SEX_VALUES
 from ..birth_dates import random_birth_date, shift_birth_date
 from ..national_ids import national_id_check
@@ -61,6 +66,7 @@ class FakerReplacementGenerator:
                 f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
         self._locale = locale
+        self._phone_region = phone_region(locale)
         self._warned_generation_fallbacks: set[str] = set()
         # Building a Faker takes most of a value's generation time, so one instance is reseeded per value.
         self._fake: Faker | None = None
@@ -69,8 +75,8 @@ class FakerReplacementGenerator:
         """Generate a Faker-backed replacement for ``request``."""
         rng = Random(request.seed)
         entity_type = request.entity_type
-        if entity_type is EntityType.PHONE_NUMBER and request.pattern is not None:
-            return render_character_mask(request.pattern, rng)
+        if entity_type is EntityType.PHONE_NUMBER:
+            return _phone_number(request.original_value, request.pattern, rng, self._phone_region)
         if entity_type is EntityType.DATE_OF_BIRTH:
             return self._birth_date(request, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD and request.pattern is not None:
@@ -101,8 +107,6 @@ class FakerReplacementGenerator:
             return name
         if entity_type is EntityType.EMAIL:
             return self._generate_email(request, fake, rng, dependencies)
-        if entity_type is EntityType.PHONE_NUMBER:
-            return _phone_number(request.original_value, fake, rng)
         if entity_type is EntityType.STREET_ADDRESS:
             # Some locales, such as en_GB, put a flat or unit on its own line.
             return fake.street_address().replace("\n", ", ")
@@ -185,28 +189,65 @@ def _faker_name_values(fake: Faker, gender: str | None) -> dict[str, str]:
     }
 
 
-_PHONE_EXTENSION = re.compile(r"\s*(?:x|ext\.?)\s*\d+$", re.IGNORECASE)
-"""A trailing extension, such as ``"x5938"`` or ``" ext. 12"``, which many Faker locales add to phone numbers."""
+def _phone_number(original: str, pattern: str | None, rng: Random, region: str | None) -> str:
+    """Return ``original`` with random digits after its country code and area code.
 
-
-def _phone_number(original: str, fake: Faker, rng: Random) -> str:
-    """Return ``original`` with its digits replaced at random, or a Faker phone number if that changes nothing.
-
-    A leading country code, such as ``+44`` or ``001``, is kept. Letters and punctuation are kept too, so
-    the replacement is written like the original, including any extension. Faker is used only for an
-    original without other digits, and its extension is dropped, since most Faker formats used for
-    ``en_US`` and the many locales without their own phone formats end in one.
+    The country code and area code are kept, so the number still looks like one from the same country,
+    network, or city; see ``kept_phone_digit_count``. Without a pattern, every other character is kept,
+    so the replacement is written like the original, including any extension, whose digits are replaced
+    too. With a character mask, the mask's fixed characters are written, the area code fills the
+    placeholders under it, and the other placeholders are random. An original written in another layout
+    has its replacement's digits moved into the mask's layout, if they fit the mask; otherwise it gets a
+    random value of the mask. When nothing after the kept digits could change, as in ``"+44"``, every
+    digit is random. Callers leave values without digits unchanged instead of calling this.
 
     Example:
-        ``"(555) 123-4567"`` becomes a value such as ``"(812) 904-3321"``, and ``"+44 20 7946 0958"`` one
-        such as ``"+44 81 2604 9135"``.
+        ``"(415) 555-2671"`` becomes a value such as ``"(415) 830-4417"``, and ``"+44 20 7946 0958"`` one
+        such as ``"+44 20 2604 9135"``. With mask ``"555-01##"``, ``"555-0123"`` becomes one such as
+        ``"555-0187"``, and with mask ``"(###) ###-####"``, ``"415.555.2671"`` one such as
+        ``"(415) 830-4417"``.
     """
-    country_code = country_code_prefix(original)
-    rest = original[len(country_code) :]
-    shaped = country_code + "".join(str(rng.randrange(10)) if character.isdigit() else character for character in rest)
-    if shaped != original:
-        return shaped
-    return _PHONE_EXTENSION.sub("", fake.phone_number())
+    kept = kept_phone_digit_count(original, region)
+    if pattern is None:
+        replacement = _with_random_digits(original, kept, rng)
+        return replacement if replacement != original else _with_random_digits(original, 0, rng)
+    expression, error = compile_character_mask(pattern)
+    parts, _ = parse_character_mask(pattern)
+    if error is not None or expression is None or parts is None:
+        raise ParameterError(error or "invalid character mask")
+    if expression.fullmatch(original) is None:
+        random_value = render_character_mask(pattern, rng)
+        moved = phone_in_layout(random_value, _phone_number(original, None, rng, region))
+        return moved if expression.fullmatch(moved) is not None and moved != original else random_value
+    replacement = _in_phone_mask(original, parts, kept, rng)
+    return replacement if replacement != original else _in_phone_mask(original, parts, 0, rng)
+
+
+def _with_random_digits(original: str, kept: int, rng: Random) -> str:
+    """Return ``original`` with each digit after its first ``kept`` digits replaced at random."""
+    written: list[str] = []
+    seen = 0
+    for character in original:
+        if character.isdigit():
+            written.append(character if seen < kept else str(rng.randrange(10)))
+            seen += 1
+        else:
+            written.append(character)
+    return "".join(written)
+
+
+def _in_phone_mask(original: str, parts: tuple[CharacterMaskPart, ...], kept: int, rng: Random) -> str:
+    """Fill a mask that ``original`` follows, copying its first ``kept`` digits into the placeholders under them."""
+    written: list[str] = []
+    seen = 0
+    for part, character in zip(parts, original, strict=True):
+        keep = character.isdigit() and seen < kept
+        seen += character.isdigit()
+        if part.literal is not None:
+            written.append(part.literal)
+        else:
+            written.append(character if keep else rng.choice(part.choices or ""))
+    return "".join(written)
 
 
 def _select_dependency_value(sampler_values: tuple[str, ...] | None, seed: int) -> str | None:

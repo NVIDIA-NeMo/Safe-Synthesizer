@@ -141,7 +141,8 @@ class TestIdentifierSpace:
         ("entity_type", "pattern", "originals", "expected"),
         [
             (EntityType.UNIQUE_IDENTIFIER, "USER-###", ["USER-001"], MaskSpace),
-            (EntityType.PHONE_NUMBER, "###-####", ["555-0101"], MaskSpace),
+            # Phone numbers keep their area code, so the generator writes them even with a mask.
+            (EntityType.PHONE_NUMBER, "###-####", ["555-0101"], None),
             (EntityType.UNIQUE_IDENTIFIER, None, ["17", "42"], NumberSpace),
             (EntityType.UNIQUE_IDENTIFIER, None, ["USER-001"], None),
             (EntityType.PHONE_NUMBER, None, ["5550101"], None),

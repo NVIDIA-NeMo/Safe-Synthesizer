@@ -163,7 +163,7 @@ class NemotronPersonasReplacementGenerator:
         )
 
 
-# Nemotron-Personas datasets have no email or phone column, so those entity types always use Faker.
+# Nemotron-Personas datasets have no email or phone column, so those entity types always use the Faker generator.
 PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.STREET_ADDRESS}
 # Value keys and the persona columns they come from. Every locale names these columns the same way; only
 # en_US has street columns, so other locales fall back to Faker for street addresses.

@@ -386,6 +386,26 @@ class TestGliner2Detector:
         assert "birth-date candidates were ignored" in caplog.text
         assert "spring" not in caplog.text
 
+    def test_rejects_phone_number_model_spans_without_digits(self) -> None:
+        text = "Call my cell or 415-555-2671"
+        model = _FakeModel(
+            [
+                {
+                    "entities": {
+                        "phone_number": [
+                            {"start": 8, "end": 15, "confidence": 1.0},
+                            {"start": 16, "end": 28, "confidence": 1.0},
+                        ]
+                    }
+                }
+            ]
+        )
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+
+        spans = detector.detect([_cell(text)]).spans
+
+        assert [text[span.start : span.end] for span in spans] == ["415-555-2671"]
+
     @pytest.mark.parametrize("value", ["5 April 1990", "April 5th, 1990", "5 avril 1990"])
     def test_accepts_complete_natural_language_birth_dates(self, value: str) -> None:
         text = f"Born on {value}"

@@ -241,14 +241,52 @@ class TestReplacementGenerator:
             assert re.fullmatch(shape, replacement), replacement
             assert replacement != original
 
-    def test_phone_number_without_digits_gets_a_faker_number_without_an_extension(self) -> None:
+    @pytest.mark.parametrize(
+        ("original", "locale", "kept"),
+        [
+            ("(415) 555-2671", "en_US", "(415) "),
+            ("+86 138 1234 5678", "en_US", "+86 138 "),
+            ("020 7946 0958", "en_GB", "020 "),
+            ("+91 98765 43210", "en_US", "+91 98765 "),
+        ],
+    )
+    def test_phone_number_keeps_the_country_code_and_area_code(self, original: str, locale: str, kept: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacements = {
+            generator.generate(_request(EntityType.PHONE_NUMBER, original, seed=seed)) for seed in range(20)
+        }
+
+        assert all(replacement.startswith(kept) for replacement in replacements), replacements
+        assert original not in replacements
+        assert len(replacements) > 1
+
+    @pytest.mark.parametrize(
+        ("original", "pattern", "shape"),
+        [
+            # The mask's fixed characters are written, and the original's area code fills the # under it.
+            ("(415) 555-2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("+1 415-555-2671", "+1 ###-###-####", r"\+1 415-[0-9]{3}-[0-9]{4}"),
+            # Fixed digits in the mask stay, even where the original has no area code to keep.
+            ("555-0123", "555-01##", r"555-01[0-9]{2}"),
+            # An original written in another layout still keeps its area code when its digits fit the mask.
+            ("415.555.2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("+1 415 555 2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("415.555.2671", "+1 ###-###-####", r"\+1 415-[0-9]{3}-[0-9]{4}"),
+            # When its digits do not fit, every # is random.
+            ("555-2671", "(###) ###-####", r"\([0-9]{3}\) [0-9]{3}-[0-9]{4}"),
+        ],
+    )
+    def test_patterned_phone_number_fits_the_mask_and_keeps_the_area_code(
+        self, original: str, pattern: str, shape: str
+    ) -> None:
         generator = _faker_generator()
 
-        for seed in range(50):
-            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, "unlisted", seed=seed))
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, original, pattern=pattern, seed=seed))
 
-            assert re.search(r"[0-9]$", replacement), replacement
-            assert not re.search(r"x|ext", replacement, re.IGNORECASE), replacement
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
 
     def test_request_is_immutable_and_hides_sensitive_inputs_from_repr(self) -> None:
         request = _request(

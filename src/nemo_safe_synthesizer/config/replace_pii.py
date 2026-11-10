@@ -1073,8 +1073,8 @@ class ReplacePiiConfig(Parameters):
     locale: str = Field(
         default="en_US",
         description=(
-            "Locale for generated names, addresses, and phone numbers, and of the Nemotron-Personas dataset "
-            "(datasets/{locale}.parquet)."
+            "Locale for generated names and addresses, for reading phone numbers written without a country "
+            "code, and of the Nemotron-Personas dataset (datasets/{locale}.parquet)."
         ),
     )
     seed: int | None = Field(

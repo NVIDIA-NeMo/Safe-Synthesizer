@@ -66,6 +66,20 @@ def test_patterned_identifier_is_allocated_from_the_pattern() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("pattern", "description"),
+    [
+        (None, "Random digits in the original's layout, keeping its country code and area code"),
+        ("(###) ###-####", "Random digits that fit the pattern, keeping the original's country code and area code"),
+    ],
+)
+def test_phone_number_keeps_the_country_code_and_area_code(pattern: str | None, description: str) -> None:
+    column = PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern=pattern)
+
+    assert describe_replacement(column, _settings()) == description
+
+
+@pytest.mark.unit
 def test_street_uses_faker_outside_en_us() -> None:
     column = PiiColumnPlan(column_name="address", entity_type=EntityType.STREET_ADDRESS)
 
