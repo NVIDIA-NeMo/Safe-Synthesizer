@@ -284,8 +284,8 @@ class WindowGroupMIA(TimeSeriesComponent):
         stride = max(window // 2, 1)
         training = WindowGroupMIA._sequences(datasets.training, columns, group_column, timestamp_column)
         synthetic = WindowGroupMIA._sequences(datasets.synthetic, columns, group_column, timestamp_column)
-        training_windows = WindowGroupMIA._balanced(training, window, stride, cfg.max_windows)
-        synthetic_windows = WindowGroupMIA._every_step(synthetic, window)
+        training_windows = WindowGroupMIA._build_windows(training, window, stride, cfg.max_windows)
+        synthetic_windows = WindowGroupMIA._build_windows(synthetic, window, 1, WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS)
         details: dict[str, Any] = {
             "timestamp_column": timestamp_column,
             "group_column": group_column,
@@ -320,7 +320,7 @@ class WindowGroupMIA(TimeSeriesComponent):
 
         holdout, holdout_reason = WindowGroupMIA._holdout_sequences(datasets, columns, group_column, timestamp_column)
         holdout_windows = (
-            None if holdout is None else WindowGroupMIA._balanced(holdout, window, stride, cfg.max_windows)
+            None if holdout is None else WindowGroupMIA._build_windows(holdout, window, stride, cfg.max_windows)
         )
         details["counts"] = WindowGroupMIA._counts(training_windows, synthetic_windows, holdout_windows)
         if holdout_reason is None and holdout_windows is not None:
@@ -471,65 +471,34 @@ class WindowGroupMIA(TimeSeriesComponent):
         return starts[finite_in_window[starts] == window]
 
     @staticmethod
-    def _balanced(sequences: list[_Sequence], window: int, stride: int, limit: int) -> _Windows:
-        """Build at most ``limit`` windows every ``stride`` steps, round robin across groups.
+    def _build_windows(sequences: list[_Sequence], window: int, stride: int, limit: int) -> _Windows:
+        """Build the complete windows that start every ``stride`` steps, or a reproducible sample of ``limit``.
 
-        One generator with a fixed seed shuffles the window positions within
-        each group, then the order in which the round robin visits the groups,
-        so repeated runs sample the same windows. When ``limit`` ends a round
-        early, or there are more groups than ``limit``, every group has the
-        same chance of a window, whatever its name. The selected windows are
-        returned round by round in the order of ``sequences``.
+        The sample is uniform over all candidate windows across groups, so
+        longer groups contribute more windows and group names don't affect
+        which windows are chosen. Windows are returned in the order of
+        ``sequences``, then by start, flattened time-major across columns.
         """
-        rng = np.random.default_rng(_SAMPLING_SEED)
-        queues: list[tuple[int, NDArray[np.int64]]] = []
-        total = 0
-        for index, sequence in enumerate(sequences):
-            starts = WindowGroupMIA._window_starts(sequence.values, window, stride)
-            total += len(starts)
-            if len(starts):
-                queues.append((index, starts[rng.permutation(len(starts))]))
-        queues = [queues[i] for i in rng.permutation(len(queues))]
-        selected: list[tuple[int, int, int]] = []
-        depth = 0
-        while queues and len(selected) < limit:
-            for index, starts in queues:
-                if len(selected) < limit:
-                    selected.append((depth, index, int(starts[depth])))
-            depth += 1
-            queues = [(index, starts) for index, starts in queues if len(starts) > depth]
-        selected.sort()
-        return WindowGroupMIA._build(sequences, [(index, start) for _, index, start in selected], total, window)
-
-    @staticmethod
-    def _every_step(
-        sequences: list[_Sequence], window: int, limit: int = WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS
-    ) -> _Windows:
-        """Build the windows starting at every step, or a reproducible sample of ``limit`` of them."""
-        per_sequence = [WindowGroupMIA._window_starts(sequence.values, window, 1) for sequence in sequences]
+        per_sequence = [WindowGroupMIA._window_starts(sequence.values, window, stride) for sequence in sequences]
         offsets = np.cumsum([0, *(len(starts) for starts in per_sequence)])
         total = int(offsets[-1])
         chosen = np.arange(total)
         if total > limit:
-            chosen = np.random.default_rng(_SAMPLING_SEED).choice(total, limit, replace=False)
-        indices = np.searchsorted(offsets, chosen, side="right") - 1
-        selected = [
-            (int(index), int(per_sequence[index][position - offsets[index]]))
-            for index, position in zip(indices, chosen, strict=True)
-        ]
-        return WindowGroupMIA._build(sequences, selected, total, window)
-
-    @staticmethod
-    def _build(sequences: list[_Sequence], selected: list[tuple[int, int]], total: int, window: int) -> _Windows:
-        """Materialize the selected ``(sequence, start)`` windows, flattened time-major across columns."""
-        if not selected:
+            chosen = np.sort(np.random.default_rng(_SAMPLING_SEED).choice(total, limit, replace=False))
+        if not len(chosen):
             return _Windows(values=np.empty((0, 0)), groups=[], starts=[], total=total)
-        offsets = np.arange(window)
-        rows = [sequences[index].values[start + offsets].reshape(-1) for index, start in selected]
+        indices = np.searchsorted(offsets, chosen, side="right") - 1
+        starts = [
+            int(per_sequence[index][position - offsets[index]]) for index, position in zip(indices, chosen, strict=True)
+        ]
+        steps = np.arange(window)
+        rows = [
+            sequences[index].values[start + steps].reshape(-1) for index, start in zip(indices, starts, strict=True)
+        ]
         return _Windows(
             values=np.vstack(rows),
-            groups=[sequences[index].group for index, _ in selected],
-            starts=[start for _, start in selected],
+            groups=[sequences[index].group for index in indices],
+            starts=starts,
             total=total,
         )
 
@@ -608,8 +577,10 @@ class WindowGroupMIA(TimeSeriesComponent):
             pseudo_synthetic = set(rng.choice(usable, len(usable) // 2, replace=False).tolist())
             members = [training[i] for i in usable if i not in pseudo_synthetic]
             reference = [training[i] for i in sorted(pseudo_synthetic)]
-            member_windows = WindowGroupMIA._balanced(members, window, stride, max_windows)
-            reference_windows = WindowGroupMIA._every_step(reference, window)
+            member_windows = WindowGroupMIA._build_windows(members, window, stride, max_windows)
+            reference_windows = WindowGroupMIA._build_windows(
+                reference, window, 1, WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS
+            )
             if len(member_windows) == 0 or len(reference_windows) == 0:
                 continue
             support = (reference_windows.values - mean) / scale
