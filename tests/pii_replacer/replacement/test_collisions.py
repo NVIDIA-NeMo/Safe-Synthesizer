@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
 import pandas as pd
 import pytest
@@ -21,7 +22,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generation import Replacemen
 
 
 class _ScriptedGenerator:
-    backend = PiiSamplerBackend.FAKER
+    backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
 
     def __init__(self, *values: str) -> None:
         self._values = list(values)
