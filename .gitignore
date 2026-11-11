@@ -30,8 +30,6 @@ integration-report.xml
 .eggs
 *.egg-info
 build
-!.mise/tasks/**/build/
-!.mise/tasks/**/build/**
 dist
 .mypy_cache
 # .python-version is tracked -- uv reads it to select the interpreter
@@ -97,4 +95,9 @@ build/
 htmlcov/
 .mypy_cache/
 .ty_cache/
+# The development Python, which house writes and CI reads, is committed even where an earlier rule ignores it.
+!/.python-version
 # END managed: house
+# The build tasks under .mise/tasks/ are tracked although the build/ rules above ignore them.
+!.mise/tasks/**/build/
+!.mise/tasks/**/build/**
