@@ -3,8 +3,9 @@
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 # The skills under .agents/skills/ are tracked although .gitignore lists them, so the
-# lint and format checks skip them; keep the hooks off them too.
-exclude: '^\.agents/skills/'
+# lint and format checks skip them; keep the hooks off them too. A signed skill directory
+# and its skill.oms.sig must stay byte-identical to what was signed, so no hook touches them.
+exclude: '^\.agents/skills/|(^|/)skill\.oms\.sig$|^skills/safe-synthesizer/'
 
 
 repos:

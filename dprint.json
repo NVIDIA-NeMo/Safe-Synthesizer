@@ -20,6 +20,8 @@
     "docs/**/*.markdown",
     "docs/**/*.md",
     "docs/**/*.mdx",
+    "skills/safe-synthesizer/BENCHMARK.md",
+    "skills/safe-synthesizer/skill-card.md",
     ".bzr",
     ".direnv",
     ".eggs",
