@@ -16,5 +16,4 @@ extra-paths = ["typings"]
 exclude = [
     ".uv_cache", # Cache Dir in CI
     "./docs/**/*.ipynb",
-    "./src/nemo_safe_synthesizer/pii_replacer/",
 ]

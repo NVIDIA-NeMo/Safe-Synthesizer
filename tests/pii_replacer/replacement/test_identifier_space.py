@@ -70,7 +70,10 @@ class TestIdentifierSpace:
         first = [allocator.allocate(seed, original, avoid=set()) for seed, original in enumerate("abcdefghij")]
         repeated = [allocator.allocate(seed, "k", avoid=set()) for seed in range(3)]
 
-        assert sorted(first) == [(str(value), "new") for value in range(10)]
+        assert None not in first
+        assert sorted(allocation for allocation in first if allocation is not None) == [
+            (str(value), "new") for value in range(10)
+        ]
         assert all(allocation is not None and allocation[1] == "repeat" for allocation in repeated)
 
     def test_distinct_allocation_lets_the_same_original_reuse_its_values(self) -> None:
