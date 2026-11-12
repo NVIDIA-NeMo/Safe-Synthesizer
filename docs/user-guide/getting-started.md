@@ -27,6 +27,10 @@ does at each stage.
   refuses to run with any other version.
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
+- For PII replacement with automatic planning, a GPU with at least 75 GiB of memory, such as
+  an 80 GB A100 or H100, to run the planning model locally. With a smaller GPU, set an
+  [inference endpoint](environment.md#where-planning-requests-go) or
+  [supply your own replacement plan](customize-pii-replacement.md#plan-sources).
 
 !!! failure "Linux only -- macOS, Windows, and Apple Silicon are not supported"
     NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.9+
