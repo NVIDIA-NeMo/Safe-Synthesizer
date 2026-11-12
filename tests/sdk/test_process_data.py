@@ -31,6 +31,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.config.training import QuantizationScheme
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
@@ -618,6 +619,43 @@ class TestLoadFromSavePath:
         assert builder._training_df is None  # generation-evaluation resume path doesn't need the transformed df
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+
+    @pytest.mark.parametrize(
+        ("saved_training", "expected"),
+        [
+            ({"quantization_bits": 4, "quantization_scheme": None}, QuantizationScheme.BNB_4BIT),
+            ({"quantization_bits": 8, "quantization_scheme": None}, QuantizationScheme.BNB_8BIT),
+            ({"quantization_bits": 4, "quantization_scheme": "nvfp4"}, QuantizationScheme.NVFP4),
+            ({"quantization_bits": 4}, QuantizationScheme.BNB_4BIT),
+        ],
+    )
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    def test_load_upgrades_0_1_saved_quantization_fields(
+        self,
+        mock_metadata_cls,
+        saved_training,
+        expected,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Runs saved by 0.1.x persisted quantization_bits; reloading folds it into quantization_scheme."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters().model_dump(mode="json")
+        saved_config["training"].pop("quantization_scheme")
+        saved_config["training"].update(saved_training)
+        workdir.config.write_text(json.dumps(saved_config))
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+        builder.load_from_save_path()
+
+        assert builder._nss_config is not None
+        assert builder._nss_config.training.quantization_scheme is expected
 
     @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_rejects_unknown_legacy_saved_fields_by_default(

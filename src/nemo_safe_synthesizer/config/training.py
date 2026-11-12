@@ -10,7 +10,6 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     ClassVar,
-    Literal,
 )
 
 from pydantic import Field
@@ -79,20 +78,6 @@ class QuantizationScheme(StrEnum):
     def is_bitsandbytes(self) -> bool:
         """Whether the scheme is implemented via bitsandbytes (QLoRA-compatible)."""
         return self in (QuantizationScheme.BNB_4BIT, QuantizationScheme.BNB_8BIT)
-
-    @classmethod
-    def from_alias(cls, scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationScheme:
-        """Normalize string and legacy bit-count aliases to a scheme."""
-        if isinstance(scheme, int):
-            legacy_aliases = {
-                4: cls.BNB_4BIT,
-                8: cls.BNB_8BIT,
-            }
-            try:
-                return legacy_aliases[scheme]
-            except KeyError as exc:
-                raise ValueError(f"Unknown quantization bit-count alias: {scheme!r}. Expected 4 or 8.") from exc
-        return cls(scheme)
 
     def to_transformers_config(self) -> QuantizationConfigMixin:
         """Build the transformers quantization config for this scheme."""
@@ -174,10 +159,11 @@ class TrainingHyperparams(Parameters):
     settings. These parameters directly affect training performance and quality.
     """
 
-    removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"warmup_ratio"})
+    removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"warmup_ratio", "quantization_bits"})
     removed_legacy_fields_message: ClassVar[str] = (
-        "warmup_ratio was removed in NSS 0.2.0. Set training.warmup_steps instead; "
-        "a value in (0, 1) is read as a ratio of total training steps."
+        "warmup_ratio and quantization_bits were removed in NSS 0.2.0. Use training.warmup_steps instead of "
+        "warmup_ratio (a value in (0, 1) is read as a ratio of total training steps), and "
+        "training.quantization_scheme (bnb-4bit or bnb-8bit) instead of quantization_bits."
     )
 
     num_input_records_to_sample: Annotated[
@@ -360,32 +346,18 @@ class TrainingHyperparams(Parameters):
         ),
     ] = False
 
-    quantization_bits: Annotated[
-        Literal[4, 8],
-        Field(
-            title="quantization_bits",
-            deprecated=True,
-            description=(
-                "Deprecated: use ``quantization_scheme`` instead. Bit width for "
-                "bitsandbytes quantization when ``quantization_scheme`` is not set "
-                "(back-compat alias: 4 → bnb-4bit, 8 → bnb-8bit)."
-            ),
-        ),
-    ] = 8
-
     quantization_scheme: Annotated[
-        QuantizationScheme | None,
+        QuantizationScheme,
         Field(
             title="quantization_scheme",
             description=(
                 "Quantization scheme to use when ``quantize_model=True``. Accepts "
                 "``bnb-4bit``, ``bnb-8bit``, ``fp8``, ``nvfp4``, or ``mxfp4``. "
-                "If unset, falls back to ``quantization_bits`` for backward "
-                "compatibility. Non-bitsandbytes schemes are incompatible with "
+                "Non-bitsandbytes schemes are incompatible with "
                 "``peft_implementation='loftq'``."
             ),
         ),
-    ] = None
+    ] = QuantizationScheme.BNB_8BIT
 
     peft_implementation: Annotated[
         str,

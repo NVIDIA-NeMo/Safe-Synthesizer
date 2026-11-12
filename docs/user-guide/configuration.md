@@ -191,8 +191,7 @@ for the full field list.
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
 | `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
-| `training.quantization_scheme` | `null` | Quantization scheme: `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, `mxfp4` | See [Quantization schemes](#quantization-schemes) below; leave unset to fall back to `quantization_bits` |
-| `training.quantization_bits` | `8` | Legacy bit width (4 or 8) used when `quantization_scheme` is unset | Prefer setting `quantization_scheme` explicitly for new configs |
+| `training.quantization_scheme` | `"bnb-8bit"` | Quantization scheme: `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, `mxfp4` | See [Quantization schemes](#quantization-schemes) below |
 | `training.attn_implementation` | `"sdpa"` | Attention backend for model loading | Leave at default |
 | `training.rope_scaling_factor` | `"auto"` | Scale the base model's context window via RoPE (`"auto"` or int) | Leave at `"auto"` |
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
@@ -247,9 +246,9 @@ training:
   quantization_scheme: nvfp4   # or bnb-4bit / bnb-8bit / fp8 / mxfp4
 ```
 
-If `quantization_scheme` is unset, Safe Synthesizer falls back to
-`quantization_bits` for backward compatibility (`4` → `bnb-4bit`,
-`8` → `bnb-8bit`).
+`training.quantization_bits` was removed in 0.2.0. Use `bnb-4bit` in place of
+`quantization_bits: 4` and `bnb-8bit` (the default) in place of
+`quantization_bits: 8`.
 
 !!! note "LoftQ + non-BNB schemes"
     `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and

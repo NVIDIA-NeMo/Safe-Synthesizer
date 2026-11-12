@@ -226,13 +226,7 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
           dequant workspace. <https://arxiv.org/abs/2305.14314>
     """
     if training_cfg.quantize_model:
-        # Prefer the explicit scheme if set; otherwise fall back to the legacy
-        # bits-based field. Both routes yield bits/param for memory estimation.
-        if training_cfg.quantization_scheme is not None:
-            bits = training_cfg.quantization_scheme.effective_bits
-        else:
-            bits = training_cfg.quantization_bits
-        return bits / 8 + 0.1
+        return training_cfg.quantization_scheme.effective_bits / 8 + 0.1
     return 2.0
 
 

@@ -62,9 +62,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset()
     """Retired field names that raise ``removed_legacy_fields_message`` instead of being ignored.
 
-    List a field here only when saved run configs never contain it; saved
-    configs are reloaded with Pydantic's default extra-field handling, so a
-    listed name that older runs persisted would make those runs unloadable.
+    Listed names are rejected even under ``unknown_fields="ignore"``. When older
+    runs persisted a listed name in their saved config, ``load_from_save_path``
+    must translate or drop it before validation, or those runs cannot be reloaded.
     """
     removed_legacy_fields_message: ClassVar[str] = "Removed configuration field(s) are no longer valid."
 

@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 from ..observability import get_logger
 
@@ -705,18 +705,12 @@ def count_trainable_params(model: PeftModel) -> tuple[int, int]:
     return trainable_params, all_params
 
 
-def get_quantization_config(scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationConfigMixin:
-    """Compatibility wrapper for building a transformers v5 quantization config.
-
-    Accepts a :class:`QuantizationScheme` (or its string value) for new
-    callers, or an integer ``4`` / ``8`` for backward compatibility with the
-    legacy ``quantization_bits`` field (4 → ``bnb-4bit``, 8 → ``bnb-8bit``).
-    New code should prefer
-    :meth:`nemo_safe_synthesizer.config.training.QuantizationScheme.to_transformers_config`.
+def get_quantization_config(scheme: QuantizationScheme | str) -> QuantizationConfigMixin:
+    """Build a transformers v5 quantization config for a scheme.
 
     Args:
-        scheme: A ``QuantizationScheme`` value, its string equivalent
-            (e.g. ``"nvfp4"``), or the legacy bit-count alias.
+        scheme: A ``QuantizationScheme`` value or its string equivalent
+            (e.g. ``"nvfp4"``).
 
     Returns:
         A transformers ``QuantizationConfigMixin`` subclass instance
@@ -725,10 +719,10 @@ def get_quantization_config(scheme: QuantizationScheme | str | Literal[4, 8]) ->
         ``quantization_config=`` kwarg.
 
     Raises:
-        ValueError: If ``scheme`` is not a recognized scheme name or bit count.
+        ValueError: If ``scheme`` is not a recognized scheme name.
         ImportError: If the underlying quantization backend is not installed
             (e.g. torchao for NVFP4 / MXFP4).
     """
     from ..config.training import QuantizationScheme
 
-    return QuantizationScheme.from_alias(scheme).to_transformers_config()
+    return QuantizationScheme(scheme).to_transformers_config()

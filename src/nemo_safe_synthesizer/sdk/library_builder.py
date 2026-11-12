@@ -10,7 +10,7 @@ import os
 import time
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -70,6 +70,30 @@ def _default_drift_paths(saved_model: Parameters, default_model: Parameters, pre
         elif saved_value != default_value:
             paths.append(field_path)
     return paths
+
+
+def _upgrade_saved_config(saved_config: Any) -> Any:
+    """Translate fields that 0.1.x runs persisted but NSS 0.2.0 removed.
+
+    0.1.x saved configs always contain ``training.quantization_bits`` and,
+    unless a scheme was chosen, ``training.quantization_scheme: null``. Fold
+    both into ``quantization_scheme`` (4 -> bnb-4bit, otherwise bnb-8bit) so
+    those runs can still be reloaded for generation.
+    """
+    if not isinstance(saved_config, Mapping):
+        return saved_config
+    training = saved_config.get("training")
+    if not isinstance(training, Mapping):
+        return saved_config
+    has_bits = "quantization_bits" in training
+    has_null_scheme = "quantization_scheme" in training and training["quantization_scheme"] is None
+    if not (has_bits or has_null_scheme):
+        return saved_config
+    upgraded_training = dict(training)
+    bits = upgraded_training.pop("quantization_bits", 8)
+    if upgraded_training.get("quantization_scheme") is None:
+        upgraded_training["quantization_scheme"] = "bnb-4bit" if bits == 4 else "bnb-8bit"
+    return {**saved_config, "training": upgraded_training}
 
 
 def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> None:
@@ -333,7 +357,7 @@ class SafeSynthesizer(ConfigBuilder):
         config_file = self._workdir.source_config
 
         with config_file.open() as file:
-            saved_config_input = json.load(file)
+            saved_config_input = _upgrade_saved_config(json.load(file))
         unknown_fields_override = self._unknown_fields_override
         if runtime_config is not None and "unknown_fields" in runtime_config.model_fields_set:
             unknown_fields_override = runtime_config.unknown_fields

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
 from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar, cast
@@ -159,11 +158,6 @@ def test_replace_pii_v2_fields_raise_schema_compatibility_error(payload: dict[st
 def test_replace_pii_unknown_non_v2_field_uses_generic_error():
     with pytest.raises(ValidationError, match="Unknown configuration field 'replace_pii.foo'"):
         SafeSynthesizerParameters.model_validate({"replace_pii": {"foo": 1}})
-
-
-def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
-    with pytest.raises(ValueError, match="Expected 4 or 8"):
-        QuantizationScheme.from_alias(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias
 
 
 def test_quantization_scheme_8bit_uses_valid_bitsandbytes_kwargs() -> None:
@@ -772,16 +766,6 @@ def test_parameters_has_rejects_ambiguous_bare_leaf_names():
         params.has("value")
 
 
-def test_parameters_get_does_not_warn_for_unrelated_deprecated_fields():
-    params = SafeSynthesizerParameters()
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        assert params.get("batch_size") == params.training.batch_size
-
-    assert not [warning for warning in caught if issubclass(warning.category, DeprecationWarning)]
-
-
 def _resolve(obj: object, path: str) -> object:
     """Resolve a dotted attribute ``path`` (e.g. ``generation.validation.foo``)."""
     for part in path.split("."):
@@ -1006,5 +990,22 @@ class TestWarmupSteps:
     ],
 )
 def test_removed_warmup_ratio_points_to_warmup_steps(validate):
-    with pytest.raises((ParameterError, ValidationError), match=r"warmup_ratio was removed.*warmup_steps"):
+    with pytest.raises((ParameterError, ValidationError), match=r"warmup_ratio.*removed.*warmup_steps"):
         validate()
+
+
+@pytest.mark.parametrize(
+    "validate",
+    [
+        lambda: TrainingHyperparams(quantization_bits=4),  # ty: ignore[unknown-argument] -- retired field
+        lambda: SafeSynthesizerParameters.model_validate({"training": {"quantization_bits": 4}}),
+        lambda: SafeSynthesizerParameters.from_params(quantization_bits=4),
+    ],
+)
+def test_removed_quantization_bits_points_to_quantization_scheme(validate):
+    with pytest.raises((ParameterError, ValidationError), match=r"quantization_bits.*removed.*quantization_scheme"):
+        validate()
+
+
+def test_quantization_scheme_defaults_to_bnb_8bit():
+    assert TrainingHyperparams().quantization_scheme is QuantizationScheme.BNB_8BIT

@@ -505,9 +505,9 @@ def test_literal_int_override_end_to_end_via_click_runner():
     def cmd(**kwargs):
         captured.update(parse_overrides(kwargs))
 
-    result = CliRunner().invoke(cmd, ["--training__quantization_bits", "4"])
+    result = CliRunner().invoke(cmd, ["--replace_pii__schema_version", "3"])
     assert result.exit_code == 0, result.output
-    assert captured["training"]["quantization_bits"] == 4
+    assert captured["replace_pii"]["schema_version"] == 3
 
 
 def test_structured_generation_nested_option_end_to_end_via_click_runner():
