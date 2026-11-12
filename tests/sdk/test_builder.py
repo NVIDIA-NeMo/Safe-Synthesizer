@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -8,9 +9,18 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    LLMConfig,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
-from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event, _emit_nss_telemetry
+from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, NSSTrainingAndGenerationEvent, TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
 _REPORT_HTML = "<html><body>report</body></html>"
@@ -247,6 +257,39 @@ def _builder_for_telemetry() -> SafeSynthesizer:
     return builder
 
 
+_LABEL_RULE = (32, r"[a-z][a-z0-9_-]{0,31}")
+# A copy of the maxLength and pattern of each PII field in the shared NeMo
+# telemetry schema. The collector rejects the whole event when one field breaks
+# its rule, so every event these tests build is checked against them.
+_SCHEMA_PII_FIELD_RULES = {
+    "piiSamplerBackend": _LABEL_RULE,
+    "piiPlanSource": _LABEL_RULE,
+    "piiReplacedColumnsBucket": (32, r"undefined|[0-9]+(-[0-9]+|\+)?"),
+    "piiLlmMode": _LABEL_RULE,
+    "piiLlmModel": (
+        192,
+        r"undefined|local_path|other|([A-Za-z0-9][A-Za-z0-9._-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,126}",
+    ),
+    "piiLocale": (9, r"undefined|other|[a-z]{2,3}(_[A-Z]{2})?"),
+}
+
+
+def _assert_pii_fields_fit_schema(event: NSSTrainingAndGenerationEvent) -> None:
+    payload = event.model_dump(by_alias=True, mode="json")
+    for field, (max_length, pattern) in _SCHEMA_PII_FIELD_RULES.items():
+        value = payload[field]
+        assert len(value) <= max_length, (field, value)
+        assert re.fullmatch(pattern, value), (field, value)
+
+
+def _build_checked_telemetry_event(
+    builder: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
+) -> NSSTrainingAndGenerationEvent:
+    event = _build_telemetry_event(builder, status, task=task)
+    _assert_pii_fields_fit_schema(event)
+    return event
+
+
 class TestTelemetryEmission:
     def test_run_emits_completed_after_save_results(self, monkeypatch, tmp_path: Path):
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
@@ -322,6 +365,227 @@ class TestTelemetryEmission:
         assert [event.task for event in events] == ["run", "run"]
         assert [event.task_status for event in events] == [TaskStatusEnum.COMPLETED, TaskStatusEnum.ERROR]
         assert [event.deployment_type for event in events] == [DeploymentTypeEnum.SDK, DeploymentTypeEnum.SDK]
+
+    @pytest.mark.parametrize(
+        ("replace_pii", "expected_enabled", "expected_backend"),
+        [
+            (ReplacePiiConfig(), True, "nemotron-personas"),
+            (
+                ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS)),
+                True,
+                "nemotron-personas",
+            ),
+            (ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)), True, "faker"),
+            (None, False, "undefined"),
+        ],
+        ids=["default", "nemotron-personas", "faker", "disabled"],
+    )
+    def test_build_telemetry_event_reports_configured_pii_sampler_backend(
+        self, replace_pii: ReplacePiiConfig | None, expected_enabled: bool, expected_backend: str
+    ):
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=replace_pii)
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.replace_pii_enabled is expected_enabled
+        assert event.pii_sampler_backend == expected_backend
+        assert event.model_dump(by_alias=True, mode="json")["piiSamplerBackend"] == expected_backend
+
+    @pytest.mark.parametrize(
+        ("replace_pii", "expected_source", "expected_columns_bucket"),
+        [
+            (ReplacePiiConfig(), "auto_discovery", "undefined"),
+            (ReplacePiiConfig(replacement_plan=PiiReplacementPlan()), "provided", "0"),
+            (
+                ReplacePiiConfig(
+                    replacement_plan=PiiReplacementPlan(
+                        columns_to_replace=[
+                            PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL),
+                            PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT),
+                        ]
+                    )
+                ),
+                "provided",
+                "1-5",
+            ),
+        ],
+        ids=["auto-discovery", "inline-empty", "inline-with-free-text"],
+    )
+    def test_build_telemetry_event_reports_pii_plan_source_and_column_bucket(
+        self, replace_pii: ReplacePiiConfig, expected_source: str, expected_columns_bucket: str
+    ):
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=replace_pii)
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.pii_plan_source == expected_source
+        assert event.pii_replaced_columns_bucket == expected_columns_bucket
+
+    def test_build_telemetry_event_reports_plan_file_as_provided(self, tmp_path: Path):
+        plan_file = tmp_path / "pii_replacement_plan.yaml"
+        plan_file.write_text("columns_to_replace:\n  - column_name: email\n    entity_type: email\n")
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True, replace_pii=ReplacePiiConfig(replacement_plan=str(plan_file))
+        )
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.pii_plan_source == "provided"
+        assert event.pii_replaced_columns_bucket == "1-5"
+        assert (event.pii_llm_mode, event.pii_llm_model) == ("none", "undefined")
+
+    def test_build_telemetry_event_prefers_plan_source_recorded_before_resolution(self):
+        resolved = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            )
+        )
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=resolved)
+        builder._pii_plan_source = "auto_discovery"
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.pii_plan_source == "auto_discovery"
+        assert event.pii_replaced_columns_bucket == "1-5"
+
+    @pytest.mark.parametrize(
+        ("locale", "expected"),
+        [("fr_FR", "fr_FR"), ("/Users/alice/locales/custom", "other")],
+        ids=["locale-code", "free-form"],
+    )
+    def test_build_telemetry_event_reports_sanitized_pii_locale(self, locale: str, expected: str):
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True,
+            replace_pii=ReplacePiiConfig(locale=locale),
+        )
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.pii_locale == expected
+
+    @pytest.mark.parametrize(
+        ("llm", "replacement_plan", "env", "expected_mode", "expected_model"),
+        [
+            ({}, PiiReplacementPlan(), {}, "none", "undefined"),
+            ({}, "auto_discovery", {}, "local", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"),
+            ({"model_id": "openai/gpt-oss-120b"}, "auto_discovery", {}, "local", "openai/gpt-oss-120b"),
+            ({"model_id": "acme/unbundled-model"}, "auto_discovery", {}, "invalid", "undefined"),
+            (
+                {"model_id": "openai/gpt-oss-120b"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "openai/gpt-oss-120b",
+            ),
+            (
+                {"model_id": "acme/planner-7b"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "acme/planner-7b",
+            ),
+            (
+                {"model_id": "/srv/alice/models/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "local_path",
+            ),
+            (
+                {"model_id": "café/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "other",
+            ),
+            (
+                {"model_id": "o" * 65 + "/planner"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "other",
+            ),
+            (
+                {},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "invalid",
+                "undefined",
+            ),
+        ],
+        ids=[
+            "user-supplied-plan",
+            "local-default",
+            "local-bundled",
+            "local-unbundled-model",
+            "endpoint-bundled-model",
+            "endpoint-repo-id-model",
+            "endpoint-local-path-model",
+            "endpoint-non-ascii-model",
+            "endpoint-long-org-model",
+            "endpoint-without-model",
+        ],
+    )
+    def test_build_telemetry_event_reports_pii_llm_mode_and_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        llm: dict | None,
+        replacement_plan: PiiReplacementPlan | str,
+        env: dict[str, str],
+        expected_mode: str,
+        expected_model: str,
+    ):
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True,
+            replace_pii=ReplacePiiConfig.model_validate({"llm": llm, "replacement_plan": replacement_plan}),
+        )
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert (event.pii_llm_mode, event.pii_llm_model) == (expected_mode, expected_model)
+
+    @pytest.mark.parametrize(
+        ("model_id", "expected_model"),
+        [("acme/planner-7b", "acme/planner-7b"), ("/home/alice/models/planner", "local_path")],
+        ids=["repo-id", "local-path"],
+    )
+    def test_build_telemetry_event_reports_custom_local_profile_model_id_not_served_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, model_id: str, expected_model: str
+    ):
+        profile_path = tmp_path / "private-profile.yaml"
+        profile_path.write_text(f"model_id: {model_id}\nrevision: main\nserved_model_name: alice-private-planner\n")
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", str(profile_path))
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True, replace_pii=ReplacePiiConfig(llm=LLMConfig())
+        )
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert (event.pii_llm_mode, event.pii_llm_model) == ("local", expected_model)
+
+    def test_build_telemetry_event_reports_undefined_backend_without_config(self):
+        builder = _builder_for_telemetry()
+        builder._nss_config = None
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.ERROR, task="replace_pii")
+
+        assert event.task == "replace_pii"
+        assert event.replace_pii_enabled is False
+        assert event.pii_sampler_backend == "undefined"
+        assert event.pii_plan_source == "undefined"
+        assert event.pii_replaced_columns_bucket == "undefined"
+        assert event.pii_locale == "undefined"
+        assert event.pii_llm_mode == "undefined"
+        assert event.pii_llm_model == "undefined"
 
     def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
         class FailingTelemetryHandler:

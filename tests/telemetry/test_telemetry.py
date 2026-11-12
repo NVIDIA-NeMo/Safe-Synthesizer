@@ -22,7 +22,9 @@ from nemo_safe_synthesizer.telemetry import (
     bucket_columns,
     bucket_records,
     build_payload,
+    sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
+    sanitize_pii_llm_model_for_telemetry,
 )
 
 telemetry_module = importlib.import_module("nemo_safe_synthesizer.telemetry")
@@ -51,6 +53,9 @@ class TestBucketRecords:
 
 
 class TestBucketColumns:
+    def test_zero_has_its_own_bucket(self):
+        assert bucket_columns(0) == "0"
+
     def test_lower_boundary(self):
         assert bucket_columns(1) == "1-5"
         assert bucket_columns(5) == "1-5"
@@ -148,6 +153,46 @@ class TestSanitizeModelForTelemetry:
         assert sanitize_model_for_telemetry(model) == "undefined"
 
 
+class TestSanitizePiiLlmModelForTelemetry:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-oss-120b",
+            "openai/gpt-oss-120b",
+            "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+            "o" * 64 + "/" + "m" * 96,
+        ],
+    )
+    def test_repo_ids_the_schema_accepts_are_preserved(self, model):
+        assert sanitize_pii_llm_model_for_telemetry(model) == model
+
+    @pytest.mark.parametrize(("model", "expected"), [(None, "undefined"), ("/srv/alice/planner", "local_path")])
+    def test_missing_and_local_path_labels_are_kept(self, model, expected):
+        assert sanitize_pii_llm_model_for_telemetry(model) == expected
+
+    @pytest.mark.parametrize("model", ["café/planner", "planner-ü", "o" * 65 + "/planner"])
+    def test_repo_ids_the_schema_rejects_are_other(self, model):
+        assert sanitize_pii_llm_model_for_telemetry(model) == "other"
+
+
+class TestSanitizeLocaleForTelemetry:
+    @pytest.mark.parametrize("locale", ["en_US", "fil_PH", "de", "ja_JP"])
+    def test_locale_codes_are_preserved(self, locale):
+        assert sanitize_locale_for_telemetry(locale) == locale
+
+    def test_every_faker_locale_is_preserved(self):
+        from faker.config import AVAILABLE_LOCALES
+
+        assert [locale for locale in AVAILABLE_LOCALES if sanitize_locale_for_telemetry(locale) != locale] == []
+
+    @pytest.mark.parametrize("locale", ["", "en-US", "EN_us", "/home/alice/locale", "en_US.UTF-8", "Alice Smith"])
+    def test_non_locale_values_are_redacted(self, locale):
+        assert sanitize_locale_for_telemetry(locale) == "other"
+
+    def test_missing_locale_is_undefined(self):
+        assert sanitize_locale_for_telemetry(None) == "undefined"
+
+
 # =============================================================================
 # NSSTrainingAndGenerationEvent
 # =============================================================================
@@ -163,6 +208,12 @@ class TestNSSTrainingAndGenerationEvent:
         assert event.num_records_generated == -1
         assert event.num_tokens_generated == -1
         assert event.replace_pii_enabled is False
+        assert event.pii_sampler_backend == "undefined"
+        assert event.pii_plan_source == "undefined"
+        assert event.pii_replaced_columns_bucket == "undefined"
+        assert event.pii_locale == "undefined"
+        assert event.pii_llm_mode == "undefined"
+        assert event.pii_llm_model == "undefined"
         assert event.differential_privacy_enabled is False
         assert event.time_series_enabled is False
         assert event.group_by_enabled is False
@@ -189,7 +240,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert NSSTrainingAndGenerationEvent._event_name == "train_and_generation_event"
 
     def test_schema_version(self):
-        assert NSSTrainingAndGenerationEvent._schema_version == "1.9"
+        assert NSSTrainingAndGenerationEvent._schema_version == "1.13"
 
     def test_feature_flags(self):
         event = NSSTrainingAndGenerationEvent(
@@ -234,6 +285,12 @@ class TestNSSTrainingAndGenerationEvent:
             task="generate",
             task_status=TaskStatusEnum.COMPLETED,
             replace_pii_enabled=True,
+            pii_sampler_backend="faker",
+            pii_plan_source="provided",
+            pii_replaced_columns_bucket="1-5",
+            pii_locale="en_US",
+            pii_llm_mode="local",
+            pii_llm_model="openai/gpt-oss-120b",
         )
         dumped = event.model_dump(by_alias=True)
         assert "nemoSource" in dumped
@@ -249,6 +306,12 @@ class TestNSSTrainingAndGenerationEvent:
         assert "syntheticQualityScore" in dumped
         assert "dataPrivacyScore" in dumped
         assert dumped["replacePiiEnabled"] is True
+        assert dumped["piiSamplerBackend"] == "faker"
+        assert dumped["piiPlanSource"] == "provided"
+        assert dumped["piiReplacedColumnsBucket"] == "1-5"
+        assert dumped["piiLocale"] == "en_US"
+        assert dumped["piiLlmMode"] == "local"
+        assert dumped["piiLlmModel"] == "openai/gpt-oss-120b"
 
 
 # =============================================================================
