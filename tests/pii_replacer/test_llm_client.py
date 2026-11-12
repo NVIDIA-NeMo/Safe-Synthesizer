@@ -156,6 +156,8 @@ class TestInferenceSettings:
                 "must not contain credentials",
                 id="embedded-credentials",
             ),
+            pytest.param("https://inference.example.com/v1?key=abc", "query string or fragment", id="query-string"),
+            pytest.param("https://inference.example.com/v1#chat", "query string or fragment", id="fragment"),
             pytest.param("http://inference.example.com/v1", "must use HTTPS", id="remote-http"),
             pytest.param("http://10.0.0.5:8000/v1", "must use HTTPS", id="private-network-http"),
             pytest.param("http://localhost.example.com/v1", "must use HTTPS", id="localhost-lookalike"),

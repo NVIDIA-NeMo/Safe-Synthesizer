@@ -547,7 +547,8 @@ class SafeSynthesizer(ConfigBuilder):
             # The text form is parsed only now, from the bytes the input was read from, so it costs no
             # memory during planning and cannot disagree with the input if the file has since changed.
             if source_text is None and self._data_source_csv is not None:
-                source_text = self._data_source_csv.read_text()
+                # Column names become text as in ``_resolve_datasource``, so a headerless file's ``0`` matches ``"0"``.
+                source_text = self._data_source_csv.read_text().rename(columns=str)
                 # The text read can lack columns the typed read derived, such as combined dates, but has every row.
                 if len(source_text) != len(dataframe):
                     raise InternalError("the text read of the CSV data source has a different row count")

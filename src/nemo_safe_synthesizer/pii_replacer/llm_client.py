@@ -141,6 +141,13 @@ def _validate_endpoint(endpoint_url: str) -> None:
         raise ParameterError("The PII inference endpoint must be an absolute HTTP(S) URL")
     if parsed.username is not None or parsed.password is not None:
         raise ParameterError("The PII inference endpoint URL must not contain credentials")
+    # The request path is appended to the endpoint, so a query or fragment would swallow it:
+    # ``https://host/v1?key=abc`` would be sent as ``https://host/v1?key=abc/chat/completions``.
+    if parsed.query or parsed.fragment:
+        raise ParameterError(
+            "The PII inference endpoint URL must not contain a query string or fragment; "
+            "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
+        )
     if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
         raise ParameterError(
             "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, or ::1)"

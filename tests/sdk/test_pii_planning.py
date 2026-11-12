@@ -218,6 +218,29 @@ def test_replace_pii_accepts_a_csv_source(tmp_path: Path) -> None:
     assert written["zip"].tolist() == ["02054"]
 
 
+def test_replace_pii_keeps_unchanged_text_of_a_headerless_csv(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("ada@example.com,02054,N/A\n")
+    config = SafeSynthesizerParameters(
+        replace_pii=ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="0", entity_type=EntityType.EMAIL)],
+            ),
+        )
+    )
+    nss = SafeSynthesizer(config=config, save_path=tmp_path / "artifacts").with_data_source(
+        CsvSource.load(str(source), {"header": None})
+    )
+
+    nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert written["0"].tolist() != ["ada@example.com"]
+    assert written["1"].tolist() == ["02054"]
+    assert written["2"].tolist() == ["N/A"]
+
+
 @pytest.mark.filterwarnings("ignore:Support for nested sequences for 'parse_dates':FutureWarning")
 def test_replace_pii_keeps_dates_combined_from_csv_columns(tmp_path: Path) -> None:
     source = tmp_path / "input.csv"

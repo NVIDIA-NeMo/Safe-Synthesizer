@@ -207,7 +207,9 @@ export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 export NSS_INFERENCE_KEY=<your key>
 ```
 
-- The endpoint must use HTTPS unless it is a loopback address.
+- The endpoint must use HTTPS unless it is a loopback address. It is the base
+  URL that `/chat/completions` is added to, so it must not contain
+  credentials, a query string, or a fragment.
 - With an endpoint, a model ID is required. It resolves from
   `--inference-model-id`, then `replace_pii.llm.model_id`, then
   `NSS_INFERENCE_MODEL`.
