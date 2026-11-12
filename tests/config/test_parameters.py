@@ -981,26 +981,17 @@ class TestWarmupSteps:
         assert TrainingHyperparams().warmup_steps == 0.05
 
 
-class TestWarmupRatioDeprecation:
-    """`warmup_ratio` stays accepted as a deprecated alias for `warmup_steps`."""
-
-    def test_migrates_to_warmup_steps_and_warns(self):
-        with pytest.warns(DeprecationWarning, match="warmup_ratio is deprecated"):
-            params = TrainingHyperparams(warmup_ratio=0.2)
-        assert params.warmup_steps == 0.2
-
-    def test_explicit_warmup_steps_wins_over_deprecated_alias(self):
-        with pytest.warns(DeprecationWarning):
-            params = TrainingHyperparams(warmup_steps=0.3, warmup_ratio=0.2)
-        assert params.warmup_steps == 0.3
-
-    @pytest.mark.parametrize("value", [1.5, float("inf")])
-    def test_deprecated_alias_is_validated_too(self, value):
-        """The alias assigns to `warmup_steps` after field validation, so it needs its own guard."""
-        with pytest.raises((ParameterError, ValidationError, ValueError)):
-            TrainingHyperparams(warmup_ratio=value)
-
-    def test_not_serialized(self):
-        with pytest.warns(DeprecationWarning):
-            params = TrainingHyperparams(warmup_ratio=0.2)
-        assert "warmup_ratio" not in params.model_dump()
+@pytest.mark.parametrize(
+    "validate",
+    [
+        lambda: TrainingHyperparams(warmup_ratio=0.2),  # ty: ignore[unknown-argument] -- retired field
+        lambda: TrainingHyperparams.model_validate({"warmup_ratio": 0.2}),
+        lambda: SafeSynthesizerParameters.model_validate({"training": {"warmup_ratio": 0.2}}),
+        lambda: SafeSynthesizerParameters.model_validate(
+            {"unknown_fields": "ignore", "training": {"warmup_ratio": 0.2}}
+        ),
+    ],
+)
+def test_removed_warmup_ratio_points_to_warmup_steps(validate):
+    with pytest.raises((ParameterError, ValidationError), match=r"warmup_ratio was removed.*warmup_steps"):
+        validate()

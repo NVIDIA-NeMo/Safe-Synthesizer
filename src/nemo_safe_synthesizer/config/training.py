@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import importlib
 import math
-import warnings
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
     Annotated,
+    ClassVar,
     Literal,
 )
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from ..configurator.parameters import (
     Parameters,
@@ -174,6 +174,12 @@ class TrainingHyperparams(Parameters):
     settings. These parameters directly affect training performance and quality.
     """
 
+    removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"warmup_ratio"})
+    removed_legacy_fields_message: ClassVar[str] = (
+        "warmup_ratio was removed in NSS 0.2.0. Set training.warmup_steps instead; "
+        "a value in (0, 1) is read as a ratio of total training steps."
+    )
+
     num_input_records_to_sample: Annotated[
         AutoIntParam,
         ValueGTZero,
@@ -239,28 +245,6 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = 0.05
-
-    warmup_ratio: Annotated[
-        float | None,
-        ValueValidator(value_func=lambda v: v is None or is_valid_warmup(v)),
-        Field(
-            title="warmup_ratio",
-            description="Deprecated. Use warmup_steps instead.",
-            exclude=True,
-        ),
-    ] = None
-
-    @model_validator(mode="after")
-    def _migrate_warmup_ratio(self) -> TrainingHyperparams:
-        if self.warmup_ratio is not None:
-            warnings.warn(
-                "warmup_ratio is deprecated and will be removed in a future release. Use warmup_steps instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if "warmup_steps" not in self.model_fields_set:
-                self.warmup_steps = self.warmup_ratio
-        return self
 
     lr_scheduler: Annotated[
         str,
