@@ -26,13 +26,14 @@ from typing import Any, ClassVar, Self, cast, get_args
 import yaml
 from pydantic import (
     BaseModel,
+    model_validator,
 )
 
 from ..config.base import (
     pydantic_model_config,
 )
 from ..config.patch import CompiledConfigPatch, PatchAssignment
-from ..config.unknown_fields import UnknownFieldBehavior
+from ..config.unknown_fields import UnknownFieldBehavior, raise_if_removed_legacy_fields
 from ..errors import ParameterError
 from .parameter import (
     DataT,
@@ -58,6 +59,21 @@ class Parameters(BaseModel, metaclass=ABCMeta):
 
     model_config = pydantic_model_config
     parameter_aliases: ClassVar[Mapping[str, str]] = {}
+    removed_legacy_fields: ClassVar[frozenset[str]] = frozenset()
+    """Retired field names that raise ``removed_legacy_fields_message`` instead of being ignored.
+
+    List a field here only when saved run configs never contain it; saved
+    configs are reloaded with Pydantic's default extra-field handling, so a
+    listed name that older runs persisted would make those runs unloadable.
+    """
+    removed_legacy_fields_message: ClassVar[str] = "Removed configuration field(s) are no longer valid."
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_legacy_fields(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
+        return value
 
     def explicit_patch(self) -> CompiledConfigPatch[Self]:
         """Compile this model's recursively explicit fields as a sparse patch.
