@@ -525,41 +525,25 @@ def test_structured_generation_nested_option_end_to_end_via_click_runner():
 
 
 @pytest.mark.parametrize(
-    ("option", "legacy_key", "value", "expected"),
+    "option",
     [
-        ("--generation__use_structured_generation", "use_structured_generation", "true", True),
-        ("--generation__structured_generation_backend", "structured_generation_backend", "outlines", "outlines"),
-        (
-            "--generation__structured_generation_schema_method",
-            "structured_generation_schema_method",
-            "json_schema",
-            "json_schema",
-        ),
-        (
-            "--generation__structured_generation_use_single_sequence",
-            "structured_generation_use_single_sequence",
-            "true",
-            True,
-        ),
+        "--generation__use_structured_generation",
+        "--generation__structured_generation_backend",
+        "--generation__structured_generation_schema_method",
+        "--generation__structured_generation_use_single_sequence",
     ],
 )
-def test_structured_generation_legacy_options_end_to_end_via_click_runner(
-    option: str,
-    legacy_key: str,
-    value: str,
-    expected: object,
-):
-    """Legacy flat structured-generation CLI aliases remain accepted during migration."""
-    captured: dict = {}
+def test_removed_flat_structured_generation_options_are_not_generated(option: str):
+    """The pre-0.2.0 flat structured-generation CLI flags no longer exist."""
 
     @pydantic_options(SafeSynthesizerParameters, field_separator="__")
     @click.command()
     def cmd(**kwargs):
-        captured.update(parse_overrides(kwargs))
+        pass
 
-    result = CliRunner().invoke(cmd, [option, value])
-    assert result.exit_code == 0, result.output
-    assert captured["generation"][legacy_key] == expected
+    result = CliRunner().invoke(cmd, [option, "true"])
+    assert result.exit_code != 0
+    assert "No such option" in result.output
 
 
 # ---------------------------------------------------------------------------

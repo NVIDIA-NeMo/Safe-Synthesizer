@@ -134,38 +134,17 @@ def test_with_generate_marks_typed_config_kwargs_as_explicit_fields():
     assert builder._generation_config.model_fields_set == {"num_records", "patience"}
 
 
-def test_with_generate_accepts_legacy_alias_keyword():
-    builder = ConfigBuilder().with_generate(use_structured_generation=True)
-
-    assert builder._generation_config.structured_generation.enabled is True
-    assert builder._generation_config.model_dump(exclude_unset=True) == {"structured_generation": {"enabled": True}}
-
-
-def test_with_generate_accepts_legacy_alias_in_raw_mapping():
-    builder = ConfigBuilder().with_generate(config={"use_structured_generation": True})
-
-    assert builder._generation_config.structured_generation.enabled is True
-
-
-def test_with_generate_legacy_mapping_alias_overrides_canonical_value():
-    builder = ConfigBuilder().with_generate(
-        config={
-            "structured_generation": {"enabled": False},
-            "use_structured_generation": True,
-        }
-    )
-
-    assert builder._generation_config.structured_generation.enabled is True
-
-
-def test_with_generate_rejects_duplicate_alias_keyword_path():
-    with pytest.raises(ParameterError, match=r"Duplicate parameter path 'structured_generation\.enabled'"):
-        ConfigBuilder().with_generate(
-            **{
-                "structured_generation.enabled": False,
-                "use_structured_generation": True,
-            }  # ty: ignore[invalid-argument-type] -- dotted names require dynamic keywords
-        )
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: ConfigBuilder().with_generate(use_structured_generation=True),
+        lambda: ConfigBuilder().with_generate(config={"use_structured_generation": True}),
+    ],
+    ids=["keyword", "mapping"],
+)
+def test_with_generate_rejects_removed_flat_structured_generation_name(call):
+    with pytest.raises(ParameterError, match=r"flat structured-generation fields were removed"):
+        call()
 
 
 @pytest.mark.parametrize(

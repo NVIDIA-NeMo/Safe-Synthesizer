@@ -111,9 +111,11 @@ SafeSynthesizerParameters.from_params(
 )
 ```
 
-Legacy aliases such as `use_structured_generation` and
-`structured_generation_backend` remain accepted. New code should use the
-canonical nested shape or dotted path.
+The flat structured-generation names from 0.1.x (`use_structured_generation`,
+`structured_generation_backend`, `structured_generation_schema_method`, and
+`structured_generation_use_single_sequence`) were removed in 0.2.0 and now raise
+an error. Use `generation.structured_generation.enabled`, `.backend`,
+`.schema_method`, and `.use_single_sequence` instead.
 
 ### Sparse Sources and Explicit Values
 

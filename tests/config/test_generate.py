@@ -87,26 +87,6 @@ class TestStructuredGenerationParametersStructuralTagValidation:
         assert params.structured_generation.schema_method == "json_schema"
         assert params.structured_generation.backend == "outlines"
 
-    def test_generate_parameters_migrates_legacy_flat_keys(self) -> None:
-        params = GenerateParameters.model_validate(
-            {
-                "use_structured_generation": True,
-                "structured_generation_schema_method": "json_schema",
-                "structured_generation_backend": "outlines",
-            }
-        )
-        assert params.structured_generation.enabled is True
-        assert params.structured_generation.schema_method == "json_schema"
-        assert params.structured_generation.backend == "outlines"
-
-    def test_from_params_rejects_incompatible_legacy_backend(self) -> None:
-        with pytest.raises(ValidationError, match="outlines"):
-            SafeSynthesizerParameters.from_params(
-                use_structured_generation=True,
-                structured_generation_schema_method="structural_tag",
-                structured_generation_backend="outlines",
-            )
-
     def test_from_params_accepts_nested_structured_generation(self) -> None:
         params = SafeSynthesizerParameters.from_params(
             generation={
@@ -122,101 +102,36 @@ class TestStructuredGenerationParametersStructuralTagValidation:
         assert params.generation.structured_generation.backend == "outlines"
 
 
+_REMOVED_FLAT_FIELDS = (
+    "use_structured_generation",
+    "structured_generation_backend",
+    "structured_generation_schema_method",
+    "structured_generation_use_single_sequence",
+)
+_REMOVED_FLAT_MESSAGE = r"flat structured-generation fields were removed.*structured_generation\.enabled"
+
+
 @pytest.mark.unit
-class TestMixedInputMigration:
-    """Regression coverage for mixed-input: legacy flat keys coexist with nested structured_generation dict.
+class TestRemovedFlatStructuredGenerationFields:
+    """The pre-0.2.0 flat structured-generation names fail with a pointer to the nested object."""
 
-    The migration contract: when both forms are present, legacy flat keys win as explicit overrides.
-    Un-overridden nested dict fields are preserved.
-    """
+    @pytest.mark.parametrize("name", _REMOVED_FLAT_FIELDS)
+    def test_model_validate_rejects_flat_field(self, name: str) -> None:
+        with pytest.raises((ParameterError, ValidationError), match=_REMOVED_FLAT_MESSAGE):
+            GenerateParameters.model_validate({name: True})
 
-    def test_legacy_backend_overrides_nested_dict_backend(self) -> None:
-        """A legacy flat backend key beats the nested dict backend when both are supplied."""
-        params = GenerateParameters.model_validate(
-            {
-                "structured_generation": {"enabled": True, "backend": "outlines"},
-                "structured_generation_backend": "xgrammar",
-            }
-        )
-        assert params.structured_generation.backend == "xgrammar"
-        assert params.structured_generation.enabled is True  # nested value preserved
+    @pytest.mark.parametrize("name", _REMOVED_FLAT_FIELDS)
+    def test_nested_flat_field_is_rejected_even_when_unknown_fields_are_ignored(self, name: str) -> None:
+        with pytest.raises((ParameterError, ValidationError), match=_REMOVED_FLAT_MESSAGE):
+            SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "generation": {name: True}})
 
-    def test_legacy_enabled_overrides_nested_dict_enabled(self) -> None:
-        """A legacy use_structured_generation key beats the nested dict enabled field."""
-        params = GenerateParameters.model_validate(
-            {
-                "use_structured_generation": True,
-                "structured_generation": {"enabled": False, "schema_method": "json_schema"},
-            }
-        )
-        assert params.structured_generation.enabled is True
-        assert params.structured_generation.schema_method == "json_schema"  # preserved
+    @pytest.mark.parametrize("name", [*_REMOVED_FLAT_FIELDS, *(f"generation.{n}" for n in _REMOVED_FLAT_FIELDS)])
+    def test_from_params_rejects_flat_name(self, name: str) -> None:
+        with pytest.raises(ParameterError, match=_REMOVED_FLAT_MESSAGE):
+            SafeSynthesizerParameters.from_params(**{name: True})
 
-    def test_legacy_schema_method_overrides_nested_dict_schema_method(self) -> None:
-        """A legacy schema_method key beats the nested dict schema_method field."""
-        params = GenerateParameters.model_validate(
-            {
-                "structured_generation_schema_method": "regex",
-                "structured_generation": {"enabled": True, "schema_method": "json_schema"},
-            }
-        )
-        assert params.structured_generation.schema_method == "regex"
-        assert params.structured_generation.enabled is True  # preserved
-
-    def test_from_params_legacy_backend_overrides_generation_section_backend(self) -> None:
-        """from_params: a top-level legacy backend key overrides the backend inside generation={}."""
-        params = SafeSynthesizerParameters.from_params(
-            generation={"structured_generation": {"enabled": True, "backend": "outlines"}},
-            structured_generation_backend="xgrammar",
-        )
-        assert params.generation.structured_generation.backend == "xgrammar"
-        assert params.generation.structured_generation.enabled is True  # preserved
-
-    def test_from_params_legacy_enabled_overrides_structured_generation_kwarg(self) -> None:
-        """from_params: a top-level legacy use_structured_generation overrides structured_generation kwarg."""
-        params = SafeSynthesizerParameters.from_params(
-            structured_generation={"enabled": False, "schema_method": "json_schema"},
-            use_structured_generation=True,
-        )
-        assert params.generation.structured_generation.enabled is True
-        assert params.generation.structured_generation.schema_method == "json_schema"  # preserved
-
-    def test_from_params_legacy_alias_and_dotted_name_are_duplicate_paths(self) -> None:
-        with pytest.raises(ParameterError, match=r"generation\.structured_generation\.backend"):
-            SafeSynthesizerParameters.from_params(
-                structured_generation_backend="xgrammar",
-                **{"generation.structured_generation.backend": "outlines"},
-            )
-
-    def test_nested_dict_with_no_legacy_keys_uses_dict_values(self) -> None:
-        """When no legacy flat keys are present, nested dict values are used as-is."""
-        params = GenerateParameters.model_validate(
-            {
-                "structured_generation": {
-                    "enabled": True,
-                    "backend": "outlines",
-                    "schema_method": "json_schema",
-                }
-            }
-        )
-        assert params.structured_generation.enabled is True
-        assert params.structured_generation.backend == "outlines"
-        assert params.structured_generation.schema_method == "json_schema"
-
-    def test_legacy_keys_with_no_nested_dict_are_migrated(self) -> None:
-        """When only legacy flat keys are present, migration produces the correct nested values."""
-        params = GenerateParameters.model_validate(
-            {
-                "use_structured_generation": True,
-                "structured_generation_backend": "xgrammar",
-                "structured_generation_schema_method": "structural_tag",
-                "structured_generation_use_single_sequence": True,
-            }
-        )
-        assert params.structured_generation.enabled is True
-        assert params.structured_generation.backend == "xgrammar"
-        assert params.structured_generation.schema_method == "structural_tag"
-        assert params.structured_generation.use_single_sequence is True
+    def test_flat_attribute_is_gone(self) -> None:
+        assert not hasattr(GenerateParameters(), "use_structured_generation")
 
 
 @pytest.mark.unit

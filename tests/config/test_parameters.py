@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
@@ -523,6 +522,20 @@ class _PresenceParameters(Parameters):
     optional: _LeftParameters | None = Field(default_factory=_LeftParameters)
 
 
+class _AliasedChildParameters(Parameters):
+    enabled: bool = False
+    backend: str = "auto"
+
+
+class _AliasedSectionParameters(Parameters):
+    parameter_aliases: ClassVar[Mapping[str, str]] = {"use_child": "child.enabled"}
+    child: _AliasedChildParameters = Field(default_factory=_AliasedChildParameters)
+
+
+class _AliasedRootParameters(Parameters):
+    section: _AliasedSectionParameters = Field(default_factory=_AliasedSectionParameters)
+
+
 class _MappingParameters(Parameters):
     payload: dict[str, object] = Field(default_factory=dict)
 
@@ -615,21 +628,21 @@ def test_from_config_source_rejects_ambiguous_keyword_override():
     ("model_type", "name", "expected"),
     [
         pytest.param(
-            GenerateParameters,
-            "use_structured_generation",
-            ParameterPath(("structured_generation", "enabled")),
+            _AliasedSectionParameters,
+            "use_child",
+            ParameterPath(("child", "enabled")),
             id="section",
         ),
         pytest.param(
-            SafeSynthesizerParameters,
-            "use_structured_generation",
-            ParameterPath(("generation", "structured_generation", "enabled")),
+            _AliasedRootParameters,
+            "use_child",
+            ParameterPath(("section", "child", "enabled")),
             id="nested-bare",
         ),
         pytest.param(
-            SafeSynthesizerParameters,
-            "generation.use_structured_generation",
-            ParameterPath(("generation", "structured_generation", "enabled")),
+            _AliasedRootParameters,
+            "section.use_child",
+            ParameterPath(("section", "child", "enabled")),
             id="nested-dotted",
         ),
     ],
@@ -641,14 +654,14 @@ def test_parameter_schema_resolves_model_declared_aliases(
 
 
 def test_alias_normalization_preserves_sparse_typed_canonical_branch():
-    result = GenerateParameters.from_config_source(
+    result = _AliasedSectionParameters.from_config_source(
         {
-            "structured_generation": StructuredGenerationParameters(backend="guidance"),
-            "use_structured_generation": True,
+            "child": _AliasedChildParameters(backend="guidance"),
+            "use_child": True,
         }
     )
 
-    assert result.model_dump(exclude_unset=True) == {"structured_generation": {"enabled": True, "backend": "guidance"}}
+    assert result.model_dump(exclude_unset=True) == {"child": {"enabled": True, "backend": "guidance"}}
 
 
 def test_from_config_source_copies_mapping_and_returned_mutable_state():
