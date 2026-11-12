@@ -47,8 +47,8 @@ extend-exclude = [
     "docs/**/*.markdown",
     "docs/**/*.md",
     "docs/**/*.mdx",
-    "skills/safe-synthesizer/BENCHMARK.md",
-    "skills/safe-synthesizer/skill-card.md",
+    # Signed skill: must stay byte-identical to what was signed.
+    "skills/safe-synthesizer/**",
 ]
 force-exclude = true
 
