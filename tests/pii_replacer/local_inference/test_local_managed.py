@@ -193,31 +193,27 @@ class TestPlanningInferenceSettings:
         assert fixture_fake_local_servers == []
 
     @pytest.mark.parametrize(
-        ("endpoint", "raises"),
+        ("endpoint", "message"),
         [
-            ("https://hosted.example:8443/v1?key=secret", False),
-            ("https://user:secret@hosted.example:8443/v1", True),  # pragma: allowlist secret
+            ("https://hosted.example:8443/v1?key=secret", "query string or fragment"),
+            ("https://user:secret@hosted.example:8443/v1", "must not contain credentials"),  # pragma: allowlist secret
         ],
         ids=["query", "credentials"],
     )
-    def test_destination_log_omits_secrets_in_the_endpoint(
+    def test_endpoint_with_a_secret_is_rejected_without_logging_it(
         self,
         fixture_fake_local_servers: list[FakeLocalServer],
         caplog: pytest.LogCaptureFixture,
         endpoint: str,
-        raises: bool,
+        message: str,
     ) -> None:
         caplog.set_level(logging.INFO)
         environ = {"NSS_INFERENCE_ENDPOINT": endpoint}
 
-        if raises:
-            with pytest.raises(ParameterError, match="must not contain credentials"):
-                with planning_inference_settings(LLMConfig(model_id="m"), environ=environ):
-                    pass
-        else:
+        with pytest.raises(ParameterError, match=message):
             with planning_inference_settings(LLMConfig(model_id="m"), environ=environ):
                 pass
-            assert "hosted.example:8443" in caplog.text
+
         assert "secret" not in caplog.text
 
     def test_with_profile_runs_the_server_only_inside_the_block(
