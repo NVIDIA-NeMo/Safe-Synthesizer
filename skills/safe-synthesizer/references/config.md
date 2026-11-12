@@ -34,11 +34,7 @@ SDK builder overrides:
 ```python
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-synthesizer = (
-    SafeSynthesizer()
-    .with_data_source("data.csv")
-    .with_generate(num_records=10000)
-)
+synthesizer = SafeSynthesizer().with_data_source("data.csv").with_generate(num_records=10000)
 ```
 
 For implementation internals around Pydantic models, Click option generation,
