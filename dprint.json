@@ -48,6 +48,7 @@
     "node_modules",
     "site-packages",
     "venv",
-    "**/*.ipynb"
+    "**/*.ipynb",
+    "skills/safe-synthesizer/**"
   ]
 }
