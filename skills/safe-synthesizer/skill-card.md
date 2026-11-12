@@ -9,14 +9,14 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and data engineers use this skill to have an agent help them run, configure, troubleshoot, and inspect outputs from NeMo Safe Synthesizer, including CLI/SDK pipeline runs, differential privacy settings, config overrides, generation and OOM failures, artifacts, logs, and evaluation metrics. <br>
+Developers and data engineers use this skill to have an agent help them run NeMo Safe Synthesizer from the CLI or SDK, set or override parameters such as differential privacy settings, diagnose install, generation, OOM, or validation failures, and locate output artifacts, logs, reports, and evaluation metrics. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
 
 ## Requirements / Dependencies: <br>
-**Requires API Key or External Credential:** [Optional] <br>
-**Credential Type(s):** [API key] <br>
+**Requires API Key or External Credential:** [Not Specified] <br>
+**Credential Type(s):** [None identified] <br>
 
 Do not include secrets in prompts/logs/output; use least-privilege credentials; rotate keys as appropriate. <br>
 
@@ -29,21 +29,21 @@ Mitigation: Review and scan skill before deployment. <br>
 - [references/config.md](references/config.md) <br>
 - [references/diagnose.md](references/diagnose.md) <br>
 - [references/artifacts.md](references/artifacts.md) <br>
-- [Getting Started guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) <br>
-- [Running guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/) <br>
-- [Configuration guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/) <br>
-- [Environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/) <br>
-- [Troubleshooting guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/troubleshooting/) <br>
-- [Data evaluation guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluating-data/) <br>
-- [PII customization guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/customize-pii-replacement/) <br>
-- [Configuration management guide](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/developer-guide/configuration_management.md) <br>
+- [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) <br>
+- [Running Safe Synthesizer](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/) <br>
+- [Configuration Reference](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/) <br>
+- [Environment Variables](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/) <br>
+- [Troubleshooting](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/troubleshooting/) <br>
+- [Synthetic Data Quality](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluating-data/) <br>
+- [Customizing PII Replacement](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/customize-pii-replacement/) <br>
+- [Configuration Management (developer guide)](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/developer-guide/configuration_management.md) <br>
 
 
 ## Skill Output: <br>
 **Output Type(s):** [Shell commands, Code, Configuration instructions, Analysis] <br>
 **Output Format:** [Markdown with inline bash and Python code blocks] <br>
 **Output Parameters:** [1D] <br>
-**Other Properties Related to Output:** [Answers start with the direct command, diagnosis, or file path, cite relevant docs paths, and include one next action.] <br>
+**Other Properties Related to Output:** [None] <br>
 
 ## Evaluation Agents Used: <br>
 - Claude Code (`aws/anthropic/bedrock-claude-opus-5-5`) <br>
@@ -52,7 +52,7 @@ Mitigation: Review and scan skill before deployment. <br>
 
 
 ## Evaluation Tasks: <br>
-6 evaluation tasks (4 positive, 2 negative); 1 attempt per task, each run in its own isolated sandbox pod (`k8s-sandbox`). Evaluated 2026-11-10 with evaluator version `1.6.9`; baseline is the same task attempted without the target skill. <br>
+6 evaluation tasks (4 positive, 2 negative), 1 attempt per task, each run in its own isolated sandbox pod (`k8s-sandbox` environment), compared against a no-skill baseline. Evaluator version `1.6.9`, evaluation date 2026-11-12. <br>
 
 ## Evaluation Metrics Used: <br>
 Reported benchmark dimensions: <br>
@@ -63,13 +63,13 @@ Reported benchmark dimensions: <br>
 - Efficiency: Did it avoid wasted tool calls and token usage? Scored from `skill_efficiency` (50%) + `token_efficiency` (50%). <br>
 
 Underlying evaluation signals used in this run: <br>
-- `security`: Security: unsafe operations, secret leakage, and unauthorized access. <br>
-- `skill_execution`: Skill Execution: whether the expected skill was selected, decoys were avoided, and the workflow executed. <br>
-- `skill_efficiency`: Tool Productivity: tool-call productivity (legacy wire id; routing is scored under Discoverability). <br>
-- `accuracy`: Accuracy: final-answer correctness against the reference answer. <br>
-- `goal_accuracy`: Goal Accuracy: whether the user's goal was achieved. <br>
-- `behavior_check`: Behavior Check: whether the expected workflow behavior was followed. <br>
-- `token_efficiency`: Token Efficiency: actual uncached prompt plus completion usage (50% of Efficiency). <br>
+- `security`: Unsafe operations, secret leakage, and unauthorized access. <br>
+- `skill_execution`: Whether the expected skill was selected, decoys were avoided, and the workflow executed. <br>
+- `skill_efficiency`: Tool-call productivity (legacy wire id; routing is scored under Discoverability). <br>
+- `accuracy`: Final-answer correctness against the reference answer. <br>
+- `goal_accuracy`: Whether the user's goal was achieved. <br>
+- `behavior_check`: Whether the expected workflow behavior was followed. <br>
+- `token_efficiency`: Actual uncached prompt plus completion usage (50% of Efficiency). <br>
 
 
 
@@ -84,12 +84,12 @@ Recommended for publication based on the completed evaluation evidence in this r
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 91.9% — baseline ran, but no comparable score was available; uplift unavailable | 89.1% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 92.9% — baseline ran, but no comparable score was available; uplift unavailable | 90.6% — baseline ran, but no comparable score was available; uplift unavailable |
 | Security | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Correctness | 53.3% → 96.7% (+43.4 points) | 80.0% → 96.7% (+16.7 points) |
+| Correctness | 56.7% → 93.3% (+36.6 points) | 80.0% → 96.7% (+16.7 points) |
 | Discoverability | 100.0% — baseline ran, but no comparable score was available; uplift unavailable | 95.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 37.1% → 86.9% (+49.8 points) | 69.3% → 80.8% (+11.5 points) |
-| Efficiency | 75.8% — baseline ran, but no comparable score was available; uplift unavailable | 73.3% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 40.9% → 85.7% (+44.8 points) | 68.1% → 89.1% (+21.0 points) |
+| Efficiency | 85.3% — baseline ran, but no comparable score was available; uplift unavailable | 72.0% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -104,9 +104,9 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Agent | Dimension | Basis | Baseline → With skill (uplift) | Explanation |
 | --- | --- | --- | --- | --- |
 | claude-code | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| claude-code | Efficiency | Token-only comparison | 96.2% → 97.9% (+1.7 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| claude-code | Efficiency | Token-only comparison | 98.4% → 98.0% (-0.4 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 | codex | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| codex | Efficiency | Token-only comparison | 91.3% → 89.9% (-1.4 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| codex | Efficiency | Token-only comparison | 90.7% → 89.6% (-1.1 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 
 ### Tier Status
 
@@ -116,8 +116,10 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
 | Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
+Scoring bands: dimension PASS at 50% or above; NEUTRAL from 40% to below 50%; FAIL below 40%. Overall verdict is PASS only when every configured dimension passes for at least one supported agent.
+
 ## Skill Version(s): <br>
-0.7.0.post1+cu130 (source: pyproject.toml); git SHA 64a837fb, committed 2026-11-10 <br>
+0.7.0.post1+cu130 (source: pyproject.toml) <br>
 
 ## Ethical Considerations: <br>
 NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications. When downloaded or used in accordance with our terms of service, developers should work with their internal team to ensure this skill meets requirements for the relevant industry and use case and addresses unforeseen product misuse. <br>
