@@ -81,13 +81,12 @@ for more detail on combining config files with runtime overrides.
 
 ### Python Parameter Construction
 
-`SafeSynthesizerParameters.from_params()` accepts four forms of keyword name:
+`SafeSynthesizerParameters.from_params()` accepts three forms of keyword name:
 
 - top-level fields such as `generation` or `replace_pii`;
-- canonical dotted paths such as `generation.num_records`;
+- canonical dotted paths such as `generation.num_records`; and
 - bare nested names such as `num_records`, when that name is unique in the
-  configuration schema; and
-- legacy structured-generation aliases, retained for compatibility.
+  configuration schema.
 
 Python syntax requires dotted names to be passed through `**` expansion:
 
@@ -162,7 +161,9 @@ override only `generation`, `evaluation`, `emit_telemetry`, and
 `unknown_fields`. Telemetry and the unknown-field policy are overridden only
 when the runtime input explicitly sets them. An explicit
 `unknown_fields: ignore` is applied while loading the saved configuration,
-allowing legacy fields to be discarded when client and service versions differ.
+allowing unrecognized fields to be discarded when client and service versions
+differ. Fields that Safe Synthesizer has removed, such as `training.warmup_ratio`,
+still raise an error under this policy.
 Saved `training`, `data`, `privacy`, PII replacement, time-series, and preflight
 settings remain unchanged.
 
@@ -232,8 +233,8 @@ following quantization schemes via transformers v5's
 
 | Scheme | Backend | Bits/param | Hardware | Notes |
 |--------|---------|-----------:|----------|-------|
-| `bnb-4bit` | bitsandbytes NF4 + bf16 compute | 4 | Ampere+ (sm_80+) | Default for QLoRA fine-tuning. LoftQ-compatible. |
-| `bnb-8bit` | bitsandbytes int8 | 8 | Ampere+ (sm_80+) | Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible. |
+| `bnb-4bit` | bitsandbytes NF4 + bf16 compute | 4 | Ampere+ (sm_80+) | Lowest VRAM of the bitsandbytes schemes. LoftQ-compatible. |
+| `bnb-8bit` | bitsandbytes int8 | 8 | Ampere+ (sm_80+) | Default. Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible. |
 | `fp8` | `FineGrainedFP8Config` | 8 | Hopper (sm_90+) / Blackwell | Float8 with block-wise scaling. Inference-leaning. |
 | `nvfp4` | `TorchAoConfig(NVFP4WeightOnlyConfig())` | 4 | Blackwell (sm_100+) | Weight-only NVIDIA FP4. Requires recent torchao. |
 | `mxfp4` | `Mxfp4Config` | 4 | Varies by torch/torchao version | OCP Microscaling FP4. |

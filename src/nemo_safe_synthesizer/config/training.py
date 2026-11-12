@@ -48,7 +48,7 @@ class QuantizationScheme(StrEnum):
 
     Selection guide:
     - ``bnb-4bit`` / ``bnb-8bit``: bitsandbytes NF4 / int8. Widest hardware
-      support (Ampere+), works with QLoRA and LoftQ. Default for training.
+      support (Ampere+), works with QLoRA and LoftQ. ``bnb-8bit`` is the default.
     - ``fp8``: transformers ``FineGrainedFP8Config``. Float8 with block-wise
       scaling. Requires Hopper (sm_90+) or Blackwell. Inference-leaning.
     - ``nvfp4``: NVIDIA FP4 via ``torchao.prototype.mx_formats.NVFP4WeightOnlyConfig``
