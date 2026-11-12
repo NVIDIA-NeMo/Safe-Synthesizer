@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping
-from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -18,7 +17,6 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.config_builder import ConfigBuilder
@@ -170,58 +168,49 @@ def test_with_generate_rejects_duplicate_alias_keyword_path():
         )
 
 
-def test_with_generate_rejects_wrong_typed_config_object():
-    wrong_config = cast(Any, PiiReplacerConfig.get_default_config())
+@pytest.mark.parametrize(
+    ("source", "kwargs"),
+    [
+        (None, {"temperature": 0.8}),
+        ({"temperature": 0.8}, {}),
+        (GenerateParameters(temperature=0.8), {}),
+    ],
+    ids=["keywords", "mapping", "typed"],
+)
+def test_with_generate_keeps_the_rest_of_the_loaded_section(
+    source: GenerateParameters | dict[str, object] | None, kwargs: dict[str, object]
+):
+    config = SafeSynthesizerParameters.from_config_source({"generation": {"num_records": 5000, "patience": 7}})
 
-    with pytest.raises(TypeError, match="Expected GenerateParameters"):
-        ConfigBuilder().with_generate(config=wrong_config)
+    builder = ConfigBuilder(config).with_generate(source, **kwargs)
+
+    assert builder._generation_config.num_records == 5000
+    assert builder._generation_config.patience == 7
+    assert builder._generation_config.temperature == 0.8
+    assert builder._generation_config.model_fields_set == {"num_records", "patience", "temperature"}
 
 
-def test_with_replace_pii_validates_default_config_with_kwargs():
-    with pytest.raises(ValidationError, match="Invalid locale"):
-        ConfigBuilder().with_replace_pii(globals={"locales": ["not-a-locale"]})
+def test_with_replace_pii_keywords_keep_the_rest_of_the_loaded_section():
+    config = SafeSynthesizerParameters.from_config_source({"replace_pii": {"locale": "fr_FR"}})
 
-
-def test_with_replace_pii_resolves_raw_config_with_kwargs():
-    builder = ConfigBuilder().with_replace_pii(
-        config=PiiReplacerConfig.get_default_config().model_dump(),
-        globals={"classify": {"enable_classify": False}},
-    )
-
-    assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.classify.enable_classify is False
-
-
-@pytest.mark.parametrize("as_mapping", [False, True])
-def test_with_replace_pii_deep_merges_nested_kwargs(as_mapping: bool):
-    config_model = PiiReplacerConfig.get_default_config()
-    config_model.globals.locales = ["en_US"]
-    config = config_model.model_dump() if as_mapping else config_model
-
-    builder = ConfigBuilder().with_replace_pii(
-        config=config,
-        globals={"classify": {"enable_classify": False}},
-    )
+    builder = ConfigBuilder(config).with_replace_pii(seed=7)
 
     assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.locales == ["en_US"]
-    assert builder._replace_pii_config.globals.classify.enable_classify is False
-    assert builder._replace_pii_config.steps[0].vars == config_model.steps[0].vars
+    assert builder._replace_pii_config.locale == "fr_FR"
+    assert builder._replace_pii_config.seed == 7
 
 
-def test_with_replace_pii_none_uses_defaults_and_preserves_step_vars_with_nested_kwargs():
-    default = PiiReplacerConfig.get_default_config()
-
-    builder = ConfigBuilder().with_replace_pii(globals={"classify": {"enable_classify": False}})
+def test_with_replace_pii_keywords_after_disabling_start_from_the_defaults():
+    builder = ConfigBuilder().with_replace_pii(enable=False).with_replace_pii(seed=7)
 
     assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.locales == default.globals.locales
-    assert builder._replace_pii_config.steps[0].vars == default.steps[0].vars
+    assert builder._replace_pii_config.seed == 7
+    assert builder._replace_pii_config.locale == "en_US"
 
 
-def test_with_replace_pii_invalid_source_preserves_value_error_contract():
-    with pytest.raises(ValueError, match="Config must be"):
-        ConfigBuilder().with_replace_pii(config=GenerateParameters())  # ty: ignore[invalid-argument-type]
+def test_with_replace_pii_can_be_disabled():
+    builder = ConfigBuilder().with_replace_pii(enable=False)
+    assert builder._replace_pii_config is None
 
 
 def test_with_generate_captures_nested_mutation_on_sparse_typed_source():
@@ -267,12 +256,55 @@ def test_resolve_preserves_preflight_from_existing_config():
     assert builder._nss_config.preflight.disabled_checks == ["gpu.vram"]
 
 
-def test_direct_assembly_preserves_classify_model_provider_injection():
-    builder = ConfigBuilder().with_data_source(pd.DataFrame({"value": [1]}))
-    builder._classify_model_provider = "test-provider"
+@pytest.mark.parametrize(
+    ("file_name", "write"),
+    [
+        ("people.parquet", lambda df, path: df.to_parquet(path)),
+        ("people.json", lambda df, path: df.to_json(path, orient="records")),
+        ("people.jsonl", lambda df, path: df.to_json(path, orient="records", lines=True)),
+    ],
+)
+def test_typed_file_paths_are_read_with_their_own_reader(tmp_path, file_name, write):
+    dataframe = pd.DataFrame({"zip": ["02054", "10001"], "visits": [3, 4]})
+    path = tmp_path / file_name
+    write(dataframe, path)
+    builder = ConfigBuilder().with_data_source(str(path))
 
-    builder.resolve()
+    builder._resolve_datasource()
 
-    assert builder._nss_config is not None
-    assert builder._nss_config.replace_pii is not None
-    assert builder._nss_config.replace_pii.globals.classify.classify_model_provider == "test-provider"
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["visits"].tolist() == [3, 4]
+    assert builder._data_source_csv is None
+
+
+def test_parquet_paths_keep_their_stored_column_types(tmp_path):
+    path = tmp_path / "people.parquet"
+    pd.DataFrame({"zip": ["02054", "10001"]}).to_parquet(path)
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["zip"].tolist() == ["02054", "10001"]
+
+
+def test_csv_paths_are_still_read_as_csv(tmp_path):
+    path = tmp_path / "people.csv"
+    path.write_text("zip,visits\n02054,3\n")
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert builder._data_source_csv is not None
+    assert builder._data_source_csv.read_text()["zip"].tolist() == ["02054"]
+
+
+def test_typed_file_extensions_ignore_letter_case(tmp_path):
+    path = tmp_path / "people.PARQUET"
+    pd.DataFrame({"zip": ["02054"]}).to_parquet(path)
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["zip"].tolist() == ["02054"]

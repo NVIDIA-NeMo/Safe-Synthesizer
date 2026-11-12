@@ -54,12 +54,12 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `cli/` | Click CLI, main entry point |
 | `config/` | Pydantic parameter models, SafeSynthesizerParameters |
 | `configurator/` | Pydantic-to-Click mapping, Parameter types, validators |
-| `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`) |
+| `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`), read-once CSV sources (`csv_source.py`) |
 | `evaluation/` | Evaluator, components (privacy, MI, AIA, PII replay), reports |
 | `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
 | `holdout/` | Train/test splitting |
 | `llm/` | Model loading, metadata, memory management |
-| `pii_replacer/` | NER-based PII detection and replacement |
+| `pii_replacer/` | PII replacement: plan discovery and validation (`planning/`), the OpenAI-compatible LLM client (`llm_client.py`), the managed local vLLM planning server (`local_inference/`), the `TabularPiiReplacer` entry point (`replacer.py`), and the structured and free-text replacement engine with its generators (`replacement/`) |
 | `privacy/` | DP transformers (Opacus integration) |
 | `sdk/` | SafeSynthesizer builder, library_builder |
 | `training/` | TrainingBackend, HuggingFace backend, timeseries_preprocessing (`timeseries_preprocessing.py`) |

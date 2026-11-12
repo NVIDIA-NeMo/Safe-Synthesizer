@@ -2,3 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from .replacer import TabularPiiReplacer
+from .transform_result import (
+    ColumnStatistics,
+    DetectionResult,
+    FreeTextReplacementRecord,
+    ReplacementGenerationStatistics,
+    ReplacementMap,
+    StructuredReplacementRecord,
+    TransformResult,
+)
+
+__all__ = [
+    "ColumnStatistics",
+    "DetectionResult",
+    "FreeTextReplacementRecord",
+    "ReplacementGenerationStatistics",
+    "ReplacementMap",
+    "StructuredReplacementRecord",
+    "TabularPiiReplacer",
+    "TransformResult",
+]

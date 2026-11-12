@@ -16,6 +16,42 @@ Read first:
 - `docs/user-guide/environment.md` or the
   [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
   for cache, endpoint, WandB, and offline environment variables.
+- `docs/user-guide/customize-pii-replacement.md` or the
+  [published PII customization guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/customize-pii-replacement/)
+  for reviewing the PII replacement plan, samplers, and the planning LLM.
+
+Before the first run with PII replacement (on by default), check whether the
+Nemotron-Personas dataset for `replace_pii.locale` exists under
+`${HOME}/.data-designer/managed-assets/datasets/` (or `$NSS_NEMOTRON_PERSONAS_PATH/datasets/`).
+If it is missing, NSS replaces names with Faker instead; tell the user and offer
+the download steps in the getting started guide's "Optional Nemotron-Personas
+Data" section, which need an NGC API key.
+
+Free-text PII detection, and automatic PII planning without
+`NSS_INFERENCE_ENDPOINT`, need a CUDA GPU. If PyTorch
+reports none from an agent sandbox, run the command where `nvidia-smi` lists the GPU rather than
+assuming the machine has none.
+
+When the user plans or replaces PII repeatedly, such as `run replace-pii`,
+`plan_pii_replacement()`, or `replace_pii()` while refining a plan, each run
+starts the planning model's vLLM server again, which takes about a minute and a
+half. Suggest starting one server with `vllm serve` and reusing it, following
+"Reuse one server across runs" in `docs/user-guide/customize-pii-replacement.md`.
+Copy the `vllm serve` flags from the bundled profile the user plans with, under
+`src/nemo_safe_synthesizer/pii_replacer/local_inference/profiles/`. With an
+endpoint NSS applies none of the profile's settings, so also set
+`NSS_INFERENCE_TIMEOUT` and `NSS_INFERENCE_REQUEST_OPTIONS` to the profile's
+`request_timeout_seconds` and `request_options`:
+
+```bash
+export NSS_INFERENCE_ENDPOINT=http://127.0.0.1:8000/v1
+export NSS_INFERENCE_MODEL=nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+export NSS_INFERENCE_TIMEOUT=300
+export NSS_INFERENCE_REQUEST_OPTIONS='{"temperature": 1.0, "top_p": 0.95, "thinking_token_budget": 4000}'
+```
+
+The server holds most of the GPU until stopped. Tell the user to stop it and
+unset `NSS_INFERENCE_ENDPOINT` before training or generating on the same GPU.
 
 Default CLI:
 

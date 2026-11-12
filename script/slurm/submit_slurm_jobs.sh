@@ -120,10 +120,10 @@ source env_variables.sh
 # Idle GPU exemption comment (15 minutes for data loading/preprocessing)
 IDLE_EXEMPT_COMMENT='{"OccupiedIdleGPUsJobReaper":{"exemptIdleTimeMins":"15","reason":"data_loading","description":"Data loading and preprocessing grace period for this job"}}'
 
-# Verify token file exists for NIM usage inside jobs
+# Jobs source this file for W&B and Hugging Face credentials.
 if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
   echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
-  echo "Create it and define NSS_INFERENCE_KEY." >&2
+  echo "Create it with WANDB_API_KEY and HF_TOKEN, then chmod 600 it." >&2
   exit 1
 fi
 

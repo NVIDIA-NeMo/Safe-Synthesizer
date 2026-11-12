@@ -25,7 +25,7 @@ For output quality and evaluation metrics, see
 | Run offline or air-gapped | [HF cache and offline](#hugging-face-cache-and-offline) · [Running in Offline Environments](running.md#running-in-offline-environments) |
 | Docker / container mounts | [Containers](#containers) · [Docker](docker.md) |
 | Logging and WandB | [Running -- Logging and Experiment Tracking](running.md#logging-and-experiment-tracking) |
-| PII column classification API key | [PII, NER, and column classification](#pii-ner-and-column-classification) · [Running -- LLM Column Classification](running.md#llm-column-classification) |
+| Inference endpoint and API key | [PII Replacement](#pii-replacement) · [Customizing PII Replacement](customize-pii-replacement.md) |
 | Disable telemetry | [Telemetry](#telemetry) |
 | Resolve CLI vs env vs defaults | [Precedence](#precedence) |
 
@@ -45,24 +45,25 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint. A non-loopback URL sends planning data to that service; see [where planning requests go](#where-planning-requests-go) | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential for an explicit endpoint, such as the hosted NVIDIA endpoint; ignored by the local vLLM server | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else none (server defaults) | JSON object of chat-completions fields sent with every request; overrides a profile's options field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Profile YAML path, or bundled profile name, for the local vLLM server Safe Synthesizer runs during plan discovery | [PII appendix](#pii-replacement) |
+| `NSS_NEMOTRON_PERSONAS_PATH` | nss | -- | PII replacement | `~/.data-designer/managed-assets` | Directory containing downloaded Nemotron-Personas `datasets/<locale>.parquet` files; `replace_pii.sampler.nemotron_personas_path` takes precedence | [Nemotron-Personas](customize-pii-replacement.md#nemotron-personas) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_PII_REPLACER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
-| `HF_HUB_OFFLINE` | third-party | `--enable-huggingface-remote` / `--disable-huggingface-remote` | Hugging Face Hub | unset | Fail if a model is not cached (covers base model and GLiNER) | Preferred offline gate; CLI flag also sets `TRANSFORMERS_OFFLINE` |
+| `HF_HUB_OFFLINE` | third-party | `--enable-huggingface-remote` / `--disable-huggingface-remote` | Hugging Face Hub | unset | Fail if a model is not cached | Preferred offline gate; CLI flag also sets `TRANSFORMERS_OFFLINE` |
 | `VLLM_CACHE_ROOT` | third-party | -- | vLLM | `~/.cache/vllm` | vLLM model cache directory | [vLLM appendix](#vllm-and-attention) |
 | `VLLM_ATTENTION_BACKEND` | third-party | -- | vLLM | auto | Override attention implementation | [vLLM appendix](#vllm-and-attention) |
 | `WANDB_MODE` | third-party | `--wandb-mode` | WandB | `disabled` | WandB run mode | Same as `NSS_WANDB_MODE` |
 | `WANDB_PROJECT` | third-party | `--wandb-project` | WandB | -- | WandB project name | Same as `NSS_WANDB_PROJECT` |
 | `WANDB_API_KEY` | third-party | -- | WandB | -- | WandB authentication | Required for online logging |
 | `NVIDIA_VISIBLE_DEVICES` | container | -- | NVIDIA runtime | all visible GPUs | Limit GPUs inside a container | [Containers](#containers) · [Docker -- GPU Access](docker.md#gpu-access) |
-| `NSS_OPT_BUCKET` | internal | -- | NER optimization | `nss-opt-dev-use2` | S3 bucket for optional NER opt artifacts | [Internal](#internal-and-cluster) |
-| `NSS_OPT_CACHE_DIR` | internal | -- | NER optimization | `.optcache` | Local cache for NER optimization downloads | [Internal](#internal-and-cluster) |
 | `NEMO_TELEMETRY_ENDPOINT` | internal | -- | telemetry | NVIDIA default | Override telemetry upload URL | [Telemetry](#telemetry) |
 | `NEMO_SESSION_PREFIX` | internal | -- | telemetry | -- | Prefix for telemetry session IDs | [Telemetry](#telemetry) |
 | `NEMO_JOB_ID` | internal | -- | evaluation reports | -- | Cluster job ID in multimodal reports | [Internal](#internal-and-cluster) |
@@ -73,9 +74,8 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 
 ### Infrastructure (CLISettings)
 
-For artifact paths, logging, WandB overrides, and the five runtime flags
-(`--inference-*`, `--enable-huggingface-remote` / `--disable-huggingface-remote`,
-`--cpu-count`):
+For artifact paths, logging, WandB overrides, and the runtime flags
+(`--inference-*`, `--enable-huggingface-remote` / `--disable-huggingface-remote`):
 
 1. CLI flags
 2. Environment variables
@@ -107,7 +107,7 @@ and [Docker -- Offline and Air-Gapped Environments](docker.md#offline-and-air-ga
 
 ### `HF_HOME`
 
-Root cache for model weights, tokenizers, compiled attention kernels, GLiNER,
+Root cache for model weights, tokenizers, compiled attention kernels,
 evaluation SentenceTransformer weights, and other Hub assets.
 
 ```bash
@@ -117,9 +117,8 @@ export HF_HOME=/shared/cache/huggingface
 ### `HF_HUB_OFFLINE`
 
 `HF_HUB_OFFLINE=1` tells Hugging Face Hub to refuse network access. It is the
-canonical offline switch: huggingface_hub honors it globally, so a single
-setting covers both the base model and GLiNER. Pair it with a pre-populated
-`HF_HOME`.
+canonical offline switch: huggingface_hub honors it globally. Pair it with a
+pre-populated `HF_HOME`.
 
 ```bash
 export HF_HUB_OFFLINE=1
@@ -152,14 +151,14 @@ safe-synthesizer run --disable-huggingface-remote ...
 ```
 
 !!! warning "Models must be cached"
-    Offline mode requires the base model and GLiNER to already be present in
-    `HF_HOME`. Loading fails if a required model is not cached.
+    Offline mode requires all models to already be present in `HF_HOME`.
+    Loading fails if a required model is not cached.
 
 ### Pre-caching models
 
 Run once with network access, then copy or mount the populated cache. Typical
-first-run downloads include training weights, GLiNER, evaluation embeddings,
-and the vLLM base model.
+first-run downloads include training weights, evaluation embeddings, and the
+vLLM base model.
 
 !!! warning "Silent downloads on first use"
     Downloads happen on first use. In an air-gapped environment, the first
@@ -170,43 +169,58 @@ for the full pre-cache checklist.
 
 ---
 
-## PII, NER, and column classification
+## PII Replacement
 
-Controls LLM-based column classification and CPU parallelism for NER-based PII
-replacement. For setup examples and NER-only fallback behavior, see
-[Running -- LLM Column Classification](running.md#llm-column-classification).
+Automatic PII plan discovery uses an LLM. By default, Safe Synthesizer runs
+`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a temporary local vLLM
+server on the GPU, so no endpoint or key is needed. To choose a different
+planning model or your own serving profile, see
+[Customizing PII Replacement -- Planning LLM](customize-pii-replacement.md#planning-llm).
 
-### `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_KEY`
+### Where planning requests go
 
-OpenAI-compatible endpoint and API key for column classification. The endpoint
-defaults to `https://integrate.api.nvidia.com/v1` when unset.
+Plan discovery sends the LLM column statistics, up to eight cell samples per
+column, up to three sample rows of the columns a dependency could link, and
+distinct values of dependency columns, such as sex or race, that need mapping
+to the sampler's values. Where they go depends only on
+`NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
 
-```bash
-export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
+- Unset: Safe Synthesizer starts its own vLLM server on this machine, and the
+  data stays here. This is the default.
+- A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on this
+  machine. Safe Synthesizer calls the server you run at that address, or, with
+  `NSS_INFERENCE_LOCAL_PROFILE`, starts its own server there. To start that
+  server yourself and reuse it across runs, see
+  [Reuse one server across runs](customize-pii-replacement.md#reuse-one-server-across-runs).
+- Any other URL: Safe Synthesizer sends the data to that service over HTTPS,
+  for example `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA
+  service. Only use a service that is approved to receive the input data,
+  including rows that may later be held out for evaluation.
+
+The run log states which case applies when planning starts. Planning also runs
+during evaluation when PII replacement is off and `evaluation.pii_replay_enabled`
+is true, to find the PII the replay check looks for.
+
+```bash title="PII inference environment" hl_lines="1 2 3"
+export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+export NSS_INFERENCE_KEY=<your key>
 ```
 
-On the CLI, can also use `--inference-api-key` and optionally
-`--inference-endpoint-url` instead of exporting these variables.
+- The endpoint must use HTTPS unless it is a loopback address. It is the base
+  URL that `/chat/completions` is added to, so it must not contain
+  credentials, a query string, or a fragment.
+- With an endpoint, a model ID is required. It resolves from
+  `--inference-model-id`, then `replace_pii.llm.model_id`, then
+  `NSS_INFERENCE_MODEL`.
+- `NSS_INFERENCE_KEY` (or `--inference-api-key`) is required by the hosted
+  NVIDIA service; local OpenAI-compatible servers may be keyless. It is ignored,
+  with a warning, while Safe Synthesizer runs its own local server.
+- The endpoint and key are never stored in configuration or plan files, and
+  are rejected in YAML.
 
-To disable column classification entirely, set
-`replace_pii.globals.classify.enable_classify: false` in YAML or use the SDK.
-See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
-
-### `NSS_INFERENCE_MODEL`
-
-Model ID sent to the inference endpoint. Defaults to
-`nvidia/nemotron-3-ultra-550b-a55b`. Override with `--inference-model-id`.
-
-### `NSS_PII_REPLACER_CPU_COUNT`
-
-Number of CPU worker processes for NER. Override with `--cpu-count`. Defaults
-to `max(1, cpu_count - 1)`, capped so each worker handles at least 1,000
-records.
-
-```bash
-export NSS_PII_REPLACER_CPU_COUNT=4
-```
+If vLLM or a suitable GPU is unavailable and no endpoint is set, planning fails
+with an error instead of falling back to a remote service.
 
 ---
 

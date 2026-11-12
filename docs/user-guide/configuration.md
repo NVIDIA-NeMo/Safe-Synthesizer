@@ -164,6 +164,12 @@ allowing legacy fields to be discarded when client and service versions differ.
 Saved `training`, `data`, `privacy`, PII replacement, time-series, and preflight
 settings remain unchanged.
 
+Runs trained with a release before 0.2.0 saved the previous `replace_pii`
+format (`globals` and `steps`), which is no longer supported, so generating
+from them fails with an error about the v2 schema, even with
+`unknown_fields: ignore`. See [Replacing PII](#replacing-pii) for the current
+format and migrate the saved configuration, or train the run again.
+
 ---
 
 ## Training
@@ -291,22 +297,31 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement detects and replaces personally identifiable information (PII) in
-your dataset before synthesis. It is on by default -- set `replace_pii: null`
-in YAML (or use `--no-replace-pii` on the CLI) to disable it.
-The `replace_pii` block is only needed when customizing entity types or
-classification via the SDK.
-
-Key config parameters:
+PII replacement runs before training and changes only the training split. It
+is on by default; set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` to turn it off. For what it does, see
+[PII Replacement](../product-overview/pii_replacement.md); for editing plans and
+setting up samplers, see [Customizing PII Replacement](customize-pii-replacement.md).
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | When using the CLI, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` if no LLM endpoint is available |
-| `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override to add or remove entity types from classification |
-| `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
+| `replace_pii.replacement_plan` | `"auto_discovery"` | `"auto_discovery"`, an inline plan, or the path of a plan YAML file (relative to the configuration file) | Run `--plan-only` first, review the plan, then point this at the plan file |
+| `replace_pii.locale` | `"en_US"` | Locale of generated values and of the Nemotron-Personas dataset | Must match the downloaded `datasets/<locale>.parquet` |
+| `replace_pii.seed` | `null` | Seed for generated values, not for plan discovery, whose LLM can return a different plan on each run; when unset, each run draws a random seed and saves it in the run's `safe-synthesizer-config.yaml` | Leave unset; to repeat a run's replacements, reuse its saved configuration, which also fixes the plan. Anyone who knows the seed can test guesses for original values in the replaced data, so keep that configuration as private as the input data |
+| `replace_pii.sampler.backend` | unset | `nemotron-personas` or `faker`; unset uses Nemotron-Personas when downloaded, else Faker | Set `faker` for locales without a Nemotron-Personas dataset |
+| `replace_pii.sampler.nemotron_personas_path` | `NSS_NEMOTRON_PERSONAS_PATH` or `~/.data-designer/managed-assets` | Directory containing `datasets/` | Leave at default |
+| `replace_pii.llm.model_id` | `null` | Planning model; without an endpoint, selects a local planning model (default Nemotron 3.5 Lightning) | With `NSS_INFERENCE_ENDPOINT`, set this, `NSS_INFERENCE_MODEL`, or `--inference-model-id` |
+| `replace_pii.llm.max_workers` | `8` | Concurrent planning requests | Leave at default; lower it if a hosted service rate-limits requests |
+| `replace_pii.free_text_detection.entity_thresholds` | tuned per type | Minimum GLiNER2 confidence per entity type | Lower one type to catch more of it |
+| `replace_pii.free_text_detection.name_exclusion_thresholds` | tuned labels | Labels for terms often mistaken for names; a name overlapping one is not replaced | Labels you set merge into the defaults; `null` drops a label |
+| `replace_pii.free_text_detection.find_and_replace` | `true` | Also replace known values the detector missed (`en_US` only) | Leave on |
+| `replace_pii.free_text_detection.batch_size` | `8` | GLiNER2 batch size | Reduce on GPU out-of-memory |
 
-See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
-for the full schema.
+The planning endpoint and API key are set at runtime, never in YAML;
+see [Environment Variables -- PII Replacement](environment.md#pii-replacement).
+See [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig]
+for the full field list, including the free-text model, revision, and chunking
+settings.
 
 ---
 
@@ -397,7 +412,7 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.mia_enabled` | `true` | Membership Inference Attack (MIA) -- privacy risk assessment | Disable to speed up evaluation if privacy assessment is not needed |
 | `evaluation.mia_excluded_columns` | `null` | Columns to leave out of the MIA | Useful when identifiers were already replaced outside Safe Synthesizer, or are expected to repeat verbatim in the synthetic data |
 | `evaluation.aia_enabled` | `true` | Attribute Inference Attack (AIA) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data | Disable to speed up evaluation if AIA is not needed |
-| `evaluation.pii_replay_enabled` | `true` | PII replay detection -- checks whether PII from training appears in synthetic data | Leave enabled if PII replacement is used |
+| `evaluation.pii_replay_enabled` | `true` | PII replay detection -- checks whether PII from training appears in synthetic data | With PII replacement off, evaluation still runs PII planning to find the PII, on the local planning model or at `NSS_INFERENCE_ENDPOINT`; set to `false` to skip it |
 | `evaluation.sqs_report_columns` | `250` | Max columns in the Synthetic Quality Score (SQS) report | Increase if your dataset has more columns |
 | `evaluation.sqs_report_rows` | `5000` | Max rows in the SQS report | Increase for larger datasets (impacts report generation time) |
 | `evaluation.quasi_identifier_count` | `3` | Number of quasi-identifiers sampled for AIA (auto-reduced for small datasets) | Leave at default |
@@ -484,7 +499,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
+| `replace_pii` (`null` to disable) | `with_replace_pii()` | [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig] |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 

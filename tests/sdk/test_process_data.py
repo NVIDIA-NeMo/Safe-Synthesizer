@@ -22,6 +22,15 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
@@ -51,91 +60,42 @@ def fixture_workdir(tmp_path: Path) -> Workdir:
 @pytest.fixture
 def fixture_process_data_setup_without_pii(
     fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
     fixture_workdir: Workdir,
 ) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
     """Build a SafeSynthesizer with mocked heavy dependencies (PII disabled).
 
-    Returns the builder *before* calling ``process_data()`` so callers
-    can inspect state at each stage.
-
-    For tests that need PII replacement enabled, use
-    ``fixture_process_data_setup_with_pii``.
+    Returns the builder *before* calling ``process_data()`` so callers can
+    inspect state at each stage.
     """
     return _create_process_data_setup(
         fixture_sample_patient_dataframe,
-        fixture_sample_patient_redacted_dataframe,
         fixture_workdir,
-        replace_pii=False,
-    )
-
-
-@pytest.fixture
-def fixture_process_data_setup_with_pii(
-    fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
-    fixture_workdir: Workdir,
-) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
-    """Build a SafeSynthesizer with mocked heavy dependencies (PII enabled).
-
-    Returns the builder *before* calling ``process_data()`` so callers
-    can inspect state at each stage.
-    """
-    return _create_process_data_setup(
-        fixture_sample_patient_dataframe,
-        fixture_sample_patient_redacted_dataframe,
-        fixture_workdir,
-        replace_pii=True,
     )
 
 
 def _create_process_data_setup(
     fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
     fixture_workdir: Workdir,
-    *,
-    replace_pii: bool = True,
 ) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
-    """Shared factory for the ``fixture_process_data_setup_*`` fixtures.
-
-    Builds a ``SafeSynthesizer`` wired with deterministic train/test splits
-    and a pre-built PII replacer mock, bypassing real NER models.  The
-    builder is returned before ``process_data()`` runs so each test
-    controls when -- and whether -- the method is called.
-    """
+    """Build a disabled-PII setup with deterministic train/test splits."""
     original_df = fixture_sample_patient_dataframe.copy()
-    if fixture_sample_patient_redacted_dataframe is not None:
-        pii_replaced_df = fixture_sample_patient_redacted_dataframe.head(100).copy()
-    else:
-        pii_replaced_df = None
 
     # Returns a deterministic train/test split
     train_split = original_df.head(100).copy()
     test_split = original_df.tail(100).copy()
 
-    config = SafeSynthesizerParameters()
+    # Disable PII in the config the builder is built from: process_data rebuilds _nss_config from
+    # the builder's settings, so clearing _nss_config.replace_pii afterwards would not stick.
+    config = SafeSynthesizerParameters(replace_pii=None)
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
     assert builder._nss_config is not None
-    if replace_pii:
-        from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+    assert builder._nss_config.replace_pii is None
 
-        builder._nss_config.replace_pii = PiiReplacerConfig.get_default_config()
-    else:
-        builder._nss_config.replace_pii = None
-
-    # Stub just enough of NemoPII's interface to satisfy process_data
+    # Retained in the fixture tuple for tests that inspect transformed state.
     mock_replacer_instance = MagicMock()
-    mock_replacer_instance.result.transformed_df = pii_replaced_df
-    mock_replacer_instance.result.column_statistics = {
-        "patient_name": MagicMock(),
-        "timestamp": MagicMock(),
-        "patient_age": MagicMock(),
-    }
-    mock_replacer_instance.elapsed_time = 1.5
-
-    return builder, train_split, test_split, pii_replaced_df, mock_replacer_instance
+    return builder, train_split, test_split, None, mock_replacer_instance
 
 
 def _wire_process_data_mocks(
@@ -216,10 +176,10 @@ def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixtu
         return report
 
     with (
-        patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=capture_preflight),
-        patch("nemo_safe_synthesizer.sdk.library_builder.Holdout") as holdout_cls,
-        patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver") as resolver_cls,
-        patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata") as metadata_cls,
+        patch("nemo_safe_synthesizer.preflight.run_preflight", side_effect=capture_preflight),
+        patch("nemo_safe_synthesizer.holdout.holdout.Holdout") as holdout_cls,
+        patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver") as resolver_cls,
+        patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata") as metadata_cls,
     ):
         holdout_cls.return_value.train_test_split.return_value = (training, source.iloc[0:0].copy())
         resolver_cls.return_value.return_value = config
@@ -232,10 +192,10 @@ def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixtu
 class TestProcessDataPiiSeparation:
     """``process_data`` must keep original and PII-replaced DataFrames separate."""
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_without_pii_replacement_sets_original_training_df(
         self,
         mock_holdout_cls,
@@ -256,75 +216,10 @@ class TestProcessDataPiiSeparation:
         assert builder._training_df is not None
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
-    def test_process_data_with_pii_replacement_preserves_original(
-        self,
-        mock_holdout_cls,
-        mock_resolver_cls,
-        mock_metadata_cls,
-        mock_pii_cls,
-        mock_preflight,
-        fixture_process_data_setup_with_pii,
-    ):
-        """With PII replacement, ``_original_training_df`` preserves the pre-PII data."""
-        builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
-        _wire_process_data_mocks(
-            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
-        )
-        mock_pii_cls.return_value = mock_replacer
-
-        builder.process_data()
-
-        # Training uses the PII-replaced data; evaluation uses the original
-        pd.testing.assert_frame_equal(builder._training_df, pii_replaced_df)
-        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
-    def test_process_data_with_pii_replacement_persists_original_and_transformed(
-        self,
-        mock_holdout_cls,
-        mock_resolver_cls,
-        mock_metadata_cls,
-        mock_pii_cls,
-        mock_preflight,
-        fixture_process_data_setup_with_pii,
-        fixture_workdir,
-    ):
-        """``training.csv`` persists the original split; ``transformed_training.csv`` persists the PII-replaced data."""
-        builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
-        _wire_process_data_mocks(
-            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
-        )
-        mock_pii_cls.return_value = mock_replacer
-
-        builder.process_data()
-
-        training_csv = fixture_workdir.dataset.training
-        transformed_csv = fixture_workdir.dataset.transformed_training
-
-        assert training_csv.exists()
-        assert transformed_csv.exists()
-
-        # ``training.csv`` always contains the original training split
-        saved_training = pd.read_csv(training_csv)
-        pd.testing.assert_frame_equal(saved_training, train_split)
-
-        # ``transformed_training.csv`` contains the PII-replaced data (inspection only)
-        saved_transformed = pd.read_csv(transformed_csv)
-        pd.testing.assert_frame_equal(saved_transformed, pii_replaced_df)
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_without_pii_replacement_does_not_write_transformed_training(
         self,
         mock_holdout_cls,
@@ -350,6 +245,110 @@ class TestProcessDataPiiSeparation:
         transformed_csv = fixture_workdir.dataset.transformed_training
         assert not transformed_csv.exists()
 
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_resolves_full_input_and_replaces_only_training_split(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+        fixture_workdir: Workdir,
+    ) -> None:
+        original_df = fixture_sample_patient_dataframe.copy()
+        # "F" appears only in the test split, so its built-in gender mapping
+        # reaches the plan only when planning reads the full input.
+        original_df["sex"] = ["female"] * (len(original_df) - 1) + ["F"]
+        train_split = original_df.head(100).copy()
+        test_split = original_df.tail(100).copy()
+        resolved_pii = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="patient_name",
+                        entity_type=EntityType.FULL_NAME,
+                        depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                        pattern="{First} {Last}",
+                    )
+                ],
+            ),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=resolved_pii),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._original_training_df is not None
+        assert builder._training_df is not None
+        assert builder._test_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+        pd.testing.assert_frame_equal(builder._test_df, test_split)
+        assert builder._training_df["patient_name"].tolist() != train_split["patient_name"].tolist()
+        assert builder._training_df.drop(columns="patient_name").equals(train_split.drop(columns="patient_name"))
+        assert builder._column_statistics is not None
+        assert builder._column_statistics["patient_name"].detected_entity_counts == {"full_name": len(train_split)}
+        assert builder._pii_replacer_time is not None
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.training), train_split)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.transformed_training), builder._training_df)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.test), test_split.reset_index(drop=True))
+        persisted = SafeSynthesizerParameters.from_yaml(
+            fixture_workdir.run_dir / "safe-synthesizer-config.yaml"
+        ).replace_pii
+        assert persisted is not None
+        assert persisted.inline_plan is not None
+        assert resolved_pii.inline_plan is not None
+        assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
+        assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
+        # A full pipeline run also leaves the reviewable plan file, naming the sampler it was written for.
+        plan_file = (fixture_workdir.run_dir / "pii_replacement_plan.yaml").read_text()
+        assert plan_file.startswith("# PII replacement plan for this dataset, written for the faker sampler")
+
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_keeps_the_full_input_pattern_coverage_decision(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_workdir: Workdir,
+    ) -> None:
+        # 990 of 1,000 phones match (99.0%); the 950-row training split keeps all 10 exceptions (98.9%).
+        phones = [f"555-{row:04d}" for row in range(990)] + [f"(555) {row:03d}-0000" for row in range(10)]
+        original_df = pd.DataFrame({"phone": phones})
+        train_split = original_df.iloc[50:].copy()
+        config = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                ],
+            ),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=config),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, original_df.head(50).copy())
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._training_df is not None
+        assert len(builder._training_df) == 950
+
 
 # ---------------------------------------------------------------------------
 # Tests: metadata lifecycle in validate mode
@@ -359,10 +358,10 @@ class TestProcessDataPiiSeparation:
 class TestProcessDataMetadataLifecycle:
     """Validate-mode metadata fallback should not persist stub metadata."""
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_check_only_stub_metadata_not_persisted_for_followup_run(
         self,
         mock_holdout_cls,
@@ -409,30 +408,20 @@ class TestProcessDataMetadataLifecycle:
 
 
 class TestEvaluateUsesOriginalTrainingDf:
-    """``evaluate()`` must always pass the original (pre-PII) data to ``Evaluator``."""
+    """``evaluate()`` passes the original training data to ``Evaluator``."""
 
-    @pytest.mark.parametrize(
-        "fixture_name",
-        [
-            "fixture_process_data_setup_with_pii",
-            "fixture_process_data_setup_without_pii",
-        ],
-        ids=["with_pii_replacement", "without_pii_replacement"],
-    )
-    @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
-        fixture_name,
-        request: pytest.FixtureRequest,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
     ):
-        """Evaluate always passes ``_original_training_df`` as ``training_df``."""
-        setup = request.getfixturevalue(fixture_name)
-        builder, train_split, test_split, pii_replaced_df, _ = setup
-        has_pii = fixture_name == "fixture_process_data_setup_with_pii"
-        builder._training_df = pii_replaced_df if has_pii else train_split
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        builder._training_df = train_split
         builder._original_training_df = train_split
         builder._test_df = test_split
         builder._total_start = 0.0
@@ -450,7 +439,7 @@ class TestEvaluateUsesOriginalTrainingDf:
         call_kwargs = mock_evaluator_cls.call_args[1]
         pd.testing.assert_frame_equal(call_kwargs["training_df"], train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_disabled_skips_evaluator_and_builds_results(
         self,
         mock_evaluator_cls,
@@ -488,6 +477,83 @@ class TestEvaluateUsesOriginalTrainingDf:
         pd.testing.assert_frame_equal(builder.results.synthetic_data, synthetic_df)
 
 
+class TestEvaluateDetectsPiiForReplay:
+    """With replacement off, ``evaluate()`` detects PII in the original training split for PII replay."""
+
+    @staticmethod
+    def _ready_for_evaluation(builder: SafeSynthesizer, train_split: pd.DataFrame, test_split: pd.DataFrame) -> None:
+        builder._training_df = train_split
+        builder._original_training_df = train_split
+        builder._test_df = test_split
+        builder._total_start = 0.0
+        builder.generator = MagicMock()
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_statistics_reach_the_evaluator(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        statistics = {"patient_name": MagicMock()}
+        mock_replacer_cls.return_value.detect.return_value.column_statistics = statistics
+
+        builder.evaluate()
+
+        detected_df = mock_replacer_cls.return_value.detect.call_args.args[0]
+        pd.testing.assert_frame_equal(detected_df, train_split)
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is statistics
+        assert call_kwargs["pii_replay_skipped_reason"] is None
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_failure_skips_replay_with_a_reason(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        mock_replacer_cls.return_value.detect.side_effect = ParameterError("no planning LLM is reachable")
+
+        builder.evaluate()
+
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is None
+        assert "no planning LLM is reachable" in call_kwargs["pii_replay_skipped_reason"]
+        assert "Skipping PII replay" in caplog.text
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_replay_turned_off_detects_nothing(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        assert builder._nss_config is not None
+        builder._nss_config.evaluation.pii_replay_enabled = False
+        self._ready_for_evaluation(builder, train_split, test_split)
+
+        builder.evaluate()
+
+        mock_replacer_cls.assert_not_called()
+        assert mock_evaluator_cls.call_args.kwargs["column_statistics"] is None
+
+
 # ---------------------------------------------------------------------------
 # Tests: load_from_save_path round-trip
 # ---------------------------------------------------------------------------
@@ -511,9 +577,7 @@ class TestLoadFromSavePath:
 
         _, train_split, test_split, _, _ = _create_process_data_setup(
             fixture_sample_patient_dataframe,
-            fixture_sample_patient_redacted_dataframe,
             workdir,
-            replace_pii=False,
         )
 
         train_split.to_csv(workdir.dataset.training, index=False)
@@ -532,7 +596,7 @@ class TestLoadFromSavePath:
 
         return workdir, train_split, test_split
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_restores_training_split(
         self,
         mock_metadata_cls,
@@ -555,7 +619,7 @@ class TestLoadFromSavePath:
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_rejects_unknown_legacy_saved_fields_by_default(
         self,
         mock_metadata_cls,
@@ -581,7 +645,7 @@ class TestLoadFromSavePath:
             builder.load_from_save_path()
 
     @pytest.mark.parametrize("policy_source", ["saved", "builder", "runtime"])
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_can_ignore_unknown_legacy_saved_fields(
         self,
         mock_metadata_cls,
@@ -622,7 +686,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.unknown_fields == "ignore"
         assert not hasattr(builder._nss_config.training, "epoch")
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_applies_runtime_generation_and_evaluation_config(
         self,
         mock_metadata_cls,
@@ -661,7 +725,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_preserves_saved_generation_when_runtime_config_has_no_overrides(
         self,
         mock_metadata_cls,
@@ -693,7 +757,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is True
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_deep_merges_nested_validation_overrides(
         self,
         mock_metadata_cls,
@@ -727,7 +791,7 @@ class TestLoadFromSavePath:
         # Unrelated saved generation field preserved.
         assert builder._nss_config.generation.num_records == 3000
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_full_runtime_config_replaces_supported_runtime_sections(
         self,
         mock_metadata_cls,
@@ -766,7 +830,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_warns_when_saved_values_differ_from_current_defaults(
         self,
         mock_metadata_cls,
@@ -794,7 +858,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config is not None
         assert builder._nss_config.generation.num_records == 3000
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
         self,
         mock_metadata_cls,
@@ -818,7 +882,7 @@ class TestLoadFromSavePath:
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_train_after_load_from_save_path_raises(
         self,
         mock_metadata_cls,
@@ -840,7 +904,7 @@ class TestLoadFromSavePath:
         with pytest.raises(RuntimeError, match="train.*cannot be called after load_from_save_path"):
             builder.train()
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_run_after_load_from_save_path_raises(
         self,
         mock_metadata_cls,
@@ -909,10 +973,10 @@ class TestLoadFromSavePathHoldoutZero:
 
         return workdir, train_split
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_no_test_csv_when_holdout_zero(
         self,
         mock_holdout_cls,
@@ -945,7 +1009,7 @@ class TestLoadFromSavePathHoldoutZero:
         assert not fixture_workdir.dataset.test.exists()
         assert builder._test_df is None
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_succeeds_without_test_csv(
         self,
         mock_metadata_cls,
@@ -970,7 +1034,7 @@ class TestLoadFromSavePathHoldoutZero:
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_handles_empty_test_csv_from_old_runs(
         self,
         mock_metadata_cls,
@@ -1019,7 +1083,7 @@ class TestProcessDataConfigValidation:
     replacement, or any disk I/O.
     """
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_invalid_groupby_raises_before_holdout(
         self,
         mock_holdout_cls,
@@ -1047,7 +1111,7 @@ class TestProcessDataConfigValidation:
         )
         mock_holdout_cls.assert_not_called()
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_invalid_orderby_raises_before_holdout(
         self,
         mock_holdout_cls,
