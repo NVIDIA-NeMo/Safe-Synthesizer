@@ -44,7 +44,6 @@ exclude = [
     "site-packages",
     "venv",
     "**/*.ipynb",
-    "skills/safe-synthesizer/**",
 ]
 
 [MD004]
