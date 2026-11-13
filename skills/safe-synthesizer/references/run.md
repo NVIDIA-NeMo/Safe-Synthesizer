@@ -72,11 +72,7 @@ SDK example:
 ```python
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-synthesizer = (
-    SafeSynthesizer()
-    .with_data_source("data.csv")
-    .with_differential_privacy(dp_enabled=True, epsilon=8.0)
-)
+synthesizer = SafeSynthesizer().with_data_source("data.csv").with_differential_privacy(dp_enabled=True, epsilon=8.0)
 synthesizer.run()
 ```
 

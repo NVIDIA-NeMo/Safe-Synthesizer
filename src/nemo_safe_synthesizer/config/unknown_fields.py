@@ -110,7 +110,7 @@ def _normalize_annotation(
             _normalize_annotation(args[0], item, unknown_fields, (*path, str(index)))
             for index, item in enumerate(value)
         )
-        return type(value)(items)
+        return type(value)(items)  # ty: ignore[too-many-positional-arguments] -- concrete Sequence types take an iterable
 
     if origin is tuple and args and isinstance(value, tuple):
         item_annotations = args if args[-1:] != (Ellipsis,) else (args[0],) * len(value)

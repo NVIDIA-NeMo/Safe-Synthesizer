@@ -17,7 +17,7 @@ wrapper with ``no_sync`` support.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from typing import Any, cast
 
@@ -320,7 +320,7 @@ class GradSampleModule(opacus.GradSampleModule):
     """
 
     @contextmanager
-    def no_sync(self) -> Iterator[None]:
+    def no_sync(self) -> Generator[None, None, None]:
         """Context manager that does nothing; required by Trainer's expected API."""
         yield
 

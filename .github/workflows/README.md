@@ -129,9 +129,9 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 
 | Job | mise task | What it checks |
 | --- | --- | --- |
-| Format | `check:format`, `check:lint`, `check:license:headers` | `dprint check` for TOML + `ruff format --check` + `ruff check` + SPDX copyright headers |
+| Format | `check:format`, `check:lint`, `check:license:headers` | `dprint check` for TOML + `ruff format --check` + `ruff check` + `rumdl check` for Markdown + SPDX copyright headers |
 | Format (lock) | `check:lock` | generated CUDA metadata matches `cuda_deps.toml` + `uv.lock` matches `pyproject.toml` |
-| Typecheck | `check:type` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
+| Typecheck | `check:type` | `ty check` (excludes per `ty.toml [src]`) |
 | Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 

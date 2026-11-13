@@ -14,13 +14,14 @@ For running Safe Synthesizer in a container, see
 ## Dockerfile Layout
 
 [`containers/Dockerfile.cuda`](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/containers/Dockerfile.cuda)
-uses `python:3.13-slim-bookworm` for the runtime and dev stages. CUDA support
+uses `python:${PYTHON_VERSION}-slim-bookworm`, with `PYTHON_VERSION` from
+`.python-version`, for the runtime and dev stages. CUDA support
 comes from the selected Python extra rather than from an `nvidia/cuda` base
 image.
 
 ```mermaid
 flowchart TD
-    uvImage["ghcr.io/astral-sh/uv:0.13.4\n(uv stage)"]
+    uvImage["ghcr.io/astral-sh/uv:UV_VERSION\n(uv stage)"]
     pythonBase["python:PYTHON_VERSION-slim-bookworm"]
 
     subgraph stages [Build Stages]
@@ -88,14 +89,20 @@ as `--help`, `--version`, and `config` skip runtime diagnostics.
 | `CONTAINER_EXTRA` | `cu129` | Python extra installed with `engine` |
 | `CONTAINER_VARIANT` | `cu129` | Variant label/tag suffix |
 | `PACKAGE_VERSION` | unset | Optional PEP 440 version passed via `UV_DYNAMIC_VERSIONING_BYPASS` |
-| `PYTHON_VERSION` | `3.13` | Python slim image version |
+| `PYTHON_VERSION` | required | Python slim image version, from `.python-version` |
+| `UV_VERSION` | required | uv version, from `[tool.uv] required-version` in `pyproject.toml` |
 | `PYTHON_IMAGE` | `python:${PYTHON_VERSION}-slim-bookworm` | Runtime/dev base image |
-| `UV_IMAGE` | `ghcr.io/astral-sh/uv:0.13.4` | Source image for pinned `uv` binaries |
+| `UV_IMAGE` | `ghcr.io/astral-sh/uv:${UV_VERSION}` | Source image for pinned `uv` binaries |
 
-Override at build time:
+The `container:build:*` tasks and the container workflow pass `PYTHON_VERSION`
+and `UV_VERSION` from those files. To build directly, pass them yourself:
 
 ```bash
+PYTHON_VERSION="$(cat .python-version)"
+UV_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["uv"]["required-version"])')"
 docker build -f containers/Dockerfile.cuda \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
+  --build-arg UV_VERSION="${UV_VERSION}" \
   --build-arg CONTAINER_EXTRA=cu129 \
   --build-arg CONTAINER_VARIANT=cu129 \
   --build-arg PACKAGE_VERSION=0.1.0 \
@@ -219,7 +226,7 @@ this is the tag without the leading `v`; on non-tag builds, it is
 
 | Aspect | `Dockerfile.cuda` | `Dockerfile.test_ci` |
 |--------|-------------------|----------------------|
-| Base | `python:3.13-slim-bookworm` | `python:3.13-slim` |
+| Base | `python:${PYTHON_VERSION}-slim-bookworm` | `python:${PYTHON_VERSION}-slim` |
 | Extras | `CONTAINER_EXTRA` + `engine` | `cpu` + `engine` |
 | GPU | Expected for runtime workloads | Not needed |
 | Stages | `uv` / `runtime` / `dev` | `setup` / `install-deps` |
@@ -251,8 +258,12 @@ you pass `--platform`:
 
 ```bash
 docker buildx build --platform linux/arm64 \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
+  --build-arg UV_VERSION="${UV_VERSION}" \
   -f containers/Dockerfile.cuda --target runtime -t nss-gpu:arm64 .
 ```
+
+Set `PYTHON_VERSION` and `UV_VERSION` as in [Build Arguments](#build-arguments).
 
 No code paths branch on `TARGETARCH` today; BuildKit selects the matching
 base image architecture and the package resolver must find wheels compatible
@@ -289,6 +300,8 @@ docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --tag registry.example.com/team/safe-synthesizer:custom-cu129 \
   --target runtime --push \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
+  --build-arg UV_VERSION="${UV_VERSION}" \
   -f containers/Dockerfile.cuda .
 ```
 

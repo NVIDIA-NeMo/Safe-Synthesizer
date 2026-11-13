@@ -15,7 +15,6 @@ Try it without installing anything: the launchable above deploys a GPU instance 
 
 Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
-
 ### Prerequisites
 
 - Python 3.11–3.14 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, 3.13, or 3.14 interpreter works)

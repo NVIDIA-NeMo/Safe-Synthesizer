@@ -2,7 +2,93 @@
 # SPDX-License-Identifier: Apache-2.0
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
-exclude: |
+# The skills under .agents/skills/ are tracked although .gitignore lists them, so the
+# lint and format checks skip them; keep the hooks off them too. A signed skill directory
+# and its skill.oms.sig must stay byte-identical to what was signed, so no hook touches them.
+exclude: '^\.agents/skills/|(^|/)skill\.oms\.sig$|^skills/safe-synthesizer/'
+
+
+repos:
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+        args:
+          - --assume-in-merge
+
+      - id: end-of-file-fixer
+        types: [text]
+        files: &whitespace-files |
+          (?x)
+          \.(py|pyi|sh|toml|yaml|yml|md|mdx|markdown|mdc|rst|txt|json|ini|in|js|ts|tsx|css|html|j2|template)$
+          | (^|/)(Makefile|Dockerfile|Dockerfile\.[^/]*|\.gitignore|\.gitattributes|\.dockerignore)$
+        exclude: &whitespace-exclude |
+          (?x)
+          (^|/)(uv\.lock|mise\.lock|LICENSE|skill\.oms\.sig)(/|$)
+          | ^(vendor|third_party|docs/assets)/
+          | \.(csv|tsv|lock)(/|$)
+          | ^docs/(.*/)?.*\.md(/|$)
+          | (^|/)\.vscode(/|$)
+          | (^|/)build(/|$)
+          | (^|/)venv(/|$)
+          | ^(.*/)?.*\.ipynb(/|$)
+
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        types: [text]
+        files: *whitespace-files
+        exclude: *whitespace-exclude
+
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md,mdx,markdown"]
+        types: [text]
+        files: *whitespace-files
+        exclude: *whitespace-exclude
+
+
+  - repo: local
+    hooks:
+
+      - id: ruff-check
+        name: Ruff lint and import sorting
+        entry: sh .house-tool.sh ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+
+      - id: ruff-format
+        name: Ruff format, and the Python in Markdown
+        entry: sh .house-tool.sh ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        exclude: '\.(mdx|markdown)$'
+
+      - id: rumdl
+        name: Format and lint Markdown with rumdl
+        entry: sh .house-tool.sh rumdl check --fix
+        language: system
+        files: '\.(md|mdx|markdown)$'
+
+      - id: dprint
+        name: Format TOML with dprint
+        entry: sh .house-tool.sh dprint fmt --allow-no-files
+        language: system
+        files: '\.toml$'
+
+      - id: typecheck
+        name: Run ty typechecks
+        entry: sh .house-tool.sh ty check
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: copyright-fix
+        name: Fix copyright headers
+        entry: uv run --script tools/codestyle/copyright_fixer.py
+        language: system
+        pass_filenames: true
+        files: '\.(py|sh|md|yaml|yml)$'
+        exclude: |
           (?x)(
               CITATION.md|
               CONTRIBUTING.md|
@@ -17,47 +103,6 @@ exclude: |
               SECURITY.md|
               THIRD_PARTY.md
           )$
-
-
-repos:
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-merge-conflict
-        args:
-          - --assume-in-merge
-
-      - id: end-of-file-fixer
-        files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
-
-      - id: trailing-whitespace
-        files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
-
-
-  - repo: local
-    hooks:
-
-      - id: format
-        name: Run ruff (format + lint fix)
-        entry: bash tools/codestyle/format.sh
-        language: system
-        pass_filenames: true
-        types: [python]
-
-      - id: typecheck
-        name: Run ty typechecks
-        entry: bash tools/codestyle/typecheck.sh
-        language: system
-        pass_filenames: false
-        types: [python]
-
-      - id: copyright-fix
-        name: Fix copyright headers
-        entry: uv run --script tools/codestyle/copyright_fixer.py
-        language: system
-        pass_filenames: true
-        files: '\.(py|sh|md|yaml|yml)$'
 
       - id: uv-lock
         name: Check generated CUDA metadata and uv.lock

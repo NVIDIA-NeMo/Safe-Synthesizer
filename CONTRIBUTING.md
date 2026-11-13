@@ -32,7 +32,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Git 2.34+ (minimum required for SSH commit signing)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [dprint](https://dprint.dev/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
-
+>
 > Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when `gpg` is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
 
 ### Setup
@@ -41,7 +41,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > NVIDIA employees have write access and can clone the repo directly. External contributors should fork first, then clone the fork and add an upstream remote.
 
-  ```bash
+   ```bash
    # NVIDIA internal -- clone directly
    git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 
@@ -49,11 +49,11 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    git clone https://github.com/<your-username>/Safe-Synthesizer.git
    cd Safe-Synthesizer
    git remote add upstream https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
-  ```
+   ```
 
 2. Set up the development environment:
 
-  ```bash
+   ```bash
    cd Safe-Synthesizer
 
    # Install dev tools via mise (installs mise itself if missing)
@@ -65,24 +65,24 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
    mise run bootstrap-nss engine # Engine dependencies only
    mise run bootstrap-nss dev    # Minimal dev dependencies only
-  ```
+   ```
 
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
-  ```bash
+   ```bash
    # Add to your shell profile (~/.bashrc, ~/.zshrc)
    REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
    printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
-  ```
+   ```
 
-  Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
+   Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
 
 4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.env.local` (git-ignored, auto-loaded by mise):
 
-  ```bash
+   ```bash
    # .env.local -- project-local overrides (git-ignored)
    SS_WORKTREE_DIR="/path/to/worktrees"
-  ```
+   ```
 
    Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
 
@@ -175,13 +175,10 @@ git reset --soft HEAD~1
 
 You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
 
-
 To avoid forgetting `--signoff` and `--gpg-sign` on future commits, configure this repo to GPG-sign automatically and create a short alias that adds DCO sign-off:
-
 
 !!! info "Git aliases"
     You can obviously choose your own aliases or set them elsewhere - this is just a suggestion so you do not have to think about it.
-
 
 ```bash
 # Automatic GPG signing on every commit (native git config)
@@ -217,7 +214,7 @@ This repository uses GitHub Rulesets to enforce consistent contribution standard
 
 All branches (except `main`) must follow this naming pattern:
 
-```
+```text
 <author>/<description>
 <author>/<issue-id>-<description>
 <author>/<type>/<description>
@@ -235,7 +232,6 @@ Valid types: `feature`, `bugfix`, `hotfix`, `release`, `docs`, `chore`, `test`
 
 Examples:
 
-
 | Branch Name                       | Valid               |
 | --------------------------------- | ------------------- |
 | `jsmith/add-login-feature`        | ✅                   |
@@ -246,12 +242,11 @@ Examples:
 | `feature/add-login`               | ❌ Missing author    |
 | `JSmith/123-Add-Login`            | ❌ Must be lowercase |
 
-
 ### Conventional Commits
 
 All commits merged to `main` must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-```
+```text
 <type>(<scope>): <description>
 ```
 
@@ -270,7 +265,6 @@ Rules:
 
 Valid types:
 
-
 | Type       | Description                                      |
 | ---------- | ------------------------------------------------ |
 | `feat`     | New feature                                      |
@@ -285,9 +279,7 @@ Valid types:
 | `chore`    | Maintenance tasks                                |
 | `revert`   | Reverting previous commits                       |
 
-
 Examples:
-
 
 | Commit Message                            | Valid                    |
 | ----------------------------------------- | ------------------------ |
@@ -299,14 +291,11 @@ Examples:
 | `fix - resolve bug`                       | ❌ Wrong format           |
 | `FIX: resolve bug`                        | ❌ Type must be lowercase |
 
-
 > Since we use squash merging, your PR title should follow this format as it becomes the commit message.
-
 
 ### Branch Protection
 
 The `main` branch has the following protections:
-
 
 | Rule                            | Setting      |
 | ------------------------------- | ------------ |
@@ -350,7 +339,7 @@ Most internal issues will be `Task`.
 
 Issues are tracked in the Safe Synthesizer Development GitHub project. Priority and effort estimates live as project fields, not labels, so backlog and prioritization views can sort and group on them directly.
 
-- `Priority` -- relative urgency for backlog ordering. 
+- `Priority` -- relative urgency for backlog ordering.
 - `Size` -- rough effort estimate.
 
 Set both in the [project view](https://github.com/orgs/NVIDIA-NeMo/projects/74) or expand the Projects drop-down on the right pane for PRs and issues.
@@ -568,16 +557,18 @@ Although the default development/runtime interpreter is Python 3.13, source code
 
 ### Formatting, Linting, and Type Checking
 
-Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
+Use mise tasks instead of running `ruff`, `rumdl`, `dprint`, or `ty` by hand. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check the whole project.
 
 ```bash
-mise run format   # auto-fix: dprint TOML + ruff format/import sorting + copyright headers
+mise run format   # auto-fix: dprint TOML + ruff lint fixes/format/import sorting + rumdl Markdown + copyright headers
 mise run check    # all read-only local quality checks
 mise run test     # unit tests
 mise run check ::: test  # local pre-PR gate: static checks + unit tests
 ```
 
-We use `dprint` for TOML, `ruff` for Python formatting and linting, and `ty` for type checking, wrapped with settings for consistency.
+We use `dprint` for TOML, `ruff` for Python formatting and linting (including the Python in Markdown), `rumdl` for Markdown, and `ty` for type checking. Their settings live in `dprint.json`, `ruff.toml`, `.rumdl.toml`, and `ty.toml`; the shared development baseline writes `dprint.json` and `.rumdl.toml` and sets common keys in `ruff.toml` and `ty.toml`.
+
+Some configuration comes from a development baseline shared with other NVIDIA NeMo repositories: `.house.toml`, `.house-tool.sh`, `.rumdl.toml`, `dprint.json`, `ty.toml`, the `managed: house` block in `.gitignore`, and the tool pins in `.mise.toml`. Maintainers update it periodically. Change those files through a PR as usual, but a later baseline upgrade may undo a change, so mention it in the PR.
 
 CI calls the same tools through atomic read-only `check:*` tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` aggregates the read-only static checks. The standard local gate is the explicit `mise run check ::: test`; no shorthand alias is defined. Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the Mise tasks.
 
@@ -589,11 +580,12 @@ mise tasks --hidden       # helper and legacy alias tasks
 mise tasks deps check     # inspect the quality-check graph
 ```
 
-You can also run tools directly on specific files:
+You can also run the tools directly on specific files:
 
 ```bash
-bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
-bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
+ruff format --check src/nemo_safe_synthesizer/cli/run.py
+ruff check src/nemo_safe_synthesizer/cli/run.py
+rumdl check CONTRIBUTING.md
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `mise run format` adds them automatically; exclusions are listed in `.copyrightignore`.
@@ -602,8 +594,9 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 | Check | CI task | `mise run format` / `mise run check` | Pre-commit |
 |---|---|---|---|
-| dprint TOML format | `mise run check:format` | `format`: auto-fix; `check`: read-only | not run |
+| dprint TOML format | `mise run check:format` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | ruff format + lint | `mise run check:format` and `mise run check:lint` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| rumdl Markdown format + lint | `mise run check:lint` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | ty typecheck | `mise run check:type` | read-only | all files |
 | copyright headers | `mise run check:license:headers` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | generated CUDA metadata and uv lock drift | `mise run check:lock` | read-only | on `pyproject.toml` or `cuda_deps.toml` changes |

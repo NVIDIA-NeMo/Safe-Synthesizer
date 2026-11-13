@@ -5,6 +5,7 @@
 
 This package contains all modifications required to fine tune models with
 differential privacy using the hugging face transformers library.
+
 1. `dp_utils.py` contains `OpacusDPTrainer`, which is the DP replacement for
    `transformers.Trainer`, `DataCollatorForPrivateCausalLanguageModeling`, which
    is required for correct per-sample gradient accumulation, and `DPCallback`,

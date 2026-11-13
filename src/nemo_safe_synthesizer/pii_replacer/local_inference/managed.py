@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -208,7 +208,7 @@ def planning_inference_settings(
     config: LLMConfig,
     *,
     environ: Mapping[str, str] | None = None,
-) -> Iterator[InferenceSettings]:
+) -> Generator[InferenceSettings]:
     """Yield the inference settings for one LLM planning pass.
 
     For an explicit endpoint (see ``resolve_planning_inference``), this

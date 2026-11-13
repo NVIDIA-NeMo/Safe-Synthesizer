@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Start live documentation server
 ---
+
 Start a local documentation server with live reload.
 
-* Run with: `mise run docs:serve`
-* Underlying command: `uv run --frozen --group docs mkdocs serve --livereload`
-* View at: http://127.0.0.1:8000
+- Run with: `mise run docs:serve`
+- Underlying command: `uv run --frozen --group docs mkdocs serve --livereload`
+- View at: <http://127.0.0.1:8000>

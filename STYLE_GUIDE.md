@@ -82,7 +82,6 @@ class TrainingHyperparams(NSSBaseModel):
 - For entry-point initialization, log environment variables, `backend` logs, and tracing API details, see [docs/developer-guide/observability.md](docs/developer-guide/observability.md).
 
 ```python
-
 # inside the package while developing, note the relative import
 from ..observability import get_logger
 
@@ -123,15 +122,17 @@ Even though `.python-version` pins Python 3.13 for local development and CI defa
 ```python
 from typing import Self, Sequence
 
+
 # Before
-def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer":
+def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer": ...
+
 
 # After
-def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
+def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self: ...
+
 
 # Or
-def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self:
-
+def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self: ...
 ```
 
 - `X | Y` not `Optional[X]` or `Union[X, Y]`
@@ -148,10 +149,7 @@ from typing_extensions import TypeIs
 
 
 def is_json_object(value: object) -> TypeIs[dict[str, JsonValue]]:
-    return isinstance(value, dict) and all(
-        isinstance(key, str) and is_json_value(item)
-        for key, item in value.items()
-    )
+    return isinstance(value, dict) and all(isinstance(key, str) and is_json_value(item) for key, item in value.items())
 ```
 
 ### Control flow
@@ -164,10 +162,7 @@ Builder pattern -- `with_*` methods return `Self`:
 
 ```python
 synthesizer = (
-    SafeSynthesizer(config)
-    .with_data_source(df)
-    .with_train(learning_rate=0.0001)
-    .with_generate(num_records=10000)
+    SafeSynthesizer(config).with_data_source(df).with_train(learning_rate=0.0001).with_generate(num_records=10000)
 )
 ```
 
@@ -231,6 +226,7 @@ def _collect_from_group(group, tokenizer, config):
         collected.append(encoded)
     return collected
 
+
 def build_training_examples(records, tokenizer, config):
     examples = []
     for group in records:
@@ -261,6 +257,7 @@ def _iter_examples(records, tokenizer, config):
                 encoded = _prepend_metadata(encoded, record)
             yield encoded
 
+
 def build_training_examples(records, tokenizer, config):
     return list(_iter_examples(records, tokenizer, config))
 ```
@@ -273,6 +270,7 @@ Break the problem into composable steps. Each function is pure and independently
 def _valid_records(group):
     return (r for r in group if r.is_valid())
 
+
 def _encode_within_budget(records, tokenizer, budget):
     tokens_used = 0
     for record in records:
@@ -282,19 +280,19 @@ def _encode_within_budget(records, tokenizer, budget):
         tokens_used += len(encoded)
         yield record, encoded
 
+
 def _maybe_add_metadata(record, encoded, include_metadata):
     if include_metadata:
         return _prepend_metadata(encoded, record)
     return encoded
+
 
 def build_training_examples(records, tokenizer, config):
     examples = []
     for group in records:
         if not group:
             continue
-        for record, encoded in _encode_within_budget(
-            _valid_records(group), tokenizer, config.token_budget
-        ):
+        for record, encoded in _encode_within_budget(_valid_records(group), tokenizer, config.token_budget):
             examples.append(_maybe_add_metadata(record, encoded, config.include_metadata))
     return examples
 ```
@@ -305,11 +303,13 @@ When a condition is a wall of boolean logic, name each piece:
 
 ```python
 # Before -- opaque
-if (prev_row_idx is not None and row_idx < prev_row_idx) or \
-   (current_group is not None and record_group != current_group) or \
-   num_sequences >= max_sequences or \
-   token_total + record_len > token_budget:
-       flush_example()
+if (
+    (prev_row_idx is not None and row_idx < prev_row_idx)
+    or (current_group is not None and record_group != current_group)
+    or num_sequences >= max_sequences
+    or token_total + record_len > token_budget
+):
+    flush_example()
 
 # After -- each condition tells you what it means
 restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
@@ -324,12 +324,24 @@ if restart_boundary or group_boundary or would_exceed_seq or would_exceed_tokens
 Or extract it entirely when the predicate is reused or has domain meaning:
 
 ```python
-def _should_flush_example(*, prev_row_idx, row_idx, current_group, record_group,
-                          num_sequences, max_sequences, token_total, record_len, token_budget) -> bool:
+def _should_flush_example(
+    *,
+    prev_row_idx,
+    row_idx,
+    current_group,
+    record_group,
+    num_sequences,
+    max_sequences,
+    token_total,
+    record_len,
+    token_budget,
+) -> bool:
     """Determine if the current training example should be flushed and a new one started."""
     restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
     group_boundary = current_group is not None and record_group != current_group
-    return restart_boundary or group_boundary or num_sequences >= max_sequences or token_total + record_len > token_budget
+    return (
+        restart_boundary or group_boundary or num_sequences >= max_sequences or token_total + record_len > token_budget
+    )
 ```
 
 ### Error messages
@@ -517,14 +529,14 @@ See [Data modeling](#data-modeling) for when to use `Field(description=...)` vs 
 Fields without defaults, with defaults, and with `Field()` all follow the same pattern:
 
 ```python
-    model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
+model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
 
-    is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
+is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
 
-    base_max_seq_length: int | None = Field(
-        default=None,
-        description="Context window size before RoPE scaling.",
-    )
+base_max_seq_length: int | None = Field(
+    default=None,
+    description="Context window size before RoPE scaling.",
+)
 ```
 
 #### Before and after
@@ -563,6 +575,7 @@ No docstring on abstract method:
 def teardown(self):
     pass
 
+
 # After
 @abc.abstractmethod
 def teardown(self) -> None:
@@ -583,6 +596,7 @@ Pydantic model without field documentation:
 # Before
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline."""
+
     data: DataParameters = Field(default_factory=DataParameters)
     evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters)
     training: TrainingHyperparams = Field(default_factory=TrainingHyperparams)
@@ -625,6 +639,7 @@ def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
         Batches of synthetic records.
     """
 
+
 # After (Yields: tells the reader what each iteration produces)
 def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
     """Generate synthetic records in batches.
@@ -645,8 +660,8 @@ Generator return type -- `Iterator` vs `Generator`:
 
 ```python
 # Iterator is correct for simple generators that only yield values
-def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
-    ...
+def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]: ...
+
 
 # Generator is needed when send() or return values are used
 def stream_with_feedback(self) -> Generator[pd.DataFrame, str, int]:
@@ -671,6 +686,7 @@ def stream_with_feedback(self) -> Generator[pd.DataFrame, str, int]:
 def adapter_path(self) -> Path:
     """Returns the adapter path."""
 
+
 # After (attribute style -- correct)
 @property
 def adapter_path(self) -> Path:
@@ -683,6 +699,7 @@ Redundant docstring that restates the signature:
 # Before (restates the obvious)
 def get_logger(name: str | None = None) -> CategoryLogger:
     """Get a logger with the given name."""
+
 
 # After (explains what the caller actually needs to know)
 def get_logger(name: str | None = None) -> CategoryLogger:
@@ -705,13 +722,13 @@ The before/after examples above demonstrate most rules. These additional points 
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
 - Cross-references in docstrings: use double backticks for inline code. For clickable API cross-links, use the `mkdocstrings` autorefs syntax:
 
-  ```
+  ```text
   [`display`][full.dotted.path]
   ```
 
   For example:
 
-  ```
+  ```text
   [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config]
   ```
 
@@ -824,7 +841,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### TOML
 
-- Format TOML with `mise run format`; dprint configuration lives in `dprint.json`.
+- Format TOML with `mise run format`; dprint configuration lives in `dprint.json`, which the shared development baseline writes.
 - Use four spaces for multiline arrays and keep inline-table spacing formatter-controlled.
 - Spaces around `=` for key-value pairs
 - Comments: `# comment` with inline comments for dependency pins
@@ -862,7 +879,6 @@ E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 ```
-
 
 ```markdown
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->

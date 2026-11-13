@@ -37,7 +37,6 @@ from nemo_safe_synthesizer.errors import GenerationError, InternalError, Paramet
 from nemo_safe_synthesizer.pii_replacer.replacement import birth_dates
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
-    ReplacementGenerator,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
     FakerReplacementGenerator,
@@ -141,7 +140,7 @@ class TestReplacementGenerator:
     )
     def test_named_generator_adapters_declare_their_backend(
         self,
-        generator_class: type[ReplacementGenerator],
+        generator_class: type[NemotronPersonasReplacementGenerator | FakerReplacementGenerator],
         backend: PiiSamplerBackend,
         tmp_path: Path,
     ) -> None:
@@ -166,7 +165,7 @@ class TestReplacementGenerator:
     )
     def test_named_generator_adapters_reject_the_wrong_backend(
         self,
-        generator_class: type[ReplacementGenerator],
+        generator_class: type[NemotronPersonasReplacementGenerator | FakerReplacementGenerator],
         backend: PiiSamplerBackend,
     ) -> None:
         with pytest.raises(InternalError, match="requires the .* sampler backend"):

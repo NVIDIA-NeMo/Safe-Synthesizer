@@ -9,7 +9,7 @@
 
 # Single source of truth for the pinned mise version. `tools/install-mise.sh`
 # reads `min_version` from this file; an older mise on PATH fails fast here too.
-min_version = '2026.7.5'
+min_version = "2026.11.3"
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.
@@ -20,12 +20,14 @@ github-cli = "latest"
 ripgrep = "latest"
 
 # Tools for managing Python environments and packages.
-dprint = "latest"
-uv = "0.13.4"
-ruff = "0.15.0"
-ty = "0.0.44"
+dprint = "0.64.3"
+uv = "0.13.5"
+ruff = "0.17.2"
+ty = "0.0.92"
 
 "aqua:j178/prek" = "latest"
+python = "3.13.17"
+rumdl = "0.3.0"
 
 [env]
 # Activate the project virtualenv (equivalent to the old .envrc "layout python3").
@@ -41,6 +43,6 @@ includes = [
 
 [settings]
 lockfile = true
-install_before = "7d" # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
+minimum_release_age = "7d" # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
 lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
 idiomatic_version_file_enable_tools = []

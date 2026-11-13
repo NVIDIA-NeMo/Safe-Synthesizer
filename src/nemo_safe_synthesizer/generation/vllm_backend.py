@@ -209,7 +209,7 @@ class VllmBackend(GeneratorBackend):
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
-        self.gen_method: partial | None = None
+        self.gen_method = None
         self._gen_method: partial | None = None
         # Initial processor without a tokenizer; replaced in ``initialize()`` with a
         # tokenizer-aware processor once the vLLM engine (and its tokenizer) exists.
@@ -533,7 +533,7 @@ class VllmBackend(GeneratorBackend):
                         result = self._gen_method(prompts=[_tokens_prompt(ids) for ids in token_ids_batch])
                     case [*ids] if all_equal_type(ids, int, flatten_iter=False):
                         logger.debug("vllm generate: token prompts (single flat list)")
-                        result = self._gen_method(prompts=_tokens_prompt(ids))
+                        result = self._gen_method(prompts=_tokens_prompt(cast(list[int], ids)))
                     case None:
                         logger.debug(
                             f"vllm generate: processing {len(prompts) if isinstance(prompts, list) else 1} prompts"
