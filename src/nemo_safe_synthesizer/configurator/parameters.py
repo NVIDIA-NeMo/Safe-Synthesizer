@@ -62,9 +62,8 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset()
     """Retired field names that raise ``removed_legacy_fields_message`` instead of being ignored.
 
-    Listed names are rejected even under ``unknown_fields="ignore"``. When older
-    runs persisted a listed name in their saved config, ``load_from_save_path``
-    must translate or drop it before validation, or those runs cannot be reloaded.
+    Listed names are rejected even under ``unknown_fields="ignore"``, including
+    in saved run configs reloaded by ``load_from_save_path``.
     """
     removed_legacy_fields_message: ClassVar[str] = "Removed configuration field(s) are no longer valid."
 

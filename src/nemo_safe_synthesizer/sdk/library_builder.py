@@ -72,28 +72,6 @@ def _default_drift_paths(saved_model: Parameters, default_model: Parameters, pre
     return paths
 
 
-def _upgrade_saved_config(saved_config: Mapping[str, object]) -> Mapping[str, object]:
-    """Translate fields that 0.1.x runs persisted but NSS 0.2.0 removed.
-
-    0.1.x saved configs always contain ``training.quantization_bits`` and,
-    unless a scheme was chosen, ``training.quantization_scheme: null``. Fold
-    both into ``quantization_scheme`` (4 -> bnb-4bit, otherwise bnb-8bit) so
-    those runs can still be reloaded for generation.
-    """
-    training = saved_config.get("training")
-    if not isinstance(training, Mapping):
-        return saved_config
-    upgraded_training = dict(training)
-    has_bits = "quantization_bits" in upgraded_training
-    has_null_scheme = "quantization_scheme" in upgraded_training and upgraded_training["quantization_scheme"] is None
-    if not (has_bits or has_null_scheme):
-        return saved_config
-    bits = upgraded_training.pop("quantization_bits", 8)
-    if upgraded_training.get("quantization_scheme") is None:
-        upgraded_training["quantization_scheme"] = "bnb-4bit" if bits == 4 else "bnb-8bit"
-    return {**saved_config, "training": upgraded_training}
-
-
 def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> None:
     """Warn when saved materialized values differ from current defaults."""
     current_defaults = SafeSynthesizerParameters()
@@ -356,8 +334,6 @@ class SafeSynthesizer(ConfigBuilder):
 
         with config_file.open() as file:
             saved_config_input = json.load(file)
-        if isinstance(saved_config_input, Mapping):
-            saved_config_input = _upgrade_saved_config(saved_config_input)
         unknown_fields_override = self._unknown_fields_override
         if runtime_config is not None and "unknown_fields" in runtime_config.model_fields_set:
             unknown_fields_override = runtime_config.unknown_fields
