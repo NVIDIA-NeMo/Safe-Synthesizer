@@ -988,6 +988,7 @@ class TestWarmupSteps:
             {"unknown_fields": "ignore", "training": {"warmup_ratio": 0.2}}
         ),
     ],
+    ids=["constructor", "training-model-validate", "nested-model-validate", "nested-unknown-fields-ignore"],
 )
 def test_removed_warmup_ratio_points_to_warmup_steps(validate):
     with pytest.raises((ParameterError, ValidationError), match=r"warmup_ratio.*removed.*warmup_steps"):
@@ -1001,6 +1002,7 @@ def test_removed_warmup_ratio_points_to_warmup_steps(validate):
         lambda: SafeSynthesizerParameters.model_validate({"training": {"quantization_bits": 4}}),
         lambda: SafeSynthesizerParameters.from_params(quantization_bits=4),
     ],
+    ids=["constructor", "nested-model-validate", "from-params-bare-name"],
 )
 def test_removed_quantization_bits_points_to_quantization_scheme(validate):
     with pytest.raises((ParameterError, ValidationError), match=r"quantization_bits.*removed.*quantization_scheme"):

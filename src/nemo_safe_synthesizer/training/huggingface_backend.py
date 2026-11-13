@@ -78,9 +78,6 @@ from ..training.callbacks import (
 from ..training.timeseries_preprocessing import process_timeseries_data
 from ..utils import write_json
 
-if TYPE_CHECKING:
-    pass
-
 logger = get_logger(__name__)
 
 DEFAULT_ROPE_THETA = 10000.0
