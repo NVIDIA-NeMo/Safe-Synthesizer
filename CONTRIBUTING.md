@@ -41,7 +41,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > NVIDIA employees have write access and can clone the repo directly. External contributors should fork first, then clone the fork and add an upstream remote.
 
-  ```bash
+   ```bash
    # NVIDIA internal -- clone directly
    git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 
@@ -49,30 +49,30 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    git clone https://github.com/<your-username>/Safe-Synthesizer.git
    cd Safe-Synthesizer
    git remote add upstream https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
-  ```
+   ```
 
 2. Set up the development environment:
 
    ```bash
-    cd Safe-Synthesizer
+   cd Safe-Synthesizer
 
-    # Install dev tools via mise (installs mise itself if missing)
-    make setup
+   # Install dev tools via mise (installs mise itself if missing)
+   make setup
 
-    # Install Python dependencies (choose one)
-    mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-    mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-    mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
-    mise run bootstrap-nss engine # Engine dependencies only
-    mise run bootstrap-nss dev    # Minimal dev dependencies only
+   # Install Python dependencies (choose one)
+   mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
+   mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
+   mise run bootstrap-nss engine # Engine dependencies only
+   mise run bootstrap-nss dev    # Minimal dev dependencies only
    ```
 
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
    ```bash
-    # Add to your shell profile (~/.bashrc, ~/.zshrc)
-    REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
-    printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
+   # Add to your shell profile (~/.bashrc, ~/.zshrc)
+   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+   printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
    ```
 
    Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
@@ -80,8 +80,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.env.local` (git-ignored, auto-loaded by mise):
 
    ```bash
-    # .env.local -- project-local overrides (git-ignored)
-    SS_WORKTREE_DIR="/path/to/worktrees"
+   # .env.local -- project-local overrides (git-ignored)
+   SS_WORKTREE_DIR="/path/to/worktrees"
    ```
 
    Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
