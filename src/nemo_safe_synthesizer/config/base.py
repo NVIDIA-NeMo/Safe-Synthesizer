@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,10 +32,6 @@ class NSSBaseModel(BaseModel):
     """
 
     model_config = pydantic_model_config
-
-    def dict(self, **kwargs: Any) -> dict[str, Any]:  # ty: ignore[invalid-type-form] -- method name shadows builtin dict; backward-compat shim for model_dump
-        """Return a dict representation via ``model_dump`` for backward compatibility."""
-        return self.model_dump(**kwargs)
 
 
 class LRScheduler(str, Enum):
