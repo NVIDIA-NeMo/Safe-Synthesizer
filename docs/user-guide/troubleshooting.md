@@ -68,16 +68,22 @@ configuration reference.
 
 ### Transformers v5 + vLLM Version Selection
 
-`uv sync` fails with an error mentioning incompatible `transformers` and
+Installation fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer pins one vLLM release and the `transformers` range that
-works with it; see the `engine` extra in `pyproject.toml` for the current
-pair. Keep vLLM's constraints intact so the resolver selects that pairing.
+Each Safe Synthesizer release requires one vLLM version and a matching range
+of `transformers` versions. This error usually means your project or
+environment pins a different `vllm` or `transformers` version, or forces a
+broad override such as `transformers>=5.0,<6`. The exact pins may be found
+in [pyproject.toml](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/pyproject.toml),
+though be sure to check the tag for your specific Safe Synthesizer version as
+these change relatively frequently.
 
-If you've vendored or copied parts of `pyproject.toml` into another project,
-avoid adding a broad `transformers>=5.0,<6` override for vLLM. That can erase
-vLLM's explicit constraints and allow incompatible Transformers releases.
+Remove your own `vllm` and `transformers` pins and overrides so Safe
+Synthesizer's requirements select the versions. To install into an existing
+environment, run `DRY_RUN=1 ./install_nss.sh` to print the installer's tested
+`uv pip` command, then adapt that command rather than writing your own. See
+[Install the Package](getting-started.md#install-the-package).
 
 ### Slow Tokenizer Warning
 
