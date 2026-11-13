@@ -11,6 +11,7 @@ from typing import cast
 
 import pandas as pd
 import pytest
+import torch
 from datasets import Dataset
 from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerBase
 
@@ -41,8 +42,15 @@ def fixture_tiny_llama_config(fixture_stub_tokenizer) -> LlamaConfig:
 
 @pytest.fixture
 def fixture_tiny_model(fixture_tiny_llama_config) -> LlamaForCausalLM:
-    """Randomly initialized LlamaForCausalLM. Tiny (~few KB), no download."""
-    return LlamaForCausalLM(fixture_tiny_llama_config)
+    """Randomly initialized LlamaForCausalLM. Tiny (~few KB), no download.
+
+    Weights are seeded so every run builds the same model; unseeded weights made
+    generation output vary between runs. ``fork_rng`` keeps the seed from leaking
+    into the global RNG state seen by other tests.
+    """
+    with torch.random.fork_rng():
+        torch.manual_seed(0)
+        return LlamaForCausalLM(fixture_tiny_llama_config)
 
 
 @pytest.fixture(scope="session")
