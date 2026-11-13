@@ -110,12 +110,6 @@ SafeSynthesizerParameters.from_params(
 )
 ```
 
-The flat structured-generation names from 0.1.x (`use_structured_generation`,
-`structured_generation_backend`, `structured_generation_schema_method`, and
-`structured_generation_use_single_sequence`) were removed in 0.2.0 and now raise
-an error. Use `generation.structured_generation.enabled`, `.backend`,
-`.schema_method`, and `.use_single_sequence` instead.
-
 ### Sparse Sources and Explicit Values
 
 Absence, explicit `None`, and an explicit value equal to the model default are
@@ -161,9 +155,9 @@ override only `generation`, `evaluation`, `emit_telemetry`, and
 `unknown_fields`. Telemetry and the unknown-field policy are overridden only
 when the runtime input explicitly sets them. An explicit
 `unknown_fields: ignore` is applied while loading the saved configuration,
-allowing unrecognized fields to be discarded when client and service versions
-differ. Fields that Safe Synthesizer has removed, such as `training.warmup_ratio`,
-still raise an error under this policy.
+allowing unrecognized fields to be discarded when reading configuration files
+from older versions. Fields that Safe Synthesizer has removed, such as
+`training.warmup_ratio`, still raise an error under this policy.
 Saved `training`, `data`, `privacy`, PII replacement, time-series, and preflight
 settings remain unchanged.
 
@@ -246,10 +240,6 @@ training:
   quantize_model: true
   quantization_scheme: nvfp4   # or bnb-4bit / bnb-8bit / fp8 / mxfp4
 ```
-
-`training.quantization_bits` was removed in 0.2.0. Use `bnb-4bit` in place of
-`quantization_bits: 4` and `bnb-8bit` (the default) in place of
-`quantization_bits: 8`.
 
 !!! note "LoftQ + non-BNB schemes"
     `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and
