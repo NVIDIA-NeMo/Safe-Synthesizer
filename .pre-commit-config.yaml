@@ -19,8 +19,20 @@ repos:
 
       - id: end-of-file-fixer
         types: [text]
-        files: &whitespace-files '(\.(py|pyi|sh|toml|yaml|yml|md|mdx|markdown|mdc|rst|txt|json|ini|in|js|ts|tsx|css|html|j2|template)|(^|/)(Makefile|Dockerfile|Dockerfile\.[^/]*|\.gitignore|\.gitattributes|\.dockerignore))$'
-        exclude: &whitespace-exclude '(^|/)(uv\.lock|mise\.lock|LICENSE|skill\.oms\.sig)(/|$)|^(vendor|third_party|docs/assets)/|\.(csv|tsv|lock)(/|$)|(^|/)(\.bzr|\.direnv|\.eggs|\.git|\.git-rewrite|\.hg|\.ipynb_checkpoints|\.mypy_cache|\.nox|\.pants\.d|\.pyenv|\.pytest_cache|\.pytype|\.ruff_cache|\.svn|\.tox|\.venv|\.vscode|__pypackages__|_build|buck-out|build|dist|node_modules|site-packages|venv)(/|$)|^(docs/(.*/)?.*\.markdown|docs/(.*/)?.*\.md|docs/(.*/)?.*\.mdx|(.*/)?.*\.ipynb)(/|$)'
+        files: &whitespace-files |
+          (?x)
+          \.(py|pyi|sh|toml|yaml|yml|md|mdx|markdown|mdc|rst|txt|json|ini|in|js|ts|tsx|css|html|j2|template)$
+          | (^|/)(Makefile|Dockerfile|Dockerfile\.[^/]*|\.gitignore|\.gitattributes|\.dockerignore)$
+        exclude: &whitespace-exclude |
+          (?x)
+          (^|/)(uv\.lock|mise\.lock|LICENSE|skill\.oms\.sig)(/|$)
+          | ^(vendor|third_party|docs/assets)/
+          | \.(csv|tsv|lock)(/|$)
+          | ^docs/(.*/)?.*\.md(/|$)
+          | (^|/)\.vscode(/|$)
+          | (^|/)build(/|$)
+          | (^|/)venv(/|$)
+          | ^(.*/)?.*\.ipynb(/|$)
 
       - id: mixed-line-ending
         args: [--fix=lf]

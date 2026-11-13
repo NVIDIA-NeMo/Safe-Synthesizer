@@ -80,6 +80,8 @@ wandb/
 # BEGIN managed: house
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+# From the shared development baseline (see .house.toml): a baseline upgrade rewrites this
+# block, so keep this repository's own rules outside it.
 .venv/
 venv/
 node_modules/
