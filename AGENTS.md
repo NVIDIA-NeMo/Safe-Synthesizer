@@ -7,6 +7,24 @@ Guide for AI agents (Cursor, Windsurf, Claude Code, etc.) working in the Safe-Sy
 
 This project loads local developer preferences from @AGENTS.local.md. You MUST read this file if it exists and give its instructions top priority.
 
+## Temporary requirement: MkDocs / Fern migration
+
+For documentation pages under `docs/`, agents MUST update the paired `.md` and
+`.mdx` files in the same change. They are independent sources with no automatic
+prose synchronization: `.md` serves production MkDocs, while `.mdx` serves Fern.
+Keep their content equivalent using each renderer's syntax. New prose pages need
+both formats and entries in `mkdocs.yml` and `docs/fern/versions/nightly.yml`.
+Do not remove legacy pages or MkDocs configuration during the migration.
+
+For tutorial notebooks, edit the `.ipynb` source and run
+`mise run docs:fern:notebooks`; review the generated MDX rather than editing it
+directly. Standalone maintainer/repository Markdown without an MDX counterpart
+does not need one. Do not update frozen release snapshots for routine changes.
+Verify both renderers with `mise run docs:build` and `mise run docs:fern:check`.
+See [the migration guide](docs/fern/FERN_MIGRATION.md#required-during-migration-update-both-formats)
+for the full authoring and cutover workflow. Keep this requirement until cutover
+and legacy-source cleanup are complete.
+
 ## Skills
 
 Repo-specific skills live in `.agents/skills/`; see `.agents/README.md` for the catalog. Read a skill when the task matches its scope instead of copying workflow details into this file.

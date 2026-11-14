@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Page ordering derived from toctree (use with add_frontmatter.py --nav-order)
+"./versions/nightly/pages/dev-notes/index.mdx": 1
+"./versions/nightly/pages/developer-guide/architecture.mdx": 1
+"./versions/nightly/pages/index.mdx": 1
+"./versions/nightly/pages/product-overview/pipeline.mdx": 1
+"./versions/nightly/pages/tutorials/index.mdx": 1
+"./versions/nightly/pages/user-guide/configuration.mdx": 1
+"./versions/nightly/pages/user-guide/evaluating-data.mdx": 1
+"./versions/nightly/pages/user-guide/getting-started.mdx": 1
+"./versions/nightly/pages/user-guide/time-series-metrics/autocorrelation-similarity.mdx": 1
+"./versions/nightly/pages/developer-guide/configuration_management.mdx": 2
+"./versions/nightly/pages/product-overview/data_synthesis.mdx": 2
+"./versions/nightly/pages/product-overview/pipeline/index.mdx": 2
+"./versions/nightly/pages/tutorials/safe-synthesizer-101.ipynb.mdx": 2
+"./versions/nightly/pages/user-guide/environment.mdx": 2
+"./versions/nightly/pages/user-guide/running.mdx": 2
+"./versions/nightly/pages/user-guide/troubleshooting.mdx": 2
+"./versions/nightly/pages/developer-guide/docker.mdx": 3
+"./versions/nightly/pages/product-overview/pii_replacement.mdx": 3
+"./versions/nightly/pages/tutorials/differential-privacy.ipynb.mdx": 3
+"./versions/nightly/pages/user-guide/docker.mdx": 3
+"./versions/nightly/pages/developer-guide/example-generation.mdx": 4
+"./versions/nightly/pages/product-overview/evaluation.mdx": 4
+"./versions/nightly/pages/tutorials/time-series-financial-transactions.ipynb.mdx": 4
+"./versions/nightly/pages/user-guide/getting-started/index.mdx": 4
+"./versions/nightly/pages/user-guide/kubernetes.mdx": 4
+"./versions/nightly/pages/developer-guide/architecture/index.mdx": 5
+"./versions/nightly/pages/developer-guide/observability.mdx": 5
+"./versions/nightly/pages/tutorials/healthcare-hospital-readmissions.ipynb.mdx": 5
+"./versions/nightly/pages/user-guide/private-workload-images.mdx": 5
+"./versions/nightly/pages/developer-guide/preflight-plugins.mdx": 6
+"./versions/nightly/pages/user-guide/evaluating-data/index.mdx": 6
+"./versions/nightly/pages/user-guide/configuration/index.mdx": 7
+"./versions/nightly/pages/user-guide/time-series-metrics/autocorrelation-similarity/index.mdx": 8

@@ -18,3 +18,17 @@ run = [
     "uv run --frozen --group docs mike deploy --push --update-aliases main latest",
     "uv run --frozen --group docs mike set-default --push latest",
 ]
+
+["docs:fern:preview"]
+description = "Generate a hosted Fern preview. Run docs:fern:check first; requires Fern authentication."
+dir = "docs/fern"
+run = "fern generate --docs --preview"
+
+["docs:fern:serve"]
+description = "Preview the staged Fern site locally."
+dir = "docs/fern"
+run = "fern docs dev"
+
+["docs:fern:notebooks"]
+description = "Regenerate Fern tutorial reading pages from notebooks without executing cells."
+run = "uv run --no-project tools/docs/export_fern_notebooks.py"

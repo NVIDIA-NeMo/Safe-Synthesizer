@@ -2,6 +2,11 @@
 
 NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets -- entirely synthetic data with no one-to-one mapping to your original records. Purpose-built for privacy compliance and sensitive information protection while preserving data utility for downstream AI tasks.
 
+> Documentation contributors: during the Fern migration, update paired
+> `docs/**/*.md` and `docs/**/*.mdx` pages together; they do not sync automatically.
+> For notebooks, edit `.ipynb` and regenerate the MDX companion. Follow the
+> [temporary authoring requirements](CONTRIBUTING.md#adding-or-editing-a-page).
+
 ## Quick Start
 
 <a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17">

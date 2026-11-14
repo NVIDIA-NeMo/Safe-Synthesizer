@@ -4,6 +4,11 @@ Thank you for your interest in contributing to NeMo Safe Synthesizer! This docum
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
+> Documentation migration in progress: update paired `docs/**/*.md` and
+> `docs/**/*.mdx` pages together in every documentation change. They do not sync
+> automatically. For notebooks, edit `.ipynb` and regenerate the MDX companion.
+> See [the documentation workflow](#adding-or-editing-a-page) before editing docs.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -612,6 +617,12 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 ## Documentation
 
+During the Fern migration, every change to a paired documentation page must
+update both its `.md` and `.mdx` files. MkDocs remains the production site; Fern
+is the staged replacement. The files do not synchronize automatically.
+See [the migration guide](docs/fern/FERN_MIGRATION.md#required-during-migration-update-both-formats)
+for the overlap policy and eventual cutover requirements.
+
 This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
 
 ### Local Preview
@@ -640,6 +651,86 @@ Build the static site (output in `site/`):
 mise run docs:build
 ```
 
+### Fern Validation and Previews
+
+Fern prose lives in `docs/**/*.mdx`. The site configuration is
+`docs/fern/docs.yml`, and nightly navigation is in
+`docs/fern/versions/nightly.yml`. Use explicit slugs to keep page URLs stable
+when reorganizing the sidebar. Images use the existing source-relative assets;
+use native Fern components for cards, tabs, and admonitions.
+
+The overall mise setup installs Node.js 22 and Fern CLI 5.201.0 from
+`.mise.toml` and `mise.lock`. No separate Fern installation is needed. Run these
+tasks from the repository root:
+
+| Task | Purpose |
+| --- | --- |
+| `mise run docs:fern:check` | Validate version alignment, configuration, MDX, and internal links. |
+| `mise run docs:fern:serve` | Start the local Fern development server. |
+| `mise run docs:fern:preview` | Generate a hosted preview; run the check task first. |
+| `mise run docs:fern:notebooks` | Regenerate notebook MDX without executing cells. |
+
+Validation runs `fern check --local --warnings --strict-broken-links` without
+`FERN_TOKEN`. It also fails on MDX parse warnings, which Fern can report with a
+successful exit code. Keep the Fern version in `.mise.toml`, `mise.lock`,
+`docs/fern/fern.config.json`, and any workflow CLI pins aligned; validation
+rejects a configuration mismatch. The CLI may need
+network access to resolve its configured version. Local validation does not
+prove that a hosted build will succeed or that every page renders correctly.
+
+For a hosted preview, authenticate with `fern login` or set `FERN_TOKEN`, then run:
+
+```bash
+mise run docs:fern:check && mise run docs:fern:preview
+```
+
+Command output, including the hosted preview URL, appears directly in the
+terminal or GitHub Actions log. Hosted previews send the selected documentation
+to Fern. For the NVIDIA theme in the local server, authentication is also needed;
+the unauthenticated local server starts without the central theme.
+An unauthenticated missing-redirects warning concerns comparison with the hosted
+instance; it does not establish that redirects work.
+
+`fern-docs-ci.yml` runs the same `docs:fern:check` task on every PR, pushes to
+`main`, merge queue checks, and manual dispatch. Its stable job name is
+**Fern Check**, and it requires no publishing token. `fern-docs-preview.yml` is
+manually dispatched from any repository branch. It runs `docs:fern:check` before
+`docs:fern:preview`, supplies the repository or organization `FERN_TOKEN` secret
+only to the preview step. Both workflows use the shared Python environment
+action to install mise tools. Neither publishes production
+documentation. See the [migration status](docs/fern/FERN_MIGRATION.md#current-status)
+for production publishing and instance setup.
+
+#### Notebooks and visual review
+
+Tutorial `.ipynb` files and their datasets remain the runnable sources. Their
+generated MDX companions provide static reading pages. The exporter does not
+execute cells and omits saved outputs. If a tutorial needs rendered outputs,
+agree on and review an export strategy before relying on them in the docs.
+
+After editing a notebook, run `mise run docs:fern:notebooks` and review the
+generated MDX diff. Check code formatting and notebook and dataset download
+links in the preview.
+
+Preview affected pages even when validation passes. Check cards, sidebar
+entries, tabs, admonitions, formulas, charts, Dev Notes bylines, and API symbol
+anchors as applicable. For navigation or theme changes, also check desktop and
+mobile layouts, light/dark themes, and search.
+
+#### Versioned documentation
+
+`nightly` follows `main`. Release documentation must reflect the exact release
+source, including API output, notebook reading pages, assets, and download links
+pinned to the release tag. Treat frozen snapshots as immutable except for
+deliberate backports. A `latest` alias should point to the current frozen GA
+release, rather than nightly content.
+
+When adding release publication, publish the complete version manifest so that
+publishing an older release cannot remove newer versions. Serialize main and
+release publications. Existing historical documentation at
+`https://nvidia-nemo.github.io/Safe-Synthesizer/` remains available; preserve
+version-specific URLs and assets rather than redirecting all releases to nightly.
+
 ### Directory Layout
 
 All documentation lives under `docs/`. The structure follows the [Diataxis](https://diataxis.fr/) framework:
@@ -654,9 +745,24 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 ### Adding or Editing a Page
 
-1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
-2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
-3. Run `mise run docs:serve` and verify the page renders correctly.
+1. Create or edit both the `.md` and `.mdx` versions under the appropriate
+   `docs/` subdirectory in the same change. Keep the content equivalent, using
+   MkDocs Material syntax in `.md` and Fern components in `.mdx`. Existing prose
+   pages have adjacent counterparts, such as `docs/user-guide/running.md` and
+   `docs/user-guide/running.mdx`.
+2. For new pages or navigation changes, update both `nav:` in `mkdocs.yml` and
+   `docs/fern/versions/nightly.yml`, keeping display names and order aligned.
+   Update links in both formats when changing a route. Retain the legacy sources
+   and MkDocs configuration until the documented cutover and cleanup.
+3. For tutorial changes, edit the `.ipynb` source, run
+   `mise run docs:fern:notebooks`, and include the regenerated MDX in the change.
+   Do not edit generated notebook MDX directly. Standalone maintainer/repository
+   Markdown without an MDX counterpart does not need a duplicate. Routine edits
+   must not change frozen release snapshots.
+4. Run `mise run docs:build` and `mise run docs:fern:check`. Preview affected pages
+   with `mise run docs:serve` and `mise run docs:fern:serve` to verify rendering.
+   See [Fern validation and previews](#fern-validation-and-previews) for Fern
+   setup and validation details.
 
 ### MkDocs Material Features
 
