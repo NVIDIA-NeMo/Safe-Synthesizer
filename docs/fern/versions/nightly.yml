@@ -1,0 +1,130 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+navigation:
+- page: Home
+  path: ../../index.mdx
+  slug: home
+- section: Product Overview
+  skip-slug: true
+  contents:
+  - page: Pipeline
+    path: ../../product-overview/pipeline.mdx
+    slug: product-overview/pipeline
+  - page: Data Synthesis
+    path: ../../product-overview/data_synthesis.mdx
+    slug: product-overview/data_synthesis
+  - page: PII Replacement
+    path: ../../product-overview/pii_replacement.mdx
+    slug: product-overview/pii_replacement
+  - page: Evaluation
+    path: ../../product-overview/evaluation.mdx
+    slug: product-overview/evaluation
+- section: Tutorials
+  skip-slug: true
+  contents:
+  - page: Tutorials
+    path: ../../tutorials/index.mdx
+    slug: tutorials
+  - page: Safe Synthesizer 101
+    path: ../../tutorials/safe-synthesizer-101.mdx
+    slug: tutorials/safe-synthesizer-101
+  - page: Differential Privacy
+    path: ../../tutorials/differential-privacy.mdx
+    slug: tutorials/differential-privacy
+  - page: Time-Series Financial Transactions
+    path: ../../tutorials/time-series-financial-transactions.mdx
+    slug: tutorials/time-series-financial-transactions
+  - page: Healthcare Hospital Readmissions
+    path: ../../tutorials/healthcare-hospital-readmissions.mdx
+    slug: tutorials/healthcare-hospital-readmissions
+  - page: Review the PII Replacement Plan
+    path: ../../tutorials/pii-replacement-review.mdx
+    slug: tutorials/pii-replacement-review
+- section: User Guide
+  skip-slug: true
+  contents:
+  - page: Getting Started
+    path: ../../user-guide/getting-started.mdx
+    slug: user-guide/getting-started
+  - page: Running Safe Synthesizer
+    path: ../../user-guide/running.mdx
+    slug: user-guide/running
+  - page: Customizing PII Replacement
+    path: ../../user-guide/customize-pii-replacement.mdx
+    slug: user-guide/customize-pii-replacement
+  - page: Docker
+    path: ../../user-guide/docker.mdx
+    slug: user-guide/docker
+  - page: Kubernetes Job
+    path: ../../user-guide/kubernetes.mdx
+    slug: user-guide/kubernetes
+  - page: Private Workload Images
+    path: ../../user-guide/private-workload-images.mdx
+    slug: user-guide/private-workload-images
+  - section: Troubleshooting
+    skip-slug: true
+    contents:
+    - page: Synthetic Data Quality
+      path: ../../user-guide/evaluating-data.mdx
+      slug: user-guide/evaluating-data
+    - page: Program Runtime
+      path: ../../user-guide/troubleshooting.mdx
+      slug: user-guide/troubleshooting
+  - section: Reference
+    skip-slug: true
+    contents:
+    - page: Configuration
+      path: ../../user-guide/configuration.mdx
+      slug: user-guide/configuration
+    - page: Environment Variables
+      path: ../../user-guide/environment.mdx
+      slug: user-guide/environment
+  - section: Time-Series Metrics (beta)
+    skip-slug: true
+    contents:
+    - page: Autocorrelation Similarity
+      path: ../../user-guide/time-series-metrics/autocorrelation-similarity.mdx
+      slug: user-guide/time-series-metrics/autocorrelation-similarity
+- section: Developer Guide
+  skip-slug: true
+  contents:
+  - page: Architecture
+    path: ../../developer-guide/architecture.mdx
+    slug: developer-guide/architecture
+  - page: Configuration Management
+    path: ../../developer-guide/configuration_management.mdx
+    slug: developer-guide/configuration_management
+  - page: Docker
+    path: ../../developer-guide/docker.mdx
+    slug: developer-guide/docker
+  - page: Example Generation
+    path: ../../developer-guide/example-generation.mdx
+    slug: developer-guide/example-generation
+  - page: Observability
+    path: ../../developer-guide/observability.mdx
+    slug: developer-guide/observability
+  - page: Preflight Plugins
+    path: ../../developer-guide/preflight-plugins.mdx
+    slug: developer-guide/preflight-plugins
+- section: Dev Notes
+  skip-slug: true
+  contents:
+  - page: Dev Notes
+    path: ../../dev-notes/index.mdx
+    slug: dev-notes
+  - page: Tuning NeMo Safe Synthesizer for Agent Conversations (Part 2)
+    path: ../../dev-notes/posts/tuning-synthetic-conversations-abcd.mdx
+    slug: dev-notes/posts/tuning-synthetic-conversations-abcd
+  - page: Synthesizing Agent Conversations with NeMo Safe Synthesizer (Part 1)
+    path: ../../dev-notes/posts/abcd-conversations-to-synthetic-training-data.mdx
+    slug: dev-notes/posts/abcd-conversations-to-synthetic-training-data
+  - page: Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets
+    path: ../../dev-notes/posts/faster-generation-with-prompt-aware-token-budgets.mdx
+    slug: dev-notes/posts/faster-generation-with-prompt-aware-token-budgets
+  - page: Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions
+      Data
+    path: ../../dev-notes/posts/does-nemo-safe-synthesizer-actually-work.mdx
+    slug: dev-notes/posts/does-nemo-safe-synthesizer-actually-work
+  - page: 'Private by Design: Introducing NeMo Safe Synthesizer'
+    path: ../../dev-notes/posts/introducing-nemo-safe-synthesizer.mdx
+    slug: dev-notes/posts/introducing-nemo-safe-synthesizer

@@ -66,6 +66,11 @@ extra:
     default: latest
     alias: true
 
+# Keep the parallel Fern tree out of MkDocs output during migration.
+exclude_docs: |
+  fern/
+  **/*.mdx
+
 watch:
   - src/nemo_safe_synthesizer
   - docs/
