@@ -26,7 +26,7 @@ from nemo_safe_synthesizer.config.evaluate import (
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig, PiiReplacementPlan
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
-from nemo_safe_synthesizer.config.training import TrainingHyperparams
+from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
@@ -223,8 +223,8 @@ class TestVRAMHeadroomCheck:
         assert any(i.code == expected_code and i.severity == expected_severity for i in issues)
         assert not any(i.code == opposite_code for i in issues)
 
-    @pytest.mark.parametrize("quantization_bits", (4, 8))
-    def test_quantized_load_can_reduce_full_vram_check_below_warning(self, default_config, quantization_bits):
+    @pytest.mark.parametrize("quantization_scheme", (QuantizationScheme.BNB_4BIT, QuantizationScheme.BNB_8BIT))
+    def test_quantized_load_can_reduce_full_vram_check_below_warning(self, default_config, quantization_scheme):
         """Runtime quantization settings affect the complete VRAM preflight path."""
         metadata = self._metadata(autoconfig=self._autoconfig())
         fake_props = MagicMock(total_memory=14 * 1024**3)
@@ -234,7 +234,7 @@ class TestVRAMHeadroomCheck:
             patch("torch.cuda.get_device_properties", return_value=fake_props),
         ):
             default_config.training.quantize_model = True
-            default_config.training.quantization_bits = quantization_bits
+            default_config.training.quantization_scheme = quantization_scheme
             quantized_issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
             default_config.training.quantize_model = False
             unquantized_issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
@@ -295,7 +295,7 @@ class TestVRAMHeadroomCheck:
         default_config.training.quantize_model = False
         bpw_unquantized = bytes_per_base_weight(default_config.training)
         default_config.training.quantize_model = True
-        default_config.training.quantization_bits = 4
+        default_config.training.quantization_scheme = QuantizationScheme.BNB_4BIT
         bpw_quantized = bytes_per_base_weight(default_config.training)
         assert bpw_unquantized > bpw_quantized
 

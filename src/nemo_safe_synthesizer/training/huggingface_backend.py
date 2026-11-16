@@ -78,9 +78,6 @@ from ..training.callbacks import (
 from ..training.timeseries_preprocessing import process_timeseries_data
 from ..utils import write_json
 
-if TYPE_CHECKING:
-    from ..config.training import QuantizationScheme
-
 logger = get_logger(__name__)
 
 DEFAULT_ROPE_THETA = 10000.0
@@ -228,33 +225,19 @@ class HuggingFaceBackend(TrainingBackend):
             **model_kwargs,
         )
 
-    def _resolve_quantization_scheme(self) -> "QuantizationScheme":
-        """Resolve which quantization scheme to apply.
-
-        Prefers the explicit ``quantization_scheme`` field; falls back to
-        the legacy ``quantization_bits`` alias when unset.
-        """
-        from ..config.training import QuantizationScheme
-
-        cfg = self.params.training
-        if cfg.quantization_scheme is not None:
-            return cfg.quantization_scheme
-        return QuantizationScheme.BNB_4BIT if cfg.quantization_bits == 4 else QuantizationScheme.BNB_8BIT
-
     def _get_quantization_config_if_enabled(self) -> QuantizationConfigMixin | None:
         """Build the v5 quantization config for the configured scheme, or None.
 
         Returns ``None`` when ``quantize_model`` is disabled. Otherwise
-        resolves the scheme (new ``quantization_scheme`` field, or legacy
-        ``quantization_bits`` fallback) and returns the corresponding v5
-        config object — ``BitsAndBytesConfig`` for the bnb-* schemes,
+        returns the v5 config object for ``training.quantization_scheme`` —
+        ``BitsAndBytesConfig`` for the bnb-* schemes,
         ``FineGrainedFP8Config``/``TorchAoConfig``/``Mxfp4Config`` for the
         others.
         """
         if not self.params.training.quantize_model:
             return None
 
-        scheme = self._resolve_quantization_scheme()
+        scheme = self.params.training.quantization_scheme
         logger.info(f"Quantizing model with scheme={scheme.value}")
         return get_quantization_config(scheme)
 
@@ -357,7 +340,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
         if self.params.training.quantize_model:
-            scheme = self._resolve_quantization_scheme()
+            scheme = self.params.training.quantization_scheme
             self.quant_params = self.quant_params | quantize_params
             logger.info(f"Quantizing model with scheme={scheme.value} (~{scheme.effective_bits} bits/param)")
             self.quant_params["peft_type"] = self.params.training.peft_implementation.upper()
