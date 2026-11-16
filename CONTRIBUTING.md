@@ -4,11 +4,6 @@ Thank you for your interest in contributing to NeMo Safe Synthesizer! This docum
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
-> Documentation migration in progress: update paired `docs/**/*.md` and
-> `docs/**/*.mdx` pages together in every documentation change. They do not sync
-> automatically. For notebooks, edit `.ipynb` and regenerate the MDX companion.
-> See [the documentation workflow](#adding-or-editing-a-page) before editing docs.
-
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -617,6 +612,11 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 ## Documentation
 
+> Documentation migration in progress: update paired `docs/**/*.md` and
+> `docs/**/*.mdx` pages together in every documentation change. They do not sync
+> automatically. For notebooks, edit `.ipynb` and regenerate the MDX companion.
+> See [the documentation workflow](#adding-or-editing-a-page) before editing docs.
+
 During the Fern migration, every change to a paired documentation page must
 update both its `.md` and `.mdx` files. MkDocs remains the production site; Fern
 is the staged replacement. The files do not synchronize automatically.
@@ -673,7 +673,7 @@ tasks from the repository root:
 Validation runs `fern check --local --warnings --strict-broken-links` without
 `FERN_TOKEN`. It also fails on MDX parse warnings, which Fern can report with a
 successful exit code. Keep the Fern version in `.mise.toml`, `mise.lock`,
-`docs/fern/fern.config.json`, and any workflow CLI pins aligned; validation
+`docs/fern/fern.config.json` aligned; validation
 rejects a configuration mismatch. The CLI may need
 network access to resolve its configured version. Local validation does not
 prove that a hosted build will succeed or that every page renders correctly.
@@ -684,9 +684,8 @@ For a hosted preview, authenticate with `fern login` or set `FERN_TOKEN`, then r
 mise run docs:fern:check && mise run docs:fern:preview
 ```
 
-Command output, including the hosted preview URL, appears directly in the
-terminal or GitHub Actions log. Hosted previews send the selected documentation
-to Fern. For the NVIDIA theme in the local server, authentication is also needed;
+Hosted previews send the selected documentation
+to Fern. To use the NVIDIA theme in the local server, authentication is also needed;
 the unauthenticated local server starts without the central theme.
 An unauthenticated missing-redirects warning concerns comparison with the hosted
 instance; it does not establish that redirects work.
