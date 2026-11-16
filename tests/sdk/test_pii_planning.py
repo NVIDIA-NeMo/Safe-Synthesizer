@@ -349,6 +349,7 @@ def test_replace_pii_emits_completed_telemetry_with_sampler_backend(
     assert event.pii_plan_source == "provided"
     assert event.pii_replaced_columns_bucket == "1-5"
     assert event.pii_locale == "en_US"
+    assert event.failed_stage == "none"
     assert event.job_duration_sec >= 0.0
 
 
@@ -363,8 +364,37 @@ def test_replace_pii_emits_error_telemetry_when_pii_is_disabled(
     with pytest.raises(ParameterError, match="PII replacement is disabled"):
         nss.replace_pii()
 
-    assert [(e.task, e.task_status, e.pii_sampler_backend) for e in fixture_no_telemetry_network] == [
-        ("replace_pii", TaskStatusEnum.ERROR, "undefined")
+    assert [(e.task, e.task_status, e.pii_sampler_backend, e.failed_stage) for e in fixture_no_telemetry_network] == [
+        ("replace_pii", TaskStatusEnum.ERROR, "undefined", "pii_planning")
+    ]
+
+
+def test_replace_pii_reports_the_replacement_stage_when_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent],
+) -> None:
+    replace_pii = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=replace_pii, emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+
+    def failing_replace(self, dataframe, **kwargs):
+        raise RuntimeError("replacement failed")
+
+    monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer.replace", failing_replace)
+
+    with pytest.raises(RuntimeError, match="replacement failed"):
+        nss.replace_pii()
+
+    assert [(e.task_status, e.failed_stage) for e in fixture_no_telemetry_network] == [
+        (TaskStatusEnum.ERROR, "pii_replacement")
     ]
 
 

@@ -28,6 +28,7 @@ from ..package_info import __version__
 from ..telemetry import (
     DeploymentTypeEnum,
     NSSTrainingAndGenerationEvent,
+    RunStageEnum,
     TaskStatusEnum,
     TelemetryHandler,
     _deployment_type,
@@ -165,11 +166,17 @@ def _build_telemetry_event(
         records_bucket = bucket_records(len(ss._data_source))
         columns_bucket = bucket_columns(len(ss._data_source.columns))
 
+    if status == TaskStatusEnum.COMPLETED:
+        failed_stage = "none"
+    else:
+        failed_stage = ss._stage.value if ss._stage is not None else "undefined"
+
     gpu = get_device_name()
 
     return NSSTrainingAndGenerationEvent(
         task=task,
         task_status=status,
+        failed_stage=failed_stage,
         deployment_type=ss._deployment_type,
         job_duration_sec=duration,
         num_records_generated=num_records,
@@ -329,6 +336,8 @@ class SafeSynthesizer(ConfigBuilder):
         # Why PII replay could not run, shown in the evaluation report; None when it ran or was turned off.
         self._pii_replay_skipped_reason: str | None = None
         self._pii_plan_source: str | None = None
+        # The stage in progress, reported as failedStage when a run errors or is canceled.
+        self._stage: RunStageEnum | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
@@ -387,6 +396,7 @@ class SafeSynthesizer(ConfigBuilder):
         """
         from ..llm.metadata import ModelMetadata
 
+        self._stage = RunStageEnum.DATA_LOADING
         self._ensure_observability()
         assert self._workdir is not None
         # Use source paths which point to parent workdir when resuming for generation
@@ -485,8 +495,10 @@ class SafeSynthesizer(ConfigBuilder):
                 f"output_path cannot be named {PII_REPLACEMENT_PLAN_FILENAME}; NSS writes the replacement plan to that "
                 "file next to the configuration"
             )
+        self._stage = RunStageEnum.DATA_LOADING
         self._ensure_observability()
         self.resolve()
+        self._stage = RunStageEnum.PII_PLANNING
 
         config = self._nss_config
         dataframe = self._data_source
@@ -582,6 +594,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._ensure_observability()
         self._total_start = time.monotonic()
         self._pii_plan_source = None
+        self._stage = None
         try:
             result = self._replace_full_input_pii(output_path, config_output_path, source_text)
             _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED, task="replace_pii")
@@ -609,6 +622,7 @@ class SafeSynthesizer(ConfigBuilder):
             raise ParameterError("source_text must have the same columns and row count as the data source")
         from ..pii_replacer import TabularPiiReplacer
 
+        self._stage = RunStageEnum.PII_REPLACEMENT
         result = TabularPiiReplacer(
             resolved,
             data_config=config.data,
@@ -619,6 +633,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._column_statistics = result.column_statistics
         self._pii_replacer_time = result.replacement_time_seconds
 
+        self._stage = RunStageEnum.SAVING
         if output_path is not None and Path(output_path).suffix.lower() == ".parquet":
             # Parquet stores column types, so the replaced frame is written as is.
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -706,6 +721,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         self._total_start = time.monotonic()
         self._pii_plan_source = None
+        self._stage = RunStageEnum.DATA_LOADING
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
 
@@ -729,6 +745,7 @@ class SafeSynthesizer(ConfigBuilder):
         # settings produce structured preflight issues instead of downstream
         # pandas/sklearn errors. The later full preflight run still uses the
         # final training split and real metadata for split-dependent checks.
+        self._stage = RunStageEnum.PREFLIGHT
         preflight = run_preflight(
             self._data_source,
             self._nss_config,
@@ -746,6 +763,7 @@ class SafeSynthesizer(ConfigBuilder):
             workdir.ensure_directories()
             self.plan_pii_replacement(output_path=workdir.run_dir / RESOLVED_CONFIG_FILENAME)
 
+        self._stage = RunStageEnum.DATA_PROCESSING
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
@@ -763,6 +781,7 @@ class SafeSynthesizer(ConfigBuilder):
         if not check_only and self._nss_config.replace_pii is not None:
             from ..pii_replacer import TabularPiiReplacer
 
+            self._stage = RunStageEnum.PII_REPLACEMENT
             # Pattern coverage was checked against the full input during planning; the training split is a
             # subset and can fall just below the 99% threshold.
             replacement_result = TabularPiiReplacer(
@@ -783,6 +802,7 @@ class SafeSynthesizer(ConfigBuilder):
                 workdir.run_dir / RESOLVED_CONFIG_FILENAME,
                 plan_path=workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
             )
+            self._stage = RunStageEnum.DATA_PROCESSING
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
@@ -813,6 +833,7 @@ class SafeSynthesizer(ConfigBuilder):
             save_config(self._nss_config, config_path)
             self._preflight_config_path = config_path
 
+        self._stage = RunStageEnum.PREFLIGHT
         preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
         self.preflight_report = preflight
         for issue in preflight.warnings:
@@ -833,6 +854,7 @@ class SafeSynthesizer(ConfigBuilder):
             return self
 
         self._data_processed = True
+        self._stage = RunStageEnum.DATA_PROCESSING
 
         # Always persist the original training split -- this is the version
         # reloaded by load_from_save_path and used for evaluation metrics.
@@ -880,6 +902,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert self._llm_metadata is not None
 
+        self._stage = RunStageEnum.TRAINING
         if self._total_start is None:
             self._total_start = time.monotonic()
         if not os.environ.get("NSS_PHASE"):
@@ -917,6 +940,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..generation.timeseries_backend import TimeseriesBackend
         from ..generation.vllm_backend import VllmBackend
 
+        self._stage = RunStageEnum.GENERATION
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "generate"
         if TYPE_CHECKING:
@@ -959,6 +983,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..evaluation.evaluator import Evaluator
         from ..results import make_nss_results
 
+        self._stage = RunStageEnum.EVALUATION
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "evaluate"
         if TYPE_CHECKING:
@@ -1068,6 +1093,7 @@ class SafeSynthesizer(ConfigBuilder):
             output_file: Explicit output path for the CSV.  Falls back
                 to ``workdir.output_file`` when ``None``.
         """
+        self._stage = RunStageEnum.SAVING
         if TYPE_CHECKING:
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)

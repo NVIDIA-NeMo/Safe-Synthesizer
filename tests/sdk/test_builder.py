@@ -20,7 +20,12 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event, _emit_nss_telemetry
-from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, NSSTrainingAndGenerationEvent, TaskStatusEnum
+from nemo_safe_synthesizer.telemetry import (
+    DeploymentTypeEnum,
+    NSSTrainingAndGenerationEvent,
+    RunStageEnum,
+    TaskStatusEnum,
+)
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
 _REPORT_HTML = "<html><body>report</body></html>"
@@ -258,10 +263,11 @@ def _builder_for_telemetry() -> SafeSynthesizer:
 
 
 _LABEL_RULE = (32, r"[a-z][a-z0-9_-]{0,31}")
-# A copy of the maxLength and pattern of each PII field in the shared NeMo
-# telemetry schema. The collector rejects the whole event when one field breaks
-# its rule, so every event these tests build is checked against them.
-_SCHEMA_PII_FIELD_RULES = {
+# A copy of the maxLength and pattern of the PII fields and failedStage in the
+# shared NeMo telemetry schema. The collector rejects the whole event when one
+# field breaks its rule, so every event these tests build is checked against them.
+_SCHEMA_FIELD_RULES = {
+    "failedStage": _LABEL_RULE,
     "piiSamplerBackend": _LABEL_RULE,
     "piiPlanSource": _LABEL_RULE,
     "piiReplacedColumnsBucket": (32, r"undefined|[0-9]+(-[0-9]+|\+)?"),
@@ -274,9 +280,9 @@ _SCHEMA_PII_FIELD_RULES = {
 }
 
 
-def _assert_pii_fields_fit_schema(event: NSSTrainingAndGenerationEvent) -> None:
+def _assert_fields_fit_schema(event: NSSTrainingAndGenerationEvent) -> None:
     payload = event.model_dump(by_alias=True, mode="json")
-    for field, (max_length, pattern) in _SCHEMA_PII_FIELD_RULES.items():
+    for field, (max_length, pattern) in _SCHEMA_FIELD_RULES.items():
         value = payload[field]
         assert len(value) <= max_length, (field, value)
         assert re.fullmatch(pattern, value), (field, value)
@@ -286,7 +292,7 @@ def _build_checked_telemetry_event(
     builder: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
 ) -> NSSTrainingAndGenerationEvent:
     event = _build_telemetry_event(builder, status, task=task)
-    _assert_pii_fields_fit_schema(event)
+    _assert_fields_fit_schema(event)
     return event
 
 
@@ -586,6 +592,58 @@ class TestTelemetryEmission:
         assert event.pii_locale == "undefined"
         assert event.pii_llm_mode == "undefined"
         assert event.pii_llm_model == "undefined"
+
+    @pytest.mark.parametrize(
+        ("status", "stage", "expected"),
+        [
+            (TaskStatusEnum.COMPLETED, RunStageEnum.SAVING, "none"),
+            (TaskStatusEnum.ERROR, RunStageEnum.PREFLIGHT, "preflight"),
+            (TaskStatusEnum.ERROR, RunStageEnum.TRAINING, "training"),
+            (TaskStatusEnum.CANCELED, RunStageEnum.GENERATION, "generation"),
+            (TaskStatusEnum.ERROR, None, "undefined"),
+        ],
+        ids=["completed", "preflight-error", "training-error", "canceled-in-generation", "error-before-any-stage"],
+    )
+    def test_build_telemetry_event_reports_failed_stage(
+        self, status: TaskStatusEnum, stage: RunStageEnum | None, expected: str
+    ):
+        builder = _builder_for_telemetry()
+        builder._stage = stage
+
+        event = _build_checked_telemetry_event(builder, status)
+
+        assert event.failed_stage == expected
+
+    @pytest.mark.parametrize("stage", list(RunStageEnum))
+    def test_every_run_stage_fits_the_schema(self, stage: RunStageEnum):
+        builder = _builder_for_telemetry()
+        builder._stage = stage
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.ERROR)
+
+        assert event.model_dump(by_alias=True, mode="json")["failedStage"] == stage.value
+
+    def test_run_reports_the_stage_that_raised(self, monkeypatch, tmp_path: Path):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
+        emitted = []
+
+        def fake_emit(ss, status):
+            emitted.append((status, ss._stage))
+
+        def failing_generate():
+            builder._stage = RunStageEnum.GENERATION
+            raise RuntimeError("generation failed")
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder._emit_nss_telemetry", fake_emit)
+        builder._data_source = _SMALL_DF
+        builder.process_data = MagicMock(return_value=builder)
+        builder.train = MagicMock(return_value=builder)
+        builder.generate = MagicMock(side_effect=failing_generate)
+
+        with pytest.raises(RuntimeError, match="generation failed"):
+            builder.run()
+
+        assert emitted == [(TaskStatusEnum.ERROR, RunStageEnum.GENERATION)]
 
     def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
         class FailingTelemetryHandler:

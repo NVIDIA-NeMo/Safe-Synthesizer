@@ -71,6 +71,20 @@ class TaskStatusEnum(str, Enum):
     UNDEFINED = "undefined"
 
 
+class RunStageEnum(str, Enum):
+    """Pipeline stage a Safe Synthesizer run is in, reported as ``failedStage`` when it stops early."""
+
+    DATA_LOADING = "data_loading"
+    PREFLIGHT = "preflight"
+    DATA_PROCESSING = "data_processing"
+    PII_PLANNING = "pii_planning"
+    PII_REPLACEMENT = "pii_replacement"
+    TRAINING = "training"
+    GENERATION = "generation"
+    EVALUATION = "evaluation"
+    SAVING = "saving"
+
+
 def _telemetry_enabled() -> bool:
     return os.getenv("NEMO_TELEMETRY_ENABLED", "true").lower() in ("1", "true", "yes")
 
@@ -219,6 +233,15 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         ...,
         serialization_alias="taskStatus",
         description="The final status of the task.",
+    )
+    failed_stage: str = Field(
+        default="undefined",
+        serialization_alias="failedStage",
+        description=(
+            "Pipeline stage the task was in when it failed or was canceled: a RunStageEnum value such as "
+            "'pii_planning' or 'training'. 'none' when the task completed; 'undefined' when it stopped before "
+            "any stage started."
+        ),
     )
     deployment_type: DeploymentTypeEnum = Field(
         default_factory=_deployment_type,
