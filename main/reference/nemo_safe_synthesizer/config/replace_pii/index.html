@@ -12356,6 +12356,9 @@ live in <code>pii_replacer.planning.validation</code>.</p>
         <p>Validators:</p>
         <ul>
             <li>
+              <code><span title="nemo_safe_synthesizer.config.replace_pii.PiiReplacementPlan._reject_removed_legacy_fields">_reject_removed_legacy_fields</span></code>
+            </li>
+            <li>
               <code><span title="nemo_safe_synthesizer.config.replace_pii.PiiReplacementPlan._validate_data_to_sampler_value_mapping">_validate_data_to_sampler_value_mapping</span></code>
             </li>
             <li>
@@ -13144,7 +13147,7 @@ or the corresponding CLI option; it is never stored in this model.</p>
         <p>Validators:</p>
         <ul>
             <li>
-              <code><span title="nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig._reject_v2_fields">_reject_v2_fields</span></code>
+              <code><span title="nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig._reject_removed_legacy_fields">_reject_removed_legacy_fields</span></code>
             </li>
             <li>
               <code><span title="nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig._validate_schema_version">_validate_schema_version</span></code>
@@ -13376,11 +13379,11 @@ or the corresponding CLI option; it is never stored in this model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/config/replace_pii.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1226">1226</a></span>
-<span class="normal"><a href="#__codelineno-0-1227">1227</a></span>
-<span class="normal"><a href="#__codelineno-0-1228">1228</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1226"><a id="__codelineno-0-1226" name="__codelineno-0-1226"></a><span class="k">def</span><span class="w"> </span><span class="nf">with_plan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plan</span><span class="p">:</span> <span class="n">PiiReplacementPlan</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-</span><span id="__span-0-1227"><a id="__codelineno-0-1227" name="__codelineno-0-1227"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a copy whose ``replacement_plan`` is ``plan``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1228"><a id="__codelineno-0-1228" name="__codelineno-0-1228"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;replacement_plan&quot;</span><span class="p">:</span> <span class="n">plan</span><span class="p">})</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1219">1219</a></span>
+<span class="normal"><a href="#__codelineno-0-1220">1220</a></span>
+<span class="normal"><a href="#__codelineno-0-1221">1221</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1219"><a id="__codelineno-0-1219" name="__codelineno-0-1219"></a><span class="k">def</span><span class="w"> </span><span class="nf">with_plan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plan</span><span class="p">:</span> <span class="n">PiiReplacementPlan</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+</span><span id="__span-0-1220"><a id="__codelineno-0-1220" name="__codelineno-0-1220"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a copy whose ``replacement_plan`` is ``plan``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1221"><a id="__codelineno-0-1221" name="__codelineno-0-1221"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;replacement_plan&quot;</span><span class="p">:</span> <span class="n">plan</span><span class="p">})</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13403,11 +13406,11 @@ or the corresponding CLI option; it is never stored in this model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/config/replace_pii.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1230">1230</a></span>
-<span class="normal"><a href="#__codelineno-0-1231">1231</a></span>
-<span class="normal"><a href="#__codelineno-0-1232">1232</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1230"><a id="__codelineno-0-1230" name="__codelineno-0-1230"></a><span class="k">def</span><span class="w"> </span><span class="nf">with_sampler_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">PiiSamplerBackend</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-</span><span id="__span-0-1231"><a id="__codelineno-0-1231" name="__codelineno-0-1231"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a copy whose ``sampler`` uses ``backend``, keeping its other settings.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1232"><a id="__codelineno-0-1232" name="__codelineno-0-1232"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sampler&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;backend&quot;</span><span class="p">:</span> <span class="n">backend</span><span class="p">})})</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1223">1223</a></span>
+<span class="normal"><a href="#__codelineno-0-1224">1224</a></span>
+<span class="normal"><a href="#__codelineno-0-1225">1225</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1223"><a id="__codelineno-0-1223" name="__codelineno-0-1223"></a><span class="k">def</span><span class="w"> </span><span class="nf">with_sampler_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">PiiSamplerBackend</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+</span><span id="__span-0-1224"><a id="__codelineno-0-1224" name="__codelineno-0-1224"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a copy whose ``sampler`` uses ``backend``, keeping its other settings.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1225"><a id="__codelineno-0-1225" name="__codelineno-0-1225"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sampler&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;backend&quot;</span><span class="p">:</span> <span class="n">backend</span><span class="p">})})</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

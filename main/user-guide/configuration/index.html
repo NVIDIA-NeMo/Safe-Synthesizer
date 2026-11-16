@@ -9469,13 +9469,12 @@ omit the flag to use the default, or set it in YAML.</p>
 <p>See <a href="../running/#using-yaml-config-files">Using YAML Config Files with the CLI and SDK</a>
 for more detail on combining config files with runtime overrides.</p>
 <h3 id="python-parameter-construction">Python Parameter Construction<a class="headerlink" href="#python-parameter-construction" title="Permanent link">&para;</a></h3>
-<p><code>SafeSynthesizerParameters.from_params()</code> accepts four forms of keyword name:</p>
+<p><code>SafeSynthesizerParameters.from_params()</code> accepts three forms of keyword name:</p>
 <ul>
 <li>top-level fields such as <code>generation</code> or <code>replace_pii</code>;</li>
-<li>canonical dotted paths such as <code>generation.num_records</code>;</li>
+<li>canonical dotted paths such as <code>generation.num_records</code>; and</li>
 <li>bare nested names such as <code>num_records</code>, when that name is unique in the
-  configuration schema; and</li>
-<li>legacy structured-generation aliases, retained for compatibility.</li>
+  configuration schema.</li>
 </ul>
 <p>Python syntax requires dotted names to be passed through <code>**</code> expansion:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizerParameters</span>
@@ -9493,9 +9492,6 @@ path:</p>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="o">**</span><span class="p">{</span><span class="s2">&quot;generation.structured_generation.enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>Legacy aliases such as <code>use_structured_generation</code> and
-<code>structured_generation_backend</code> remain accepted. New code should use the
-canonical nested shape or dotted path.</p>
 <h3 id="sparse-sources-and-explicit-values">Sparse Sources and Explicit Values<a class="headerlink" href="#sparse-sources-and-explicit-values" title="Permanent link">&para;</a></h3>
 <p>Absence, explicit <code>None</code>, and an explicit value equal to the model default are
 different inputs. An absent field inherits the next lower-precedence source or
@@ -9529,7 +9525,9 @@ override only <code>generation</code>, <code>evaluation</code>, <code>emit_telem
 <code>unknown_fields</code>. Telemetry and the unknown-field policy are overridden only
 when the runtime input explicitly sets them. An explicit
 <code>unknown_fields: ignore</code> is applied while loading the saved configuration,
-allowing legacy fields to be discarded when client and service versions differ.
+allowing unrecognized fields to be discarded when reading configuration files
+from older versions. Fields that Safe Synthesizer has removed, such as
+<code>training.warmup_ratio</code>, still raise an error under this policy.
 Saved <code>training</code>, <code>data</code>, <code>privacy</code>, PII replacement, time-series, and preflight
 settings remain unchanged.</p>
 <p>Runs trained with a release before 0.2.0 saved the previous <code>replace_pii</code>
@@ -9608,15 +9606,9 @@ for the full field list.</p>
 </tr>
 <tr>
 <td><code>training.quantization_scheme</code></td>
-<td><code>null</code></td>
+<td><code>"bnb-8bit"</code></td>
 <td>Quantization scheme: <code>bnb-4bit</code>, <code>bnb-8bit</code>, <code>fp8</code>, <code>nvfp4</code>, <code>mxfp4</code></td>
-<td>See <a href="#quantization-schemes">Quantization schemes</a> below; leave unset to fall back to <code>quantization_bits</code></td>
-</tr>
-<tr>
-<td><code>training.quantization_bits</code></td>
-<td><code>8</code></td>
-<td>Legacy bit width (4 or 8) used when <code>quantization_scheme</code> is unset</td>
-<td>Prefer setting <code>quantization_scheme</code> explicitly for new configs</td>
+<td>See <a href="#quantization-schemes">Quantization schemes</a> below</td>
 </tr>
 <tr>
 <td><code>training.attn_implementation</code></td>
@@ -9704,14 +9696,14 @@ following quantization schemes via transformers v5's
 <td>bitsandbytes NF4 + bf16 compute</td>
 <td style="text-align: right;">4</td>
 <td>Ampere+ (sm_80+)</td>
-<td>Default for QLoRA fine-tuning. LoftQ-compatible.</td>
+<td>Lowest VRAM of the bitsandbytes schemes. LoftQ-compatible.</td>
 </tr>
 <tr>
 <td><code>bnb-8bit</code></td>
 <td>bitsandbytes int8</td>
 <td style="text-align: right;">8</td>
 <td>Ampere+ (sm_80+)</td>
-<td>Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible.</td>
+<td>Default. Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible.</td>
 </tr>
 <tr>
 <td><code>fp8</code></td>
@@ -9741,9 +9733,6 @@ following quantization schemes via transformers v5's
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">quantize_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">quantization_scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvfp4</span><span class="w">   </span><span class="c1"># or bnb-4bit / bnb-8bit / fp8 / mxfp4</span>
 </span></code></pre></div>
-<p>If <code>quantization_scheme</code> is unset, Safe Synthesizer falls back to
-<code>quantization_bits</code> for backward compatibility (<code>4</code> → <code>bnb-4bit</code>,
-<code>8</code> → <code>bnb-8bit</code>).</p>
 <div class="admonition note">
 <p class="admonition-title">LoftQ + non-BNB schemes</p>
 <p><code>peft_implementation: loftq</code> is incompatible with <code>fp8</code>, <code>nvfp4</code>, and

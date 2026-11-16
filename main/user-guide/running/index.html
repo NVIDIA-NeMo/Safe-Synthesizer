@@ -10799,8 +10799,8 @@ via <a href="https://opacus.ai/">Opacus</a>.</p>
 </div>
 <h3 id="quantization">Quantization<a class="headerlink" href="#quantization" title="Permanent link">&para;</a></h3>
 <p>Enabling quantization reduces VRAM consumption at the cost of some numerical
-precision. Set <code>training.quantize_model</code> to <code>true</code> and choose a bit width with
-<code>training.quantization_bits</code>.</p>
+precision. Set <code>training.quantize_model</code> to <code>true</code> and choose a scheme with
+<code>training.quantization_scheme</code> (default <code>bnb-8bit</code>).</p>
 <table>
 <thead>
 <tr>
@@ -10820,14 +10820,14 @@ precision. Set <code>training.quantize_model</code> to <code>true</code> and cho
 <td>Use when VRAM is not a constraint</td>
 </tr>
 <tr>
-<td>8-bit</td>
+<td>8-bit (<code>bnb-8bit</code>)</td>
 <td>~50% reduction</td>
 <td>Near-full</td>
 <td>Slightly slower</td>
 <td>Good balance for most cases</td>
 </tr>
 <tr>
-<td>4-bit</td>
+<td>4-bit (<code>bnb-4bit</code>)</td>
 <td>~75% reduction</td>
 <td>Reduced</td>
 <td>Faster</td>
@@ -10840,7 +10840,7 @@ precision. Set <code>training.quantize_model</code> to <code>true</code> and cho
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span>--training__quantize_model<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span>--training__quantization_bits<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span>--training__quantization_scheme<span class="w"> </span>bnb-4bit<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
@@ -10850,14 +10850,14 @@ precision. Set <code>training.quantize_model</code> to <code>true</code> and cho
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">synthesizer</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="n">SafeSynthesizer</span><span class="p">()</span>
 </span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">)</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="o">.</span><span class="n">with_train</span><span class="p">(</span><span class="n">quantize_model</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">quantization_bits</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="o">.</span><span class="n">with_train</span><span class="p">(</span><span class="n">quantize_model</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">quantization_scheme</span><span class="o">=</span><span class="s2">&quot;bnb-4bit&quot;</span><span class="p">)</span>
 </span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="p">)</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">training</span><span class="p">:</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">quantize_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="nt">quantization_bits</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="nt">quantization_scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bnb-4bit</span>
 </span></code></pre></div>
 </div>
 </div>
