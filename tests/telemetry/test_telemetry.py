@@ -170,9 +170,13 @@ class TestSanitizePiiLlmModelForTelemetry:
     def test_missing_and_local_path_labels_are_kept(self, model, expected):
         assert sanitize_pii_llm_model_for_telemetry(model) == expected
 
-    @pytest.mark.parametrize("model", ["café/planner", "planner-ü", "o" * 65 + "/planner"])
-    def test_repo_ids_the_schema_rejects_are_other(self, model):
-        assert sanitize_pii_llm_model_for_telemetry(model) == "other"
+    def test_an_organization_the_schema_rejects_is_other(self):
+        assert sanitize_pii_llm_model_for_telemetry("o" * 65 + "/planner") == "other"
+
+    @pytest.mark.parametrize("model", ["café/planner", "planner-ü"])
+    def test_non_ascii_names_are_never_sent(self, model):
+        # Newer huggingface_hub versions reject these names (local_path); older ones accept them (other).
+        assert sanitize_pii_llm_model_for_telemetry(model) in {"local_path", "other"}
 
 
 class TestSanitizeLocaleForTelemetry:

@@ -168,9 +168,11 @@ def sanitize_pii_llm_model_for_telemetry(model: str | None) -> str:
     """Return a telemetry-safe label for the PII planning model.
 
     Applies ``sanitize_model_for_telemetry``, then reports ``"other"`` for a
-    repo ID the telemetry schema does not accept: one with non-ASCII
-    characters, an organization longer than 64 characters, or a name longer
-    than 127 characters.
+    repo ID the telemetry schema does not accept, such as one with an
+    organization longer than 64 characters. A name with non-ASCII letters is
+    never sent as is, but its label depends on the installed
+    ``huggingface_hub``: versions whose repo ID check rejects it report
+    ``"local_path"`` and older versions that accept it report ``"other"``.
     """
     label = sanitize_model_for_telemetry(model)
     if label in ("undefined", LOCAL_MODEL_LABEL) or _PII_LLM_MODEL_PATTERN.fullmatch(label) is not None:

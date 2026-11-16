@@ -503,13 +503,6 @@ class TestTelemetryEmission:
                 "local_path",
             ),
             (
-                {"model_id": "café/planner"},
-                "auto_discovery",
-                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
-                "endpoint",
-                "other",
-            ),
-            (
                 {"model_id": "o" * 65 + "/planner"},
                 "auto_discovery",
                 {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
@@ -532,7 +525,6 @@ class TestTelemetryEmission:
             "endpoint-bundled-model",
             "endpoint-repo-id-model",
             "endpoint-local-path-model",
-            "endpoint-non-ascii-model",
             "endpoint-long-org-model",
             "endpoint-without-model",
         ],
