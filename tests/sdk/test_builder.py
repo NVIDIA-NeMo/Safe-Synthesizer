@@ -516,6 +516,13 @@ class TestTelemetryEmission:
                 "invalid",
                 "undefined",
             ),
+            (
+                {"model_id": "acme/planner-7b"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://[::1/v1"},
+                "invalid",
+                "undefined",
+            ),
         ],
         ids=[
             "user-supplied-plan",
@@ -527,6 +534,7 @@ class TestTelemetryEmission:
             "endpoint-local-path-model",
             "endpoint-long-org-model",
             "endpoint-without-model",
+            "endpoint-malformed-url",
         ],
     )
     def test_build_telemetry_event_reports_pii_llm_mode_and_model(

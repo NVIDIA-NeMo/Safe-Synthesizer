@@ -112,7 +112,8 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
 
     try:
         inference = resolve_planning_inference(config.llm)
-    except ParameterError:
+    except ValueError:
+        # ParameterError is a ValueError; a malformed endpoint URL raises a plain ValueError from urlparse.
         return "invalid", "undefined"
     if isinstance(inference, LocalServerRequest):
         return "local", sanitize_pii_llm_model_for_telemetry(inference.profile.model_id)
@@ -130,7 +131,8 @@ def _build_telemetry_event(
     num_records = -1
     sqs = -1.0
     dps = -1.0
-    if hasattr(ss, "results") and ss.results is not None:
+    # Only run() sets results, so a replace_pii() event must not report results left by an earlier run().
+    if task != "replace_pii" and hasattr(ss, "results") and ss.results is not None:
         summary = ss.results.summary
         if summary.num_valid_records is not None:
             num_records = summary.num_valid_records
@@ -720,7 +722,6 @@ class SafeSynthesizer(ConfigBuilder):
         from ..preflight import PreflightStage, run_preflight
 
         self._total_start = time.monotonic()
-        self._pii_plan_source = None
         self._stage = RunStageEnum.DATA_LOADING
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
@@ -729,7 +730,10 @@ class SafeSynthesizer(ConfigBuilder):
 
         if self._loaded_from_save_path or getattr(self, "_data_processed", False):
             # Resume path or already-processed data in this builder instance; nothing to do.
+            # The plan source recorded when the data was processed still describes this config.
             return self
+
+        self._pii_plan_source = None
 
         self._resolve_nss_config()
         self._resolve_datasource()

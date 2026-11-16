@@ -6,7 +6,7 @@
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -441,3 +441,42 @@ def test_plan_pii_replacement_keeps_auto_discovery_plan_source_after_resolution(
     event = _build_telemetry_event(nss, TaskStatusEnum.COMPLETED)
     assert event.pii_plan_source == "auto_discovery"
     assert event.pii_replaced_columns_bucket == "1-5"
+
+
+def test_process_data_keeps_the_plan_source_when_data_is_already_processed(tmp_path: Path) -> None:
+    # run() calls process_data() again after a caller already did; the planning that ran the first time still counts.
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(), emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+    nss._pii_plan_source = "auto_discovery"
+    nss._data_processed = True
+
+    nss.process_data()
+
+    assert nss._pii_plan_source == "auto_discovery"
+
+
+def test_replace_pii_does_not_report_results_from_an_earlier_run(
+    tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
+) -> None:
+    replace_pii = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=replace_pii, emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+    nss.results = MagicMock()
+    nss.results.summary.num_valid_records = 100
+    nss.results.summary.synthetic_data_quality_score = 8.5
+    nss.results.summary.data_privacy_score = 9.0
+
+    nss.replace_pii()
+
+    assert [
+        (e.num_records_generated, e.synthetic_quality_score, e.data_privacy_score) for e in fixture_no_telemetry_network
+    ] == [(-1, -1.0, -1.0)]
