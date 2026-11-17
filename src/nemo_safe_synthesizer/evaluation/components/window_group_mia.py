@@ -64,10 +64,11 @@ class _Sequence:
     """One group's numeric values in time order, with gaps filled by interpolation.
 
     ``values`` has shape ``(steps, columns)``, one row per time step, before
-    any windows are cut from it.
+    any windows are cut from it. ``group`` keeps the original label, so labels
+    such as ``1`` and ``"1"`` stay separate groups until they are displayed.
     """
 
-    group: str | None
+    group: Any
     values: NDArray[np.float64]
 
 
@@ -82,7 +83,7 @@ class _Windows:
     """
 
     values: NDArray[np.float64]
-    groups: list[str | None]
+    groups: list[Any]
     total: int
 
     def __len__(self) -> int:
@@ -456,9 +457,8 @@ class WindowGroupMIA(TimeSeriesComponent):
         sequences = []
         for label in labels:
             frame = group_frame(df, group_column, label, timestamp_column)
-            values = frame[columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-            group = None if label is None else str(label)
-            sequences.append(_Sequence(group=group, values=WindowGroupMIA._interpolate(values)))
+            values = frame[columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+            sequences.append(_Sequence(group=label, values=WindowGroupMIA._interpolate(values)))
         return sequences
 
     @staticmethod
@@ -634,14 +634,14 @@ class WindowGroupMIA(TimeSeriesComponent):
         windows: _Windows, squared: NDArray[np.float64], squared_threshold: float | None
     ) -> list[dict[str, Any]]:
         """Summarize each training group's windows: count, exact copies, and flags."""
-        by_group: dict[str | None, list[float]] = {}
+        by_group: dict[Any, list[float]] = {}
         for group, distance in zip(windows.groups, squared, strict=True):
             by_group.setdefault(group, []).append(float(distance))
         summaries = []
-        for group, values in sorted(by_group.items(), key=lambda item: str(item[0])):
+        for group, values in sorted(by_group.items(), key=lambda item: group_sort_key(item[0])):
             group_squared = np.array(values)
             summary: dict[str, Any] = {
-                "group": group,
+                "group": None if group is None else str(group),
                 "windows": len(values),
                 "exact_copy_rate": float(np.mean(group_squared == 0.0)),
             }

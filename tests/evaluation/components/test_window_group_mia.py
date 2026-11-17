@@ -373,6 +373,34 @@ def test_window_group_mia_skips_groups_with_a_column_of_fewer_than_two_finite_va
     assert {row["group"] for row in component.details["per_group"]} == {f"train-{index}" for index in range(2, GROUPS)}
 
 
+def test_window_group_mia_treats_nullable_missing_values_like_nan():
+    rng = np.random.default_rng(29)
+    training = _frame(_with_missing(rng, _entities(rng, 100)), "train-")
+    synthetic = _frame(_entities(rng, 100), "train-")
+    holdout = _frame(_entities(rng, 100), "holdout-")
+    nullable = [frame.astype({"a": "Float64", "b": "Float64"}) for frame in (training, synthetic, holdout)]
+    assert training["a"].isna().any()
+
+    expected = WindowGroupMIA.from_evaluation_datasets(_datasets(training, synthetic, holdout), _config())
+    component = WindowGroupMIA.from_evaluation_datasets(_datasets(*nullable), _config())
+
+    assert component.details["evaluation_mode"] == "full"
+    assert component.score.score == expected.score.score
+
+
+def test_window_group_mia_keeps_group_labels_that_look_the_same_as_text_apart():
+    rng = np.random.default_rng(30)
+    holdout = _frame(_entities(rng, 100, count=2), "holdout-")
+    holdout["entity"] = pd.Series([1] * 100 + ["1"] * 100, dtype=object)
+
+    component = WindowGroupMIA.from_evaluation_datasets(
+        _datasets(_frame(_entities(rng, 100), "train-"), _frame(_entities(rng, 100), "train-"), holdout), _config()
+    )
+
+    assert component.details["counts"]["holdout_groups_with_windows"] == 2
+    assert component.details["evaluation_mode"] == "full"
+
+
 def test_window_group_mia_column_cap_uses_a_reproducible_sample():
     rng = np.random.default_rng(14)
     training, synthetic, holdout = (_frame(_entities(rng, 60), prefix) for prefix in ("t", "t", "h"))
