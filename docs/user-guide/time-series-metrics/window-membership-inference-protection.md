@@ -132,9 +132,10 @@ The score needs:
 - At least 20 training windows and 20 holdout windows.
 - At least two holdout groups.
 
-When these aren't met, the card skips the score. It still shows the share of
-training windows with an exact copy in the synthetic data and the Closest match
-chart.
+When these aren't met, the card skips the score. If the holdout is what's
+missing, the card still shows the share of training windows with an exact copy
+in the synthetic data and the Closest match chart. These copy diagnostics need
+at least one complete window in both the training and the synthetic data.
 
 ## Example scenarios
 
