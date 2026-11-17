@@ -1,0 +1,304 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Dataframe-aware validation for final PII replacement plans."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterator
+from datetime import datetime, timezone
+
+import pandas as pd
+
+from ...config.data import DataParameters
+from ...config.replace_pii import (
+    ENTITY_BY_TYPE,
+    EntityType,
+    PatternSyntax,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+)
+from ...config.time_series import TimeSeriesParameters
+from ...errors import InternalError, ParameterError
+from ...observability import get_logger
+from ..replacement.collisions import all_distinct
+from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
+from .patterns import compile_character_mask, compile_name_pattern
+
+logger = get_logger(__name__)
+
+_DISTINCT_MASK_ENTITY_TYPES = MASK_ALLOCATED_ENTITY_TYPES | {EntityType.PHONE_NUMBER}
+"""Entity types whose distinct originals need distinct replacements that fit a character mask."""
+
+__all__ = [
+    "column_pattern_issue",
+    "column_pattern_syntax_issue",
+    "get_protected_columns",
+    "identifier_mask_capacity_issue",
+    "validate_plan",
+    "value_matches_pattern",
+]
+
+# A column has one pattern, so it must describe nearly every value; the small
+# tolerance only absorbs stray malformed cells.
+MIN_PATTERN_COVERAGE = 0.99
+
+
+def get_protected_columns(
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+) -> frozenset[str]:
+    """Return ordering columns that automatic replacement must preserve."""
+    candidates = {
+        data_config.order_training_examples_by,
+        time_series.timestamp_column if time_series is not None else None,
+    }
+    return frozenset(column for column in candidates if column is not None)
+
+
+def _strftime_pattern_error(pattern: str) -> str | None:
+    try:
+        # Use an aware probe so timezone directives such as ``%z`` and ``%Z``
+        # render values that can be parsed back with the same format.
+        rendered = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone.utc).strftime(pattern)
+        datetime.strptime(rendered, pattern)
+    # strptime compiles the format to a regex; a repeated directive such as
+    # "%d %d" fails that compile with re.error rather than ValueError.
+    except (ValueError, re.error) as exc:
+        return str(exc)
+    return None
+
+
+def _pattern_matcher(
+    entity_type: EntityType,
+    pattern: str,
+) -> tuple[re.Pattern[str] | None, str | None]:
+    pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
+    if pattern_syntax is PatternSyntax.CHARACTER_MASK:
+        return compile_character_mask(pattern)
+    if pattern_syntax is PatternSyntax.NAME_PARTS:
+        return compile_name_pattern(entity_type, pattern)
+    return None, None
+
+
+def value_matches_pattern(entity_type: EntityType, pattern: str, value: str) -> bool:
+    """Return whether ``value`` follows ``pattern`` under ``entity_type``'s pattern grammar.
+
+    Patterns without a matcher accept every value.
+
+    Example:
+        ``value_matches_pattern(EntityType.UNIQUE_IDENTIFIER, "[aB]", "A")`` is ``False``.
+    """
+    if ENTITY_BY_TYPE[entity_type].pattern_syntax is PatternSyntax.STRFTIME:
+        return _parses_datetime(value, pattern)
+    matcher, _ = _pattern_matcher(entity_type, pattern)
+    return matcher is None or matcher.fullmatch(value) is not None
+
+
+def column_pattern_syntax_issue(spec: PiiColumnPlan) -> str | None:
+    """Return the grammar issue with a replacement column's pattern, independent of any data.
+
+    Args:
+        spec: Replacement column carrying the pattern to check.
+
+    Returns:
+        A description of the grammar problem, or ``None`` when the column has no
+        pattern or the pattern follows its entity's grammar.
+
+    Raises:
+        InternalError: If the entity's pattern syntax has no matcher.
+    """
+    pattern = spec.pattern
+    if pattern is None:
+        return None
+    pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
+    if pattern_syntax is PatternSyntax.STRFTIME:
+        if error := _strftime_pattern_error(pattern):
+            return f"column {spec.column_name!r}: pattern {pattern!r} is not valid strftime ({error})"
+        return None
+    matcher, error = _pattern_matcher(spec.entity_type, pattern)
+    if error is not None:
+        return f"column {spec.column_name!r}: pattern {pattern!r} {error}"
+    if matcher is None:
+        raise InternalError(
+            f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
+        )
+    return None
+
+
+def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
+    """Return the dataframe-aware pattern issue for one replacement column.
+
+    A pattern must follow its entity's grammar and cover at least
+    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. Columns without a
+    pattern, or absent from ``df``, have no pattern issue.
+
+    Args:
+        df: Dataframe whose column values the pattern must describe.
+        spec: Replacement column carrying the pattern to check.
+
+    Returns:
+        A description of the first problem found, or ``None`` when the pattern is valid.
+
+    Raises:
+        InternalError: If the entity's pattern syntax has no matcher.
+    """
+    if (issue := column_pattern_syntax_issue(spec)) is not None:
+        return issue
+    coverage = _pattern_coverage(df, spec)
+    if coverage is not None and coverage < MIN_PATTERN_COVERAGE:
+        return (
+            f"column {spec.column_name!r}: pattern {spec.pattern!r} covers {coverage:.1%} of non-null values; "
+            f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
+        )
+    return None
+
+
+def _pattern_coverage(df: pd.DataFrame, spec: PiiColumnPlan) -> float | None:
+    """Return the share of the column's non-null values ``spec.pattern`` matches, or ``None`` if there is none.
+
+    The pattern's syntax must already be valid.
+    """
+    pattern = spec.pattern
+    if pattern is None or spec.column_name not in df.columns:
+        return None
+    # Blank strings are left unreplaced, so they do not count against the pattern.
+    values = [value for value in df[spec.column_name].dropna().astype(str).tolist() if value.strip()]
+    if not values:
+        return None
+    if ENTITY_BY_TYPE[spec.entity_type].pattern_syntax is PatternSyntax.STRFTIME:
+        matches = sum(_parses_datetime(value, pattern) for value in values)
+    else:
+        matcher, _ = _pattern_matcher(spec.entity_type, pattern)
+        if matcher is None:
+            # column_pattern_syntax_issue already rejected patterns without a matcher.
+            raise InternalError(
+                f"pattern {pattern!r} for column {spec.column_name!r} passed syntax checks without a matcher"
+            )
+        matches = sum(matcher.fullmatch(value) is not None for value in values)
+    return matches / len(values)
+
+
+def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
+    """Return an issue when an identifier mask is too small to keep a distinct column's replacements distinct.
+
+    Replacements must stay distinct only when the column's original values are all distinct. Each also
+    differs from its own original, so the mask needs more values than the column has. Replacement still
+    succeeds with a smaller mask, but some replacements repeat. Automatic planning uses this to drop an
+    LLM-proposed mask in favor of an unpatterned replacement with more room.
+
+    Example:
+        Pattern ``"USER-#"`` has 10 values; a column holding the 10 distinct values ``"USER-0"`` through
+        ``"USER-9"`` returns an issue, while a column where values repeat does not.
+    """
+    pattern = spec.pattern
+    if pattern is None or spec.entity_type not in _DISTINCT_MASK_ENTITY_TYPES or spec.column_name not in df.columns:
+        return None
+    values = df[spec.column_name].dropna().astype(str).tolist()
+    if not all_distinct(values):
+        return None
+    # Replacements must differ ignoring letter case, so count the values that still differ without it.
+    if (size := MaskSpace.from_pattern(pattern).folded_size) > len(values):
+        return None
+    return (
+        f"column {spec.column_name!r}: pattern {pattern!r} has {size} values that differ ignoring case, too few to give each of "
+        f"the column's {len(values)} distinct values its own replacement"
+    )
+
+
+def _iter_pattern_issues(
+    df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool, warn_on_low_coverage: bool
+) -> Iterator[str]:
+    for spec in plan.columns_to_replace:
+        if (issue := column_pattern_syntax_issue(spec)) is not None:
+            yield issue
+            continue
+        coverage = _pattern_coverage(df, spec) if check_coverage else None
+        if coverage is None or coverage >= MIN_PATTERN_COVERAGE:
+            continue
+        if not warn_on_low_coverage:
+            yield (
+                f"column {spec.column_name!r}: pattern {spec.pattern!r} covers {coverage:.1%} of non-null values; "
+                f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
+            )
+            continue
+        logger.user.warning(
+            f"Column {spec.column_name!r}: pattern {spec.pattern!r} covers only {coverage:.1%} of non-null values. "
+            "Values it does not fit still get replacements written in the pattern."
+        )
+
+
+def _parses_datetime(value: str, pattern: str) -> bool:
+    try:
+        datetime.strptime(value, pattern)
+    except (ValueError, re.error):
+        return False
+    return True
+
+
+def _iter_reference_issues(
+    df: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    protected_columns: frozenset[str],
+) -> Iterator[str]:
+    dataframe_columns = set(df.columns)
+    for spec in plan.columns_to_replace:
+        if spec.column_name not in dataframe_columns:
+            yield f"replacement column {spec.column_name!r} is not present in the dataframe"
+        if spec.column_name in protected_columns:
+            yield f"protected column {spec.column_name!r} cannot be replaced"
+        for dependency in spec.depends_on:
+            if dependency.column_name not in dataframe_columns:
+                yield (
+                    f"column {spec.column_name!r}: depends_on column "
+                    f"{dependency.column_name!r} is not present in the dataframe"
+                )
+
+
+def validate_plan(
+    df: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    *,
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+    check_pattern_coverage: bool = True,
+    warn_on_low_pattern_coverage: bool = False,
+) -> None:
+    """Validate the selected final plan against the dataframe and data configuration.
+
+    This is the resolver's single dataframe-aware validation gate. Pydantic
+    model construction and LLM response parsing are separate, context-free
+    checks performed at their respective seams.
+
+    Args:
+        df: Data the plan is validated against.
+        plan: Final replacement plan.
+        data_config: Data parameters, used for grouping and protected columns.
+        time_series: Time-series parameters, used for protected columns.
+        check_pattern_coverage: Require each pattern to cover at least 99% of
+            the column's values. Pass ``False`` when ``df`` is a subset of
+            data the plan was already validated against, such as a training
+            split: a subset can fall just below the threshold although the
+            full input met it. Pattern syntax is checked either way.
+        warn_on_low_pattern_coverage: Log a warning instead of failing when a
+            pattern covers less than 99%, as for a plan the user supplied.
+    """
+    issues: list[str] = []
+    group_column = data_config.group_training_examples_by
+    # Replacement consistency is derived from data configuration rather than
+    # stored in the reusable plan: configured groups use group consistency;
+    # otherwise every record is replaced independently.
+    if group_column is not None and group_column not in df.columns:
+        issues.append(f"group column {group_column!r} is not present in the dataframe")
+
+    issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
+    issues.extend(
+        _iter_pattern_issues(
+            df, plan, check_coverage=check_pattern_coverage, warn_on_low_coverage=warn_on_low_pattern_coverage
+        )
+    )
+
+    if issues:
+        details = "\n".join(f"  - {issue}" for issue in issues)
+        raise ParameterError(f"Invalid PII replacement plan for this dataframe:\n{details}")

@@ -572,11 +572,6 @@ class Workdir:
         return self.train.adapter.schema
 
     @property
-    def dataset_schema_file(self) -> Path:
-        """Alias for schema_file (backwards compatibility)."""
-        return self.schema_file
-
-    @property
     def output_file(self) -> Path:
         """Shortcut to generate.output."""
         return self.generate.output

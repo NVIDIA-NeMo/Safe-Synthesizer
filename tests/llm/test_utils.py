@@ -30,16 +30,16 @@ def test_load_fast_tokenizer_forces_fast_backend() -> None:
     from_pretrained.assert_called_once_with("test-model", use_fast=True, trust_remote_code=True)
 
 
-def test_get_quantization_config_rejects_invalid_legacy_bit_alias() -> None:
-    with pytest.raises(ValueError, match="Expected 4 or 8"):
-        get_quantization_config(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias
+def test_get_quantization_config_rejects_unknown_scheme() -> None:
+    with pytest.raises(ValueError, match="int4"):
+        get_quantization_config("int4")
 
 
 def test_get_quantization_config_8bit_uses_valid_bitsandbytes_kwargs() -> None:
     config = MagicMock()
 
     with patch("transformers.BitsAndBytesConfig", return_value=config) as bitsandbytes_config:
-        result = get_quantization_config(8)
+        result = get_quantization_config("bnb-8bit")
 
     assert result is config
     bitsandbytes_config.assert_called_once_with(load_in_8bit=True)

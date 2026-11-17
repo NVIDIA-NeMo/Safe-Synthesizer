@@ -25,7 +25,7 @@ NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datase
 Deploys an NVIDIA GPU instance with NeMo Safe Synthesizer and the tutorial notebooks
 already installed, so there is no CUDA, driver, or Python setup to do. The
 [Safe Synthesizer 101](tutorials/safe-synthesizer-101.ipynb) notebook runs end to end in
-about 15 minutes.
+about 25 minutes.
 
 !!! warning "The instance bills continuously"
     Most GPU providers on Brev do not support stopping an instance. Billing runs from

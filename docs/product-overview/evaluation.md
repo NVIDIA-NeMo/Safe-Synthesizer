@@ -96,7 +96,7 @@ This score measures resistance to attribute inference attacks -- whether sensiti
 
 PII Replay counts the total and unique instances of personally identifiable information (PII) from your training data that show up in your synthetic data. Lower counts indicate higher privacy.
 
-You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling [Replace PII](pii_replacement.md) before synthesis.
+You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, keep [PII replacement](pii_replacement.md) turned on; it is on by default.
 
 ## Time-Series Metrics (beta)
 

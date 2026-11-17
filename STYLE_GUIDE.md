@@ -154,8 +154,6 @@ def is_json_object(value: object) -> TypeIs[dict[str, JsonValue]]:
     )
 ```
 
-Legacy modules (`pii_replacer/`) still use `Optional`/`List`/`Dict`. Only `pii_replacer/` is excluded from `ty` type-checking (see `[tool.ty.src] exclude` in `pyproject.toml`). The remaining legacy usages will be migrated when those modules come under the type checker.
-
 ### Control flow
 
 - Prefer `match`/`case` for dispatch on types or tagged values. Not a blanket rule -- `if`/`elif` is fine for simple boolean predicates.
@@ -843,6 +841,10 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 ---
 
 ## General conventions
+
+### Tutorial notebook install cells
+
+A tutorial installs NeMo Safe Synthesizer in one code cell tagged `install-safe-synthesizer` in its cell metadata, and installs nothing else there. Put any other package the tutorial needs, such as `kagglehub` for a dataset download, in a separate untagged cell after it. Environments that already have the package, such as the e2e notebook test and the Brev Launchable, remove the tagged cell and keep the rest.
 
 ### Package structure
 

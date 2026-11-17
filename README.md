@@ -290,42 +290,10 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 
 ## NIM Integration
 
-Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
-in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
-override it to use a different endpoint.
-
-When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
-using the default) so column classification can run.
-
-### Local Endpoint
-
-To point to a locally hosted LLM, add the variables to `.env.local` (git-ignored, auto-loaded by mise):
-
-```bash
-# .env.local
-NSS_INFERENCE_ENDPOINT=https://your-local-nim-endpoint
-NSS_INFERENCE_KEY=your-api-key  # pragma: allowlist secret
-```
-
-Or export them in your shell:
-
-```bash
-export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
-```
-
-### Disable Classification
-
-To disable classification entirely:
-
-```yaml
-replace_pii:
-  globals:
-    classify:
-      enable_classify: false
-```
-
-When classification is disabled, NSS falls back to default entity types.
+PII plan discovery runs a local vLLM server by default. To use a hosted NVIDIA
+NIM or another OpenAI-compatible endpoint instead, set
+`NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY`; see
+[Where planning requests go](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/#where-planning-requests-go).
 
 ## Artifacts and Workdirs
 
@@ -337,6 +305,8 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
+├── safe-synthesizer-config.yaml     # resolved configuration, when PII replacement runs
+├── pii_replacement_plan.yaml        # the PII replacement plan that configuration names
 ├── train/
 │   ├── safe-synthesizer-config.json
 │   └── adapter/                     # trained PEFT adapter
@@ -475,6 +445,10 @@ export NEMO_TELEMETRY_ENABLED=false
 ```
 
 Use of third-party endpoints, including NVIDIA Build: NeMo Safe Synthesizer can be configured to use various inference endpoints, including build.nvidia.com (NVIDIA Build). If you choose to use NVIDIA Build or any other third-party endpoint, that endpoint's own terms of service and privacy practices apply independently of this library. Any opt-out you exercise within NeMo Safe Synthesizer does not extend to data collection by your chosen endpoint. NVIDIA Build is intended for evaluation and testing purposes only and may not be used in production environments. Do not submit any confidential information or personal data when using NVIDIA Build.
+
+## Contributing
+
+See the [Contributing Guide](CONTRIBUTING.md) for development setup and contribution requirements. Before submitting an external PR, including a draft, link an existing, open issue that a maintainer has labeled `triaged`. Newly opened or reopened external PRs without one are automatically closed; you may reopen after the issue is triaged.
 
 ## License
 

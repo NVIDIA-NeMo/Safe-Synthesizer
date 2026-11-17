@@ -9,16 +9,37 @@ URLs or file paths.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Self
+from urllib.parse import urlparse
 
 import pandas as pd
 import yaml
 from pydantic import BaseModel, Field
 
+from ..data_processing.csv_source import CsvSource, redact_url
 from ..observability import get_logger
 
 logger = get_logger(__name__)
+
+
+# Compression and archive suffixes pandas recognizes in a file name and undoes while reading.
+_ARCHIVE_EXTENSIONS = frozenset({"gz", "bz2", "xz", "zst", "zip", "tar"})
+
+
+def file_extension(url: str) -> str:
+    """Return the lowercase extension of a path or URL, without the dot, ignoring any query string.
+
+    Compression and ``tar`` suffixes are skipped, so the result names the format inside the archive.
+
+    Example:
+        ``"people.PARQUET"`` and ``"https://host/people.parquet?token=abc"`` both return ``"parquet"``,
+        and ``"people.csv.gz"`` and ``"people.csv.tar.gz"`` return ``"csv"``.
+    """
+    suffixes = [suffix.lower().lstrip(".") for suffix in PurePosixPath(urlparse(url).path.replace("\\", "/")).suffixes]
+    while len(suffixes) > 1 and suffixes[-1] in _ARCHIVE_EXTENSIONS:
+        suffixes.pop()
+    return suffixes[-1] if suffixes else ""
 
 
 def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
@@ -109,11 +130,11 @@ class DatasetInfo(BaseModel):
         """
         url = self.get_url()
 
-        logger.info(f"Reading dataset from {url}")
+        logger.info(f"Reading dataset from {redact_url(url)}")
 
         # Determine the file extension and appropriate reader
         reader: Any
-        extension = Path(url).suffix.lstrip(".")
+        extension = file_extension(url)
         match extension:
             case "csv" | "txt":
                 reader = _dynamic_callable(pd.read_csv)
@@ -129,17 +150,40 @@ class DatasetInfo(BaseModel):
                 default_load_args = {}
             case _:
                 if not extension:
-                    extension = f"<no extension found on url '{url}'>"
+                    extension = f"<no extension found on url '{redact_url(url)}'>"
                 raise ValueError(f"Unsupported file extension: {extension}")
 
         # Merge load args: user-provided args override defaults
         final_load_args = {**default_load_args, **(self.load_args or {})}
 
+        loggable_url = redact_url(url)
         try:
-            return _require_dataframe(reader(url, **final_load_args), url=url)
+            return _require_dataframe(reader(url, **final_load_args), url=loggable_url)
         except Exception as e:
-            logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
+            # The error is raised again for the caller to report. The logged copy leaves out the traceback and
+            # replaces the URL, since either can carry a signed URL's access token.
+            message = str(e).replace(url, loggable_url)
+            logger.error(f"Error reading dataset from {loggable_url}: {type(e).__name__}: {message}")
             raise
+
+    def fetch_csv_source(self) -> CsvSource | None:
+        """Read a CSV or TXT dataset's bytes once, so its typed and text forms parse the same content.
+
+        ``fetch`` infers column types, which changes how some cells are written back out:
+        ``"02054"`` becomes the integer ``2054``, an integer column with blanks becomes float so
+        ``"7"`` is written as ``"7.0"``, and ``"N/A"`` becomes an empty cell. Callers that write
+        unchanged cells back out use ``CsvSource.read_text`` to keep them exactly as they appeared,
+        parsed from the same bytes as ``CsvSource.read`` even if the file changes later.
+
+        Returns:
+            The file's bytes with this dataset's ``load_args``, or ``None`` for formats other
+            than CSV and TXT.
+        """
+        url = self.get_url()
+        if file_extension(url) not in {"csv", "txt"}:
+            return None
+        logger.info(f"Reading dataset from {redact_url(url)}")
+        return CsvSource.load(url, self.load_args)
 
 
 class DatasetRegistry(BaseModel):

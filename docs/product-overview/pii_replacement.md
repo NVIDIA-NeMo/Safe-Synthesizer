@@ -3,173 +3,127 @@
 
 # PII Replacement
 
-PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.
+Personally identifiable information (PII) is information that can identify a
+person, such as a name, email address, phone number, or ID number. Before
+training, Safe Synthesizer replaces the PII in your data with realistic synthetic
+values. The model then learns the shape of your data -- which columns hold
+names, how emails are written, how notes mention people -- without ever seeing
+the real values.
+
+PII replacement is on by default.
+
+## What It Looks Like
+
+Here is one record before and after replacement:
+
+| Column | Before | After |
+|--------|--------|-------|
+| Full name | Ada Lovelace | Grace Hopper |
+| Email | ada.lovelace@example.com | grace.hopper@example.com |
+| Sex | F | F |
+| Date of birth | 1990-04-05 | 1990-04-19 |
+| Notes | Ada called about her refill. | Grace called about her refill. |
+
+A few things to notice:
+
+- The synthetic values stay consistent. The email is built from the new name, and
+  the "Ada" in the notes becomes "Grace", the same as the name column.
+- The synthetic name fits the rest of the record. Because the record says "F", the
+  new name is one typically given to women.
+- Dates of birth move by a few days or weeks rather than being replaced
+  with a random date, so ages stay realistic.
+- Columns that describe a person but do not identify them on their own, such as
+  sex, are kept as they are.
 
 ## How It Works
 
-The PII replacement pipeline operates in multiple stages:
+Replacement happens in three steps.
 
-1. Detection: Classifies PII entities within free text and entire columns.
-2. Replacement: Substitutes PII using configurable rules.
+1. Find the PII columns. An LLM reads each column's name, some simple statistics,
+   and a handful of sample values, and decides which columns hold PII, what
+   kind of PII each holds, and how columns relate (for example, that an email
+   belongs to the person named in another column). The result is a replacement
+   plan: a YAML file with one entry per PII column, giving its kind of PII and
+   the format of its values, that you can review and edit.
+2. Replace structured PII columns. For every column in the plan with an
+   identified entity type, Safe Synthesizer generates a realistic new value,
+   usually in the same format as the original. Names and addresses come from
+   Nemotron-Personas, NVIDIA's datasets of synthetic
+   people that follow real population statistics, or from the open-source
+   Faker library.
+3. Replace PII inside free text. Columns such as notes or comments are scanned
+   for names, phone numbers, email addresses, ID numbers, and other PII by
+   GLiNER2, an open-source model that finds PII in text, plus regex checks for
+   email addresses, payment cards, and IP addresses. Only those words are
+   replaced. The rest of the text is unchanged.
 
-## Detection Methods
+The same original value gets the same synthetic value everywhere within a record
+(or within a group of records, such as all visits by one patient), so
+relationships in your data survive replacement.
 
-NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
+Only the training data is changed. Evaluation still compares the synthetic
+output with your original data.
 
-| Method | Scope | Description | Key Features |
-|--------|--------|--------------|---------------|
-| LLM Classification | Entire columns | Leverages language models for column classification when the entire column is a single entity | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
-| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Free text | Uses the GLiNER PII model for entity recognition within free text columns | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
+## What Gets Replaced
 
+The PII replacement step replaces:
 
-## Replacement Methods
+- Names: first, middle, last, and full names
+- Contact details: email addresses, phone numbers, and street addresses
+- Identifiers: national ID numbers (such as US Social Security numbers),
+  payment card numbers, customer and patient IDs, and API keys
+- Network addresses: IPv4 and IPv6 addresses
+- Dates of birth
 
-After detection, PII can be handled in multiple ways:
+It recognizes, but keeps, information that is useful for analysis and rarely
+identifies someone by itself: city, state, postal code, country, organization,
+gender, race or ethnicity, and dates other than birth dates.
 
-| Strategy   | Description                                  | Example                     |
-|------------|----------------------------------------------|-----------------------------|
-| Annotate   | Add identified entity to original PII        | Alice → &lt;entity type="first_name" value="Alice"&gt; |
-| Redact     | Replace PII with a generic tag               | Alice → &lt;first_name&gt;     |
-| Hash       | Replace PII with a hashed value               | Alice → 3bf676c57     |
-| Substitute | Replace PII with a context-relevant alternative | Alice → Erica            |
+## Where Your Data Goes
 
-## Supported Entity Types
-GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
+The AI model that builds the plan runs on your own GPU by default, so your data
+never leaves your machine. This needs a GPU with 80 GB of memory, such as an
+NVIDIA A100 or H100.
 
-!!! note "Default entity set"
-    The default configuration detects and replaces a focused subset of these entities: `first_name`,
-    `last_name`, `name`, `street_address`, `city`, `state`, `postcode`, `address`, `phone_number`,
-    `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect additional
-    entity types, add them to `replace_pii.globals.classify.entities` and
-    `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
+If your GPU has less than 80 GB of memory, or you would rather not spend GPU
+time on planning, you have two options. You can point Safe Synthesizer at a
+hosted model service, in which case column samples are sent to that service, so
+use one that is approved to receive your data. See
+[Environment Variables -- Where planning requests go](../user-guide/environment.md#where-planning-requests-go).
+Or you can write the plan yourself, which needs no AI model at all. See
+[Customizing PII Replacement](../user-guide/customize-pii-replacement.md#inline-plan).
 
-### Personal Information
-- `first_name` - Given names
-- `last_name` - Surnames and family names
-- `name` - Full names
-- `age` - Ages
-- `email` - Email addresses
-- `phone_number` - Phone numbers in various formats
-- `fax_number` - Fax numbers in various formats
+## Reviewing the Plan
 
+You can create the replacement plan on its own, read it, correct it, and then
+reuse it for every later run. This is the best way to check that the right
+columns are being replaced before you train. See the
+[Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb)
+tutorial for a walkthrough.
 
+## Limitations
 
-### Addresses
+- Safe Synthesizer replaces only what it is confident is PII. This is by
+  design: replacement is a first step, and most of the privacy protection
+  comes from synthesis, where the model writes new records. Replacing values
+  that are not PII would distort the data your model learns from, so some PII,
+  especially in free text, can be missed.
+- Free-text detection works best in English and the other Latin-script
+  languages the detection model covers: French, Spanish, German, Italian,
+  Portuguese, and Dutch. It finds little PII in languages written in other
+  scripts, such as Chinese, Japanese, Korean, or Thai.
+- Nicknames and other informal references to a person are not linked to the
+  person's real name.
 
-- `address` - Complete physical addresses (for example, 123 Main Street, Anytown, CA 90210)
-- `street_address` - Street addresses (for example, 123 Main Street)
-- `city` - City names
-- `county` - County names
-- `state` - State/province names
-- `postcode` - Postal/ZIP codes
-- `country` - Country names
+The evaluation report's [PII replay](evaluation.md#pii-replay) check shows any
+original PII that still appears in the synthetic output.
 
-### Personal Identifiers
-- `ssn` - Social Security Numbers
-- `national_id` - National ID numbers
-- `tax_id` - Tax ID numbers
-- `certificate_license_number` - Driver’s license numbers
-- `unique_identifier` - Generic unique IDs
-- `customer_id` - Customer identifiers
-- `employee_id` - Employee identifiers
+## Related Topics
 
-### Financial Information
-
-- `credit_debit_card` - Credit and debit card numbers
-- `cvv` - Credit card verification code
-- `pin` - Personal identification numbers
-- `account_number` - Bank account numbers
-- `bank_routing_number` - Bank routing numbers
-- `swift_bic` - Swift/BIC codes
-- `iban` - International bank account numbers
-
-### Medical Information
-
-- `medical_record_number` - Medical record numbers
-- `health_plan_beneficiary_number` - Insurance IDs
-- `biometric_identifier` - Biometric data references
-
-### Technical Identifiers
-
-- `url` - Web URLs
-- `ipv4` - IPv4 addresses
-- `ipv6` - IPv6 addresses
-- `mac_address` - Hardware MAC addresses
-- `api_key` - API keys and tokens
-- `user_name` - Usernames
-- `password` - Passwords
-- `http_cookie` - HTTP Cookies
-- `device_identifier` - Device IDs
-
-### Vehicle Identifiers
-
-- `vehicle_identifier` - Vehicle identification numbers (VINs)
-- `license_plate` - License plates
-
-### Geographic Information
-
-- `latitude` - Latitude coordinates
-- `longitude` - Longitude coordinates
-- `coordinate` - Coordinate pairs
-
-### Quasi Identifiers
-
-- `date` - Date values
-- `date_time` - Date and time values
-- `blood_type` - Blood type information
-- `gender` - Gender information
-- `sexuality` - Sexual orientation
-- `political_view` - Political affiliations
-- `race` - Race
-- `ethnicity` - Ethnicity information
-- `religious_belief` - Religious affiliations
-- `language` - Language preferences
-- `education` - Education level
-- `job_title` - Professional titles
-- `employment_status` - Employment information
-- `company_name` - Organization names
-
-### Custom Entity Types
-
-Beyond these built-in types, you can define custom entities using:
-
-```yaml title="Custom entity configuration"
-globals:
-  classify:
-    enable_classify: true
-    entities:
-      - first_name
-      - last_name
-      - email
-      - employee_id
-      - project_code
-```
-
-## Configuration
-
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii).
-
-```yaml title="replace_pii section"
-replace_pii:
-  globals:
-    locales:
-      - en_US
-  steps:
-    - rows:
-        update:
-          - entity:
-              - email
-              - phone_number
-            value: "column.entity | fake"
-```
-
-## When to Use PII Replacement
-
-Consider using PII replacement when:
-
-- Your data contains names, addresses, or other direct identifiers
-- Compliance requires PII removal before processing
-- You want to ensure the model cannot memorize sensitive values
-- You need to share synthetic data with external parties
-
-PII replacement is on by default as a pre-processing step before synthesis.
+- [Review the PII Replacement Plan](../tutorials/pii-replacement-review.ipynb) --
+  step-by-step tutorial
+- [Customizing PII Replacement](../user-guide/customize-pii-replacement.md) --
+  edit the plan, choose where synthetic values come from, and tune free-text
+  detection
+- [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii) --
+  every setting, including how to turn replacement off

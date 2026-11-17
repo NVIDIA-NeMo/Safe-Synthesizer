@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.training import QuantizationScheme
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
@@ -112,7 +113,7 @@ def params_with_dp(base_params):
 def params_with_quantization(base_params):
     """Create params with quantization enabled."""
     base_params.training.quantize_model = True
-    base_params.training.quantization_bits = 4
+    base_params.training.quantization_scheme = QuantizationScheme.BNB_4BIT
     return base_params
 
 
@@ -457,7 +458,7 @@ class TestGetQuantizationConfigIfEnabled:
 
     @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
     def test_returns_config_when_enabled(self, mock_get_config, backend_with_quantization):
-        """Legacy bits-based path: quantization_bits=4 -> BNB_4BIT scheme."""
+        """The configured scheme is passed through to the config builder."""
         from nemo_safe_synthesizer.config.training import QuantizationScheme
 
         mock_config = MagicMock()
@@ -469,11 +470,11 @@ class TestGetQuantizationConfigIfEnabled:
         assert result == mock_config
 
     @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
-    def test_defaults_to_8_bits(self, mock_get_config, backend_with_quantization):
-        """Legacy bits-based path: quantization_bits=8 -> BNB_8BIT scheme."""
-        from nemo_safe_synthesizer.config.training import QuantizationScheme
+    def test_defaults_to_bnb_8bit(self, mock_get_config, backend_with_quantization):
+        """An unset scheme uses the bnb-8bit default."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 
-        backend_with_quantization.params.training.quantization_bits = 8
+        backend_with_quantization.params.training.quantization_scheme = TrainingHyperparams().quantization_scheme
         mock_config = MagicMock()
         mock_get_config.return_value = mock_config
 
@@ -483,8 +484,8 @@ class TestGetQuantizationConfigIfEnabled:
         assert result == mock_config
 
     @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
-    def test_explicit_scheme_overrides_bits(self, mock_get_config, backend_with_quantization):
-        """When quantization_scheme is set, it overrides the bits-based fallback."""
+    def test_non_bitsandbytes_scheme(self, mock_get_config, backend_with_quantization):
+        """Non-bitsandbytes schemes reach the config builder unchanged."""
         from nemo_safe_synthesizer.config.training import QuantizationScheme
 
         backend_with_quantization.params.training.quantization_scheme = QuantizationScheme.NVFP4

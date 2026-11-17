@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
 from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar, cast
@@ -10,10 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -22,7 +20,6 @@ from nemo_safe_synthesizer.configurator.parameter_paths import (
     ParameterSchema,
     ResolvedParameterName,
     UnknownParameterName,
-    classify_parameter_annotation,
 )
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
@@ -138,14 +135,29 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_pii_replacer_default():
-    with pytest.raises(ValidationError):
-        PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"globals": {"seed": 42}}, "replace_pii.globals"),
+        ({"steps": []}, "replace_pii.steps"),
+    ],
+)
+def test_replace_pii_v2_fields_raise_schema_compatibility_error(payload: dict[str, object], field: str):
+    message = "configuration uses the PII replacement v2 schema.*Configure replace_pii.replacement_plan instead"
+    pattern = rf"{message}.*{field}"
+    with pytest.raises((ParameterError, ValidationError), match=pattern):
+        SafeSynthesizerParameters.model_validate({"replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match=message):
+        SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match=message):
+        ReplacePiiConfig.model_validate(payload)
+    with pytest.raises(ParameterError, match=message):
+        ReplacePiiConfig.from_config_source(payload)
 
 
-def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
-    with pytest.raises(ValueError, match="Expected 4 or 8"):
-        QuantizationScheme.from_alias(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias
+def test_replace_pii_unknown_non_v2_field_uses_generic_error():
+    with pytest.raises(ValidationError, match="Unknown configuration field 'replace_pii.foo'"):
+        SafeSynthesizerParameters.model_validate({"replace_pii": {"foo": 1}})
 
 
 def test_quantization_scheme_8bit_uses_valid_bitsandbytes_kwargs() -> None:
@@ -306,12 +318,6 @@ def test_parameter_schema_reports_ambiguous_bare_names_with_candidates():
     }
 
 
-def test_mapping_valued_step_vars_annotation_is_a_leaf():
-    annotation = StepDefinition.model_fields["vars"].annotation
-
-    assert classify_parameter_annotation(annotation) is ParameterFieldKind.LEAF
-
-
 def test_parameters_queries_remain_instance_based_for_disabled_optional_branch():
     params = SafeSynthesizerParameters(privacy=None)
     schema_result = ParameterSchema.from_model(SafeSynthesizerParameters).resolve("privacy.dp_enabled")
@@ -433,18 +439,6 @@ def test_constructor_applies_unknown_field_policy_recursively():
     assert not hasattr(config.training, "epoch")
 
 
-def test_unknown_field_policy_reaches_models_inside_collections():
-    raw = SafeSynthesizerParameters().model_dump()
-    assert isinstance(raw["replace_pii"], dict)
-    raw["replace_pii"]["steps"][0]["unknown"] = True  # type: ignore[index]
-
-    with pytest.raises(ValidationError, match="unknown"):
-        SafeSynthesizerParameters.model_validate(raw)
-
-    raw["unknown_fields"] = "ignore"
-    assert SafeSynthesizerParameters.model_validate(raw).unknown_fields == "ignore"
-
-
 def test_service_job_config_preserves_dynamic_unknown_field_policy():
     payload: dict[str, object] = {"data_source": "dataset", "config": {"training": {"epoch": 1}}}
     with pytest.raises(ValidationError, match="epoch"):
@@ -520,6 +514,20 @@ class _PresenceParameters(Parameters):
     left: _LeftParameters = Field(default_factory=_LeftParameters)
     right: _RightParameters = Field(default_factory=_RightParameters)
     optional: _LeftParameters | None = Field(default_factory=_LeftParameters)
+
+
+class _AliasedChildParameters(Parameters):
+    enabled: bool = False
+    backend: str = "auto"
+
+
+class _AliasedSectionParameters(Parameters):
+    parameter_aliases: ClassVar[Mapping[str, str]] = {"use_child": "child.enabled"}
+    child: _AliasedChildParameters = Field(default_factory=_AliasedChildParameters)
+
+
+class _AliasedRootParameters(Parameters):
+    section: _AliasedSectionParameters = Field(default_factory=_AliasedSectionParameters)
 
 
 class _MappingParameters(Parameters):
@@ -614,21 +622,21 @@ def test_from_config_source_rejects_ambiguous_keyword_override():
     ("model_type", "name", "expected"),
     [
         pytest.param(
-            GenerateParameters,
-            "use_structured_generation",
-            ParameterPath(("structured_generation", "enabled")),
+            _AliasedSectionParameters,
+            "use_child",
+            ParameterPath(("child", "enabled")),
             id="section",
         ),
         pytest.param(
-            SafeSynthesizerParameters,
-            "use_structured_generation",
-            ParameterPath(("generation", "structured_generation", "enabled")),
+            _AliasedRootParameters,
+            "use_child",
+            ParameterPath(("section", "child", "enabled")),
             id="nested-bare",
         ),
         pytest.param(
-            SafeSynthesizerParameters,
-            "generation.use_structured_generation",
-            ParameterPath(("generation", "structured_generation", "enabled")),
+            _AliasedRootParameters,
+            "section.use_child",
+            ParameterPath(("section", "child", "enabled")),
             id="nested-dotted",
         ),
     ],
@@ -640,14 +648,14 @@ def test_parameter_schema_resolves_model_declared_aliases(
 
 
 def test_alias_normalization_preserves_sparse_typed_canonical_branch():
-    result = GenerateParameters.from_config_source(
+    result = _AliasedSectionParameters.from_config_source(
         {
-            "structured_generation": StructuredGenerationParameters(backend="guidance"),
-            "use_structured_generation": True,
+            "child": _AliasedChildParameters(backend="guidance"),
+            "use_child": True,
         }
     )
 
-    assert result.model_dump(exclude_unset=True) == {"structured_generation": {"enabled": True, "backend": "guidance"}}
+    assert result.model_dump(exclude_unset=True) == {"child": {"enabled": True, "backend": "guidance"}}
 
 
 def test_from_config_source_copies_mapping_and_returned_mutable_state():
@@ -756,16 +764,6 @@ def test_parameters_has_rejects_ambiguous_bare_leaf_names():
 
     with pytest.raises(ParameterError, match=r"left\.value.*right\.value"):
         params.has("value")
-
-
-def test_parameters_get_does_not_warn_for_unrelated_deprecated_fields():
-    params = SafeSynthesizerParameters()
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        assert params.get("batch_size") == params.training.batch_size
-
-    assert not [warning for warning in caught if issubclass(warning.category, DeprecationWarning)]
 
 
 def _resolve(obj: object, path: str) -> object:
@@ -980,26 +978,36 @@ class TestWarmupSteps:
         assert TrainingHyperparams().warmup_steps == 0.05
 
 
-class TestWarmupRatioDeprecation:
-    """`warmup_ratio` stays accepted as a deprecated alias for `warmup_steps`."""
+@pytest.mark.parametrize(
+    "validate",
+    [
+        lambda: TrainingHyperparams(warmup_ratio=0.2),  # ty: ignore[unknown-argument] -- retired field
+        lambda: TrainingHyperparams.model_validate({"warmup_ratio": 0.2}),
+        lambda: SafeSynthesizerParameters.model_validate({"training": {"warmup_ratio": 0.2}}),
+        lambda: SafeSynthesizerParameters.model_validate(
+            {"unknown_fields": "ignore", "training": {"warmup_ratio": 0.2}}
+        ),
+    ],
+    ids=["constructor", "training-model-validate", "nested-model-validate", "nested-unknown-fields-ignore"],
+)
+def test_removed_warmup_ratio_points_to_warmup_steps(validate):
+    with pytest.raises((ParameterError, ValidationError), match=r"warmup_ratio.*removed.*warmup_steps"):
+        validate()
 
-    def test_migrates_to_warmup_steps_and_warns(self):
-        with pytest.warns(DeprecationWarning, match="warmup_ratio is deprecated"):
-            params = TrainingHyperparams(warmup_ratio=0.2)
-        assert params.warmup_steps == 0.2
 
-    def test_explicit_warmup_steps_wins_over_deprecated_alias(self):
-        with pytest.warns(DeprecationWarning):
-            params = TrainingHyperparams(warmup_steps=0.3, warmup_ratio=0.2)
-        assert params.warmup_steps == 0.3
+@pytest.mark.parametrize(
+    "validate",
+    [
+        lambda: TrainingHyperparams(quantization_bits=4),  # ty: ignore[unknown-argument] -- retired field
+        lambda: SafeSynthesizerParameters.model_validate({"training": {"quantization_bits": 4}}),
+        lambda: SafeSynthesizerParameters.from_params(quantization_bits=4),
+    ],
+    ids=["constructor", "nested-model-validate", "from-params-bare-name"],
+)
+def test_removed_quantization_bits_points_to_quantization_scheme(validate):
+    with pytest.raises((ParameterError, ValidationError), match=r"quantization_bits.*removed.*quantization_scheme"):
+        validate()
 
-    @pytest.mark.parametrize("value", [1.5, float("inf")])
-    def test_deprecated_alias_is_validated_too(self, value):
-        """The alias assigns to `warmup_steps` after field validation, so it needs its own guard."""
-        with pytest.raises((ParameterError, ValidationError, ValueError)):
-            TrainingHyperparams(warmup_ratio=value)
 
-    def test_not_serialized(self):
-        with pytest.warns(DeprecationWarning):
-            params = TrainingHyperparams(warmup_ratio=0.2)
-        assert "warmup_ratio" not in params.model_dump()
+def test_quantization_scheme_defaults_to_bnb_8bit():
+    assert TrainingHyperparams().quantization_scheme is QuantizationScheme.BNB_8BIT

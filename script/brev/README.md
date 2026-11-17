@@ -18,7 +18,8 @@ update it in the console for the change to take effect.
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
   build of Safe Synthesizer into a dedicated venv through the release installer,
   provisions Triton's runtime compiler, registers the venv as the default Jupyter
-  kernel, and drops the tutorial notebooks in `$HOME`.
+  kernel, and drops the tutorial notebooks in `$HOME` with their Safe Synthesizer
+  install cells replaced by a note.
 - `welcome.md`: Added to the Launchable's Source files so it renders on the Launchable
   webpage and appears as the customer's `$HOME/welcome.md`.
 
@@ -48,7 +49,7 @@ All optional. Per Brev's guidance, do not put credential values in parameter def
 
 | Name | Type | Purpose |
 | ---- | ---- | ------- |
-| `NSS_INFERENCE_KEY` | Text | NVIDIA NIM key for column classification. Without it, classification runs in degraded mode. |
+| `NSS_INFERENCE_KEY` | Text | API key for a hosted PII planning service; also set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` in the notebook. Without them, planning runs a local vLLM server. |
 | `HF_TOKEN` | Text | Only needed for gated Hugging Face models. |
 
 Brev passes these to `setup.sh` as environment variables.
@@ -66,7 +67,7 @@ there. Everything operational is a dotfile, which the browser hides by default.
 
 ```text
 $HOME/
-  tutorials/                    the four tutorial notebooks and their datasets
+  tutorials/                    the five tutorial notebooks and their datasets
   welcome.md                    where to start, rendered on double-click
   SETUP-IN-PROGRESS.md          present only while setup is running or after failure
 
@@ -147,6 +148,13 @@ hard way on a real instance.
   required to have `git`. The tarball is pinned to the tag matching the installed wheel,
   falling back to `main`, so the notebooks can never call APIs newer than the package
   they run against.
+- Each tutorial's Safe Synthesizer install cell, the code cell tagged
+  `install-safe-synthesizer`, is replaced by a short "already installed" note. Running it
+  would spend several minutes reinstalling the PyPI release over the venv this script
+  just verified. Untagged cells that install a tutorial's other packages, such as
+  `kagglehub`, stay, so this script carries no list of tutorial dependencies. Notebooks
+  from releases older than the tag have no tagged cell and are copied unchanged, install
+  cell included.
 - The tar member is an exact path, not a glob. GNU tar does not enable wildcards for
   member names by default, and bsdtar rejects `--wildcards` outright, so no single glob
   form works on both. The archive's top-level directory name also varies by ref
@@ -172,7 +180,7 @@ to switch kernels. If it reports a 3.12 path instead, kernel registration landed
 directory the server does not consult; check the `registered kernel at ...` lines in the
 log against `jupyter kernelspec list`.
 
-Then run `tutorials/safe-synthesizer-101.ipynb` end to end -- roughly 15 minutes on
+Then run `tutorials/safe-synthesizer-101.ipynb` end to end -- roughly 25 minutes on
 an A100 or H100.
 
 ### Tested configurations

@@ -91,6 +91,27 @@ def test_column_intersection(fixture_training_df, fixture_synthetic_df, fixture_
     assert evaluation_datasets.evaluation_fields[0].name == "num"
 
 
+@pytest.mark.parametrize("target_column_count", [10, 3])
+def test_subsample_columns_keeps_training_column_order(target_column_count):
+    # Attribute inference picks quasi-identifiers by column order, so the order must not depend on string hashing.
+    columns = ["zeta", "alpha", "mu", "beta", "omega", "kappa"]
+    training = pd.DataFrame({col: [1, 2] for col in columns})
+    synthetic = pd.DataFrame({col: [1, 2] for col in reversed(columns)})
+    test = pd.DataFrame({col: [1, 2] for col in sorted(columns)})
+
+    training, synthetic, test = EvaluationDatasets.subsample_columns(
+        training, synthetic, test, target_column_count=target_column_count, mandatory_columns=["omega"]
+    )
+
+    selected = list(training.columns)
+    assert selected == [col for col in columns if col in selected]
+    assert len(selected) == min(target_column_count, len(columns))
+    assert "omega" in selected
+    assert list(synthetic.columns) == selected
+    assert test is not None
+    assert list(test.columns) == [col for col in columns if col in set(test.columns)]
+
+
 def test_empty_column_intersection(fixture_training_df, fixture_synthetic_df):
     fixture_training_df = fixture_training_df[["num", "num_cat"]]
     fixture_synthetic_df = fixture_synthetic_df[["other", "text"]]
@@ -104,6 +125,24 @@ def test_empty_testdf_intersection(fixture_training_df, fixture_synthetic_df, fi
     fixture_test_df = fixture_test_df[["other", "text"]]
     with pytest.raises(ValueError):
         EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
+
+
+def test_subsample_columns_keeps_holdout_in_sync_with_sampled_columns():
+    columns = [f"c{i}" for i in range(10)]
+    training = pd.DataFrame([range(10)], columns=columns)
+    synthetic = training.copy()
+    test = pd.DataFrame([range(11)], columns=[*columns, "holdout_only"])
+
+    training_out, synthetic_out, test_out = EvaluationDatasets.subsample_columns(
+        training, synthetic, test, target_column_count=4, mandatory_columns=["c0"]
+    )
+
+    selected = list(training_out.columns)
+    assert len(selected) == 4
+    assert "c0" in selected
+    assert list(synthetic_out.columns) == selected
+    assert test_out is not None
+    assert list(test_out.columns) == selected
 
 
 def test_get_columns_of_type(fixture_training_df):
