@@ -11,6 +11,7 @@ from typing import cast
 
 import pandas as pd
 import pytest
+import torch
 from datasets import Dataset
 from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerBase
 
@@ -39,10 +40,23 @@ def fixture_tiny_llama_config(fixture_stub_tokenizer) -> LlamaConfig:
     )
 
 
+def _build_seeded_tiny_model(config: LlamaConfig) -> LlamaForCausalLM:
+    """Build a tiny LlamaForCausalLM with the same random weights on every run.
+
+    Unseeded weights made generation output vary between runs and caused flaky
+    smoke tests. The model is constructed on CPU, so only the CPU generator is
+    seeded; ``fork_rng(devices=[])`` restores it afterward without touching CUDA,
+    which keeps the seed from leaking into other tests.
+    """
+    with torch.random.fork_rng(devices=[]):
+        torch.random.default_generator.manual_seed(0)
+        return LlamaForCausalLM(config)
+
+
 @pytest.fixture
 def fixture_tiny_model(fixture_tiny_llama_config) -> LlamaForCausalLM:
-    """Randomly initialized LlamaForCausalLM. Tiny (~few KB), no download."""
-    return LlamaForCausalLM(fixture_tiny_llama_config)
+    """Seeded, randomly initialized LlamaForCausalLM. Tiny (~few KB), no download."""
+    return _build_seeded_tiny_model(fixture_tiny_llama_config)
 
 
 @pytest.fixture(scope="session")
@@ -86,7 +100,7 @@ def fixture_tiny_training_dataset_with_position_ids(fixture_tiny_training_datase
 def fixture_local_tinyllama_dir(tmp_path_factory, fixture_tiny_llama_config, fixture_stub_tokenizer) -> Path:
     """Save tiny model + tokenizer to a local dir named with 'tinyllama' for NSS compatibility."""
     local_dir = tmp_path_factory.mktemp("smoke-tinyllama-model")
-    model = LlamaForCausalLM(fixture_tiny_llama_config)
+    model = _build_seeded_tiny_model(fixture_tiny_llama_config)
     model.save_pretrained(local_dir)
     fixture_stub_tokenizer.save_pretrained(local_dir)
     return local_dir
