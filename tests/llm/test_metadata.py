@@ -1080,6 +1080,37 @@ class TestModelInitialization:
         else:
             assert metadata.base_max_seq_length == DEFAULT_MAX_SEQ_LENGTH
 
+    @pytest.mark.parametrize(
+        ("model_class", "model_path"),
+        [
+            (Mistral, "mistralai/Mistral-7B-Instruct-v0.3"),
+            (SmolLM2, "HuggingFaceTB/SmolLM2-135M"),
+            (SmolLM3, "HuggingFaceTB/SmolLM3-3B"),
+        ],
+    )
+    @pytest.mark.parametrize(("factor", "warns"), [(1, False), (1.0, False), (2, True)])
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    def test_unsupported_rope_scaling_warns_only_when_it_would_scale(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+        model_class,
+        model_path: str,
+        factor: float,
+        warns: bool,
+    ):
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        with patch("nemo_safe_synthesizer.llm.metadata.logger") as mock_logger:
+            model_class(model_name_or_path=model_path, rope_scaling_factor=factor)
+
+        warned = any("Rope scaling factor" in str(call.args[0]) for call in mock_logger.warning.call_args_list)
+        assert warned is warns
+
 
 class TestFromConfig:
     """Tests for ModelMetadata.from_config method."""

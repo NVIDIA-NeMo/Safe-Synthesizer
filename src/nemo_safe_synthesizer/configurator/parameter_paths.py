@@ -170,6 +170,7 @@ class ParameterSchema:
             case ResolvedParameterName() as resolved:
                 return resolved.path
             case UnknownParameterName() as unknown:
+                self._raise_if_removed(unknown.name)
                 kind = "path" if PARAMETER_PATH_SEPARATOR in name else "name"
                 raise ParameterError(f"Unknown parameter {kind} {unknown.name!r}.")
             case AmbiguousParameterName() as ambiguous:
@@ -201,6 +202,22 @@ class ParameterSchema:
                 case UnknownParameterName():
                     pass
         return values
+
+    def _raise_if_removed(self, name: str) -> None:
+        """Raise the retirement error when ``name`` is a field some model in this tree has retired.
+
+        A bare name matches a retired field at any depth; a dotted name matches
+        only the model at its parent path.
+        """
+        from ..config.unknown_fields import raise_if_removed_legacy_fields
+
+        try:
+            parts = split_parameter_path(name).parts
+        except ValueError:
+            return
+        for model, prefix in _walk_parameter_models(self.model_type):
+            if len(parts) == 1 or parts[:-1] == prefix:
+                raise_if_removed_legacy_fields(model, parts[-1:], path=prefix)
 
     def _alias_candidates(self, name: str) -> tuple[ParameterPath, ...]:
         return tuple(alias.path for alias in self.aliases if alias.name == name)

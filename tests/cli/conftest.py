@@ -15,6 +15,7 @@ def mock_workdir(tmp_path: Path) -> MagicMock:
     workdir = MagicMock()
     workdir.run_dir = tmp_path / "run"
     workdir.project_dir = tmp_path / "project"
+    workdir.dataset_name = "input"
     workdir.log_file = tmp_path / "run.log"
     workdir.output_file = tmp_path / "output.csv"
     workdir.source_dataset.path = tmp_path / "source"

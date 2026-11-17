@@ -86,8 +86,8 @@ class MembershipInferenceProtection(Component):
         synthetic_df = evaluation_datasets.synthetic
         test_df = evaluation_datasets.test
 
-        # Column subsampling can leave test with columns that training and synthetic no longer have,
-        # so check and drop against each dataframe independently.
+        # Column subsampling can remove a requested column, and test may hold only a subset of
+        # training's columns, so ignore names a dataframe does not have.
         frames = [df for df in (training_df, synthetic_df, test_df) if df is not None]
         excluded_columns = [col for col in requested if any(col in df.columns for df in frames)]
         if excluded_columns:

@@ -12,12 +12,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
+from pydantic import ValidationError
 
 from ..config import SafeSynthesizerParameters
 from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, RESOLVED_CONFIG_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -27,6 +29,8 @@ from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
     PathT,
     common_setup,
+    data_source_extension,
+    fetch_data_source_for_replacement,
 )
 from .wandb_setup import publish_evaluation_report
 
@@ -176,7 +180,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for PII column classification. "
+            help="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery. When unset, NSS "
+            "runs a local vLLM server instead (see --inference-local-profile). "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
@@ -186,8 +191,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="API key for the inference endpoint used in PII column classification. "
-            "Can also be set via NSS_INFERENCE_KEY env var.",
+            help="API key for the PII inference endpoint. Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(
@@ -196,9 +200,47 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Model ID sent to the inference endpoint for PII column classification. "
+            help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
+            "Without an endpoint, selects the bundled local vLLM profile to run "
+            f"(default: {DEFAULT_NSS_INFERENCE_LOCAL_MODEL}); required with an explicit endpoint.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-timeout-seconds",
+            type=float,
+            required=False,
+            default=None,
+            help="Per-request timeout in seconds for PII inference, including model reasoning. "
+            "Overrides the local profile's timeout. Can also be set via NSS_INFERENCE_TIMEOUT env var. "
+            "[default: the local profile's timeout, or 60]",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-request-options",
+            type=str,
+            required=False,
+            default=None,
+            help="JSON object of chat-completions fields sent with every PII inference request, such as "
+            '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Overrides the local profile\'s options '
+            "field by field; a null value drops a field. Fields left out use the server's defaults. "
+            "Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-local-profile",
+            type=str,
+            required=False,
+            default=None,
+            help="Path to a custom profile YAML, or a bundled profile name, for the local vLLM server that NSS "
+            "starts for LLM-assisted "
+            "PII plan discovery and stops before planning returns. Without it and without an endpoint, "
+            "--inference-model-id selects a bundled profile. With a profile, NSS_INFERENCE_ENDPOINT, if set, "
+            "must be a loopback http URL and selects the listening address. "
+            "Can also be set via NSS_INFERENCE_LOCAL_PROFILE env var.",
         )
     )
     options.append(
@@ -207,24 +249,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "huggingface_remote",
             required=False,
             default=None,
-            help="Allow or block Hugging Face remote downloads for both the base model "
-            "and GLiNER. --disable-huggingface-remote forces a fully offline run by "
-            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; both must already be "
+            help="Allow or block Hugging Face remote downloads for Hub assets "
+            "(base model, evaluation embeddings, and similar). "
+            "--disable-huggingface-remote blocks Hugging Face asset downloads by "
+            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; required assets must already be "
             "cached. Equivalent to setting HF_HUB_OFFLINE in the environment. When "
             "neither flag is given, the run inherits HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE "
             "from the environment (remote downloads enabled when unset). "
             "[default: --enable-huggingface-remote]",
-        )
-    )
-    options.append(
-        click.option(
-            "--cpu-count",
-            type=int,
-            required=False,
-            default=None,
-            help="Number of CPU worker processes used for NER (PII replacement). "
-            "Can also be set via NSS_PII_REPLACER_CPU_COUNT env var. "
-            "[default: max(1, cpu_count - 1)]",
         )
     )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
@@ -257,10 +289,22 @@ def _settings_from_run_kwargs(kwargs: dict[str, Any]) -> CLISettings:
 
     ``kwargs`` is mutated: matched settings keys are popped before the remainder
     is parsed into overrides.
+
+    Raises:
+        click.UsageError: If a setting is invalid, such as a negative
+            ``--inference-timeout-seconds``. Click prints the message without a
+            traceback, which would also echo the other settings, API key included.
     """
     settings_kwargs = {name: kwargs.pop(name) for name in _CLI_SETTINGS_FIELDS if name in kwargs}
     settings_kwargs["synthesis_overrides"] = _parse_run_overrides(kwargs)
-    return CLISettings.from_cli_kwargs(**settings_kwargs)
+    try:
+        return CLISettings.from_cli_kwargs(**settings_kwargs)
+    except ValidationError as exc:
+        messages = [
+            ": ".join(filter(None, (".".join(map(str, error["loc"])), error["msg"].removeprefix("Value error, "))))
+            for error in exc.errors()
+        ]
+        raise click.UsageError("; ".join(messages)) from None
 
 
 def _set_cli_deployment_type_default() -> None:
@@ -410,7 +454,9 @@ def run(
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
-    Use 'run train' or 'run generate' for individual stages.
+    Use 'run train', 'run generate', or 'run replace-pii' for individual
+    stages. Pass '--plan-only' to resolve a PII replacement configuration
+    without replacing data.
     """
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
@@ -460,6 +506,67 @@ def run(
             finally:
                 if hasattr(nss, "generator") and nss.generator is not None:
                     nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
+
+
+@run.command("replace-pii")
+@common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--plan-only",
+    is_flag=True,
+    default=False,
+    help="Resolve and write the PII replacement plan without running replacement, training, generation, or evaluation.",
+)
+def run_replace_pii(
+    plan_only: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Plan or apply PII replacement to the full input dataset."""
+    _set_cli_deployment_type_default()
+    settings = _settings_from_run_kwargs(kwargs)
+    run_logger, config, _, workdir = common_setup(
+        settings=settings,
+        phase="replace_pii",
+        skip_wandb=True,
+        load_data=False,
+    )
+
+    try:
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            # A CSV source keeps its bytes, so the output's unchanged cells are parsed from the same read.
+            data_source = fetch_data_source_for_replacement(settings)
+            if data_source is None:
+                raise UserError("Input data is required to plan or apply PII replacement.")
+            config_output_path = workdir.run_dir / RESOLVED_CONFIG_FILENAME
+            nss = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(data_source)
+            if plan_only:
+                nss.plan_pii_replacement(output_path=config_output_path)
+                run_logger.info(f"Resolved PII replacement configuration saved to: {config_output_path}")
+            else:
+                # Parquet input is written back as Parquet so its column types survive; otherwise CSV.
+                output_suffix = ".parquet" if data_source_extension(settings) == "parquet" else ".csv"
+                data_output_path = (
+                    Path(settings.output_file)
+                    if settings.output_file
+                    else workdir.run_dir / f"{workdir.dataset_name}_pii_replaced{output_suffix}"
+                )
+                result = nss.replace_pii(
+                    output_path=data_output_path,
+                    config_output_path=config_output_path,
+                )
+                run_logger.info(
+                    f"PII replacement complete: {result.generation_statistics.generated_replacement_count} "
+                    f"distinct replacements generated; output saved to: {data_output_path}"
+                )
     except UserError as exc:
         click.secho(str(exc), fg="red", err=True)
         raise SystemExit(1)

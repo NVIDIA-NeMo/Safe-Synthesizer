@@ -22,7 +22,7 @@ import inspect
 import json
 import re
 import types
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
@@ -38,14 +38,6 @@ __all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 
 _NEGATION_PREFIX = "no_"
 """Prefix marking a generated disable flag for a nullable sub-config field."""
-
-_LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
-    "generation.structured_generation.enabled": ("generation.use_structured_generation",),
-    "generation.structured_generation.backend": ("generation.structured_generation_backend",),
-    "generation.structured_generation.schema_method": ("generation.structured_generation_schema_method",),
-    "generation.structured_generation.use_single_sequence": ("generation.structured_generation_use_single_sequence",),
-}
-"""Hidden compatibility aliases for renamed generated CLI options."""
 
 
 def _unescape_list_token(token: str) -> str:
@@ -214,7 +206,13 @@ def _is_list_type(annotation: object) -> bool:
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
-    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
+    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``.
+
+    A union that contains a model but not ``None`` (for example
+    ``SomeModel | str``) is not nullable and must not get a ``--no-*`` flag.
+    """
+    if type(None) not in union_args:
+        return None
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
 
 
@@ -309,6 +307,26 @@ def _literal_value_types(args: set) -> set:
     return normalized
 
 
+class JsonObjectParamType(click.ParamType):
+    """Click type for a mapping field, given as a JSON object such as ``'{"gender": null}'``."""
+
+    name = "json-object"
+
+    def convert(self, value: Any, param: click.Parameter | None, ctx: click.Context | None) -> dict[str, Any]:
+        if isinstance(value, Mapping):
+            return dict(value)
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            parsed = None
+        if not isinstance(parsed, dict):
+            self.fail("must be a JSON object, such as '{\"label\": 0.5}'", param, ctx)
+        return parsed
+
+
+JSON_OBJECT = JsonObjectParamType()
+
+
 def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
@@ -326,6 +344,8 @@ def _click_type(annotation: Any) -> click.ParamType:
         t = get_args(t)[0]
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
+    if any(get_origin(arg) in (dict, Mapping) for arg in args):
+        return JSON_OBJECT
     if _has_string_literal(args):
         # Auto*Param: Literal["auto"] | <numeric|bool> -- wrap in AutoParamType so
         # --help shows "integer|auto" instead of "TEXT" and Click validates the
@@ -441,7 +461,7 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
         A Click decorator that attaches the generated options to a command.
     """
 
-    def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
+    def apply_leaf_option(f, name: str, field: FieldInfo):
         """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
         item_type = _list_item_type(field.annotation)
@@ -453,13 +473,11 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
                 default=None,
                 callback=_make_list_callback(is_basemodel=_is_basemodel(item_type)),
                 help=field.description or "",
-                hidden=hidden,
             )(f)
         return click.option(
             *names,
             type=_click_type(field.annotation),
             help=field.description or "",
-            hidden=hidden,
         )(f)
 
     def decorator(f):
@@ -484,8 +502,6 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
                     )(f)
                 case LeafParam(field=field):
                     f = apply_leaf_option(f, param.name, field)
-                    for legacy_name in _LEGACY_CLI_OPTION_PATHS.get(param.name, ()):
-                        f = apply_leaf_option(f, legacy_name, field, hidden=True)
         return f
 
     return decorator

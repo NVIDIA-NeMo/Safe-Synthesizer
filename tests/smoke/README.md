@@ -11,6 +11,7 @@ mise run test:smoke:gpu:generation
 mise run test:smoke:gpu:resume
 mise run test:smoke:gpu:structured-generation
 mise run test:smoke:gpu:timeseries
+mise run test:smoke:gpu:local-inference
 mise run test:smoke:gpu:smollm2
 ```
 
@@ -43,7 +44,8 @@ GPU smoke tests use staged mise tasks for process isolation and CI visibility:
 3. `test-smoke-gpu-resume`: resume + generation vLLM tests.
 4. `test-smoke-gpu-structured-generation`: structured generation vLLM tests.
 5. `test-smoke-gpu-timeseries`: timeseries generation vLLM tests.
-6. `test-smoke-gpu-smollm2`: SmolLM2 Hub download tests, auto-discovered via markers.
+6. `test-smoke-gpu-local-inference`: managed local vLLM PII planning server tests.
+7. `test-smoke-gpu-smollm2`: SmolLM2 Hub download tests, auto-discovered via markers.
 
 `mise run test:smoke:gpu` runs all GPU smoke stages in order. vLLM stages are
 split by file because vLLM pre-allocates all GPU memory and never releases it

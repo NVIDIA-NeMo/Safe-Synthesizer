@@ -1,0 +1,1255 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+import re
+import statistics
+import subprocess
+import sys
+from collections.abc import Callable
+from dataclasses import FrozenInstanceError
+from datetime import datetime
+from pathlib import Path
+from random import Random
+from typing import Literal
+
+import numpy as np
+import pandas as pd
+import pytest
+from faker import Faker
+from faker.providers.person.en_US import Provider as FakerPersonProvider
+from faker.providers.person.fr_FR import Provider as FrenchFakerPersonProvider
+from stdnum.br import cpf as br_cpf
+from stdnum.fr import nir as fr_nir
+from stdnum.it import codicefiscale as it_codicefiscale
+from stdnum.nl import bsn as nl_bsn
+from stdnum.pl import pesel as pl_pesel
+from stdnum.se import personnummer as se_personnummer
+from stdnum.us import ssn as us_ssn
+
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+)
+from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.replacement import birth_dates
+from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
+    ReplacementGenerationRequest,
+    ReplacementGenerator,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
+    FakerReplacementGenerator,
+    NemotronPersonasReplacementGenerator,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.generators._common import normalize_organization_domain
+from nemo_safe_synthesizer.pii_replacer.replacement.person_names import (
+    full_name_layout,
+    name_affixes,
+    read_full_name,
+    write_full_name,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
+from nemo_safe_synthesizer.pii_replacer.replacement.value_checks import is_luhn_valid
+
+
+def _construct(factory: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """Call ``factory`` with deliberately invalid arguments that its type hints would reject."""
+    return factory(*args, **kwargs)
+
+
+_FAKER_FEMALE_FIRST_NAMES = frozenset(FakerPersonProvider.first_names_female)
+_FAKER_MALE_FIRST_NAMES = frozenset(FakerPersonProvider.first_names_male)
+
+
+def _request(
+    entity_type: EntityType = EntityType.FIRST_NAME,
+    original_value: str = "Ada",
+    *,
+    dependencies: tuple[tuple[EntityType, CanonicalValue | None], ...] = (),
+    pattern: str | None = None,
+    seed: int = 42,
+    resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...] = (),
+    full_name_pattern: str | None = None,
+) -> ReplacementGenerationRequest:
+    return ReplacementGenerationRequest(
+        entity_type=entity_type,
+        original_value=original_value,
+        effective_dependency_tuple=dependencies,
+        pattern=pattern,
+        seed=seed,
+        resolved_dependency_values=resolved_values,
+        full_name_pattern=full_name_pattern,
+    )
+
+
+def _faker_generator(*, locale: str = "en_US") -> FakerReplacementGenerator:
+    return FakerReplacementGenerator(
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        locale=locale,
+    )
+
+
+def _nemotron_personas_generator(
+    tmp_path: Path,
+    people: pd.DataFrame | None = None,
+    *,
+    locale: str = "en_US",
+) -> NemotronPersonasReplacementGenerator:
+    """Build a generator over ``people`` written as the locale dataset, or over an empty, unreadable file."""
+    asset_path = tmp_path / "datasets" / f"{locale}.parquet"
+    asset_path.parent.mkdir(exist_ok=True)
+    if people is None:
+        asset_path.touch()
+    else:
+        people.to_parquet(asset_path)
+    return NemotronPersonasReplacementGenerator(
+        sampler=PiiSamplerConfig(
+            backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+            nemotron_personas_path=str(tmp_path),
+        ),
+        locale=locale,
+    )
+
+
+def _record_faker_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement: str,
+) -> list[ReplacementGenerationRequest]:
+    requests: list[ReplacementGenerationRequest] = []
+
+    def generate(
+        _generator: FakerReplacementGenerator,
+        request: ReplacementGenerationRequest,
+    ) -> str:
+        requests.append(request)
+        return replacement
+
+    monkeypatch.setattr(FakerReplacementGenerator, "generate", generate)
+    return requests
+
+
+@pytest.mark.unit
+class TestReplacementGenerator:
+    @pytest.mark.parametrize(
+        ("generator_class", "backend"),
+        [
+            (NemotronPersonasReplacementGenerator, PiiSamplerBackend.NEMOTRON_PERSONAS),
+            (FakerReplacementGenerator, PiiSamplerBackend.FAKER),
+        ],
+    )
+    def test_named_generator_adapters_declare_their_backend(
+        self,
+        generator_class: type[ReplacementGenerator],
+        backend: PiiSamplerBackend,
+        tmp_path: Path,
+    ) -> None:
+        (tmp_path / "datasets").mkdir()
+        pd.DataFrame({"first_name": ["Persona"]}).to_parquet(tmp_path / "datasets" / "en_US.parquet")
+        generator = generator_class(
+            sampler=PiiSamplerConfig(backend=backend, nemotron_personas_path=str(tmp_path)),
+            locale="en_US",
+        )
+
+        assert generator.backend is backend
+        generated = generator.generate(_request())
+
+        assert generated != "Ada"
+
+    @pytest.mark.parametrize(
+        ("generator_class", "backend"),
+        [
+            (NemotronPersonasReplacementGenerator, PiiSamplerBackend.FAKER),
+            (FakerReplacementGenerator, PiiSamplerBackend.NEMOTRON_PERSONAS),
+        ],
+    )
+    def test_named_generator_adapters_reject_the_wrong_backend(
+        self,
+        generator_class: type[ReplacementGenerator],
+        backend: PiiSamplerBackend,
+    ) -> None:
+        with pytest.raises(InternalError, match="requires the .* sampler backend"):
+            generator_class(
+                sampler=PiiSamplerConfig(backend=backend),
+                locale="en_US",
+            )
+
+    @pytest.mark.parametrize(
+        ("entity_type", "original"),
+        [
+            (EntityType.FIRST_NAME, "Ada"),
+            (EntityType.MIDDLE_NAME, "Augusta"),
+            (EntityType.LAST_NAME, "Lovelace"),
+            (EntityType.FULL_NAME, "Ada Lovelace"),
+            (EntityType.EMAIL, "ada@example.com"),
+            (EntityType.PHONE_NUMBER, "+1-202-555-0101"),
+            (EntityType.DATE_OF_BIRTH, "1815-12-10"),
+            (EntityType.STREET_ADDRESS, "1 Main Street"),
+            (EntityType.NATIONAL_ID, "123-45-6789"),
+            (EntityType.CREDIT_DEBIT_CARD, "4111111111111111"),
+            (EntityType.API_KEY, "sk-ABC123"),
+            (EntityType.IPV4, "192.0.2.1"),
+            (EntityType.IPV6, "2001:db8::1"),
+            (EntityType.UNIQUE_IDENTIFIER, "550e8400-e29b-41d4-a716-446655440000"),
+        ],
+    )
+    def test_faker_supports_every_structured_entity(self, entity_type: EntityType, original: str) -> None:
+        generator = _faker_generator()
+        request = _request(entity_type, original)
+
+        replacement = generator.generate(request)
+
+        assert replacement
+        assert replacement != original
+        assert generator.generate(request) == replacement
+
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("123-45-6789", r"[0-9]{3}-[0-9]{2}-[0-9]{4}"),
+            ("D1234567", r"[A-Z][0-9]{7}"),
+            ("12-3456789", r"[0-9]{2}-[0-9]{7}"),
+            ("AB 12 34 56 C", r"[A-Z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-Z]"),
+        ],
+    )
+    def test_national_id_keeps_the_original_shape(self, original: str, shape: str) -> None:
+        generator = _faker_generator()
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed))
+
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
+
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("(555) 123-4567", r"\([0-9]{3}\) [0-9]{3}-[0-9]{4}"),
+            ("555.123.4567", r"[0-9]{3}\.[0-9]{3}\.[0-9]{4}"),
+            ("+44 20 7946 0958", r"\+44 [0-9]{2} [0-9]{4} [0-9]{4}"),
+            ("+14155550123", r"\+1[0-9]{10}"),
+            ("+353 1 234 5678", r"\+353 [0-9] [0-9]{3} [0-9]{4}"),
+            ("001-555-123-4567", r"001-[0-9]{3}-[0-9]{3}-[0-9]{4}"),
+            ("555-123-4567 ext. 89", r"[0-9]{3}-[0-9]{3}-[0-9]{4} ext\. [0-9]{2}"),
+        ],
+    )
+    def test_unpatterned_phone_number_keeps_the_original_shape(self, original: str, shape: str) -> None:
+        generator = _faker_generator()
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, original, seed=seed))
+
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
+
+    @pytest.mark.parametrize(
+        ("original", "locale", "kept"),
+        [
+            ("(415) 555-2671", "en_US", "(415) "),
+            ("+86 138 1234 5678", "en_US", "+86 138 "),
+            ("020 7946 0958", "en_GB", "020 "),
+            ("+91 98765 43210", "en_US", "+91 98765 "),
+        ],
+    )
+    def test_phone_number_keeps_the_country_code_and_area_code(self, original: str, locale: str, kept: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacements = {
+            generator.generate(_request(EntityType.PHONE_NUMBER, original, seed=seed)) for seed in range(20)
+        }
+
+        assert all(replacement.startswith(kept) for replacement in replacements), replacements
+        assert original not in replacements
+        assert len(replacements) > 1
+
+    @pytest.mark.parametrize(
+        ("original", "pattern", "shape"),
+        [
+            # The mask's fixed characters are written, and the original's area code fills the # under it.
+            ("(415) 555-2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("+1 415-555-2671", "+1 ###-###-####", r"\+1 415-[0-9]{3}-[0-9]{4}"),
+            # Fixed digits in the mask stay, even where the original has no area code to keep.
+            ("555-0123", "555-01##", r"555-01[0-9]{2}"),
+            # An original written in another layout still keeps its area code when its digits fit the mask.
+            ("415.555.2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("+1 415 555 2671", "(###) ###-####", r"\(415\) [0-9]{3}-[0-9]{4}"),
+            ("415.555.2671", "+1 ###-###-####", r"\+1 415-[0-9]{3}-[0-9]{4}"),
+            # When its digits do not fit, every # is random.
+            ("555-2671", "(###) ###-####", r"\([0-9]{3}\) [0-9]{3}-[0-9]{4}"),
+        ],
+    )
+    def test_patterned_phone_number_fits_the_mask_and_keeps_the_area_code(
+        self, original: str, pattern: str, shape: str
+    ) -> None:
+        generator = _faker_generator()
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.PHONE_NUMBER, original, pattern=pattern, seed=seed))
+
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
+
+    def test_request_is_immutable_and_hides_sensitive_inputs_from_repr(self) -> None:
+        request = _request(
+            EntityType.FULL_NAME,
+            "Ada Lovelace",
+            dependencies=(
+                (
+                    EntityType.ORGANIZATION,
+                    CanonicalValue(type_tag="string", normalized_value="Analytical Engines"),
+                ),
+            ),
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            setattr(request, "seed", 7)
+        assert "Ada Lovelace" not in repr(request)
+        assert "Analytical Engines" not in repr(request)
+
+    @pytest.mark.parametrize(
+        "dependency_tuple",
+        [
+            [(EntityType.ORGANIZATION, None)],
+            (("organization", None),),
+            ((EntityType.ORGANIZATION, "example"),),
+            ((EntityType.ORGANIZATION,),),
+        ],
+    )
+    def test_request_rejects_malformed_dependency_tuples(self, dependency_tuple: object) -> None:
+        with pytest.raises(InternalError, match="effective_dependency_tuple must"):
+            _construct(
+                ReplacementGenerationRequest,
+                entity_type=EntityType.EMAIL,
+                original_value="ada@example.com",
+                effective_dependency_tuple=dependency_tuple,
+                pattern=None,
+                seed=42,
+            )
+
+    def test_request_requires_resolved_dependency_values_to_be_a_tuple(self) -> None:
+        with pytest.raises(InternalError, match="resolved_dependency_values must be a tuple"):
+            _construct(
+                ReplacementGenerationRequest,
+                entity_type=EntityType.FIRST_NAME,
+                original_value="Ada",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                resolved_dependency_values=[],
+            )
+
+    def test_importing_the_contract_does_not_load_generator_implementations(self) -> None:
+        code = (
+            "import sys\n"
+            "import nemo_safe_synthesizer.pii_replacer.replacement.generation\n"
+            "loaded = [m for m in sys.modules if m.startswith('nemo_safe_synthesizer.pii_replacer.replacement.generators')]\n"
+            "assert not loaded, loaded\n"
+        )
+
+        subprocess.run([sys.executable, "-c", code], check=True)
+
+    def test_faker_generation_is_deterministic_for_equal_requests(self) -> None:
+        generator = _faker_generator()
+        request = _request(
+            EntityType.UNIQUE_IDENTIFIER,
+            "USER-ab12",
+            pattern="USR-^^####",
+            seed=91,
+        )
+
+        assert generator.generate(request) == generator.generate(request)
+        assert generator.generate(request).startswith("USR-")
+
+    @pytest.mark.parametrize(
+        ("dependency_value", "resolved_values", "allowed_names"),
+        [
+            ("Female", (), _FAKER_FEMALE_FIRST_NAMES),
+            ("Woman", ((EntityType.GENDER, ("female",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("M", ((EntityType.GENDER, ("male",)),), _FAKER_MALE_FIRST_NAMES),
+            ("F", ((EntityType.GENDER, ("femme",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("F", ((EntityType.GENDER, ("女",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("M", ((EntityType.GENDER, ("männlich",)),), _FAKER_MALE_FIRST_NAMES),
+        ],
+    )
+    def test_faker_applies_gender_dependency_mappings(
+        self,
+        dependency_value: str,
+        resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...],
+        allowed_names: frozenset[str],
+    ) -> None:
+        generator = _faker_generator()
+
+        names = {
+            generator.generate(
+                _request(
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
+                    resolved_values=resolved_values,
+                    seed=seed,
+                )
+            )
+            for seed in range(20)
+        }
+
+        assert names <= allowed_names
+
+    @pytest.mark.parametrize(
+        ("dependency", "resolved_values"),
+        [
+            ((EntityType.GENDER, CanonicalValue("string", "Non-binary")), ()),
+            (
+                (EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),
+                ((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
+            ),
+        ],
+    )
+    def test_faker_uses_ungendered_names_without_a_supported_gender(
+        self,
+        dependency: tuple[EntityType, CanonicalValue],
+        resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...],
+    ) -> None:
+        generator = _faker_generator()
+
+        names = {
+            generator.generate(_request(dependencies=(dependency,), resolved_values=resolved_values, seed=seed))
+            for seed in range(40)
+        }
+
+        assert names - _FAKER_FEMALE_FIRST_NAMES
+        assert names - _FAKER_MALE_FIRST_NAMES
+
+    def test_faker_preserves_uuid_shape(self) -> None:
+        generator = _faker_generator()
+        request = _request(EntityType.UNIQUE_IDENTIFIER, "550e8400-e29b-41d4-a716-446655440000")
+
+        assert re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            generator.generate(request),
+        )
+
+    def test_faker_preserves_unpatterned_api_key_shape(self) -> None:
+        generator = _faker_generator()
+        request = _request(EntityType.API_KEY, "sk-ABC123")
+
+        assert re.fullmatch(r"[a-z]{2}-[A-Z]{3}\d{3}", generator.generate(request))
+
+    def test_unpatterned_identifier_replaces_non_ascii_letters_and_digits(self) -> None:
+        generator = _faker_generator()
+
+        replacement = generator.generate(_request(EntityType.UNIQUE_IDENTIFIER, "张伟-Zoë-٣4"))
+
+        assert re.fullmatch(r"[A-Z]{2}-[A-Z][a-z]{2}-[0-9]{2}", replacement), replacement
+
+    def test_email_pattern_uses_dependencies_and_normalizes_organization(self) -> None:
+        generator = _faker_generator()
+        request = _request(
+            EntityType.EMAIL,
+            "ada@original.example",
+            dependencies=(
+                (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
+                (EntityType.ORGANIZATION, CanonicalValue("string", "Société ACME, Inc.")),
+            ),
+            pattern="{first}@mail.{organization}.co.uk",
+            seed=12,
+        )
+
+        assert generator.generate(request) == "synthetic@mail.societe-acme-inc.co.uk"
+
+    @pytest.mark.parametrize(
+        ("dependencies", "expected"),
+        [
+            (
+                (
+                    (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
+                    (EntityType.LAST_NAME, CanonicalValue("string", "Person")),
+                ),
+                r"synthetic\.person\d{2}@original\.example",
+            ),
+            (
+                ((EntityType.FULL_NAME, CanonicalValue("string", "Synthetic Person")),),
+                r"synthetic\.person\d{2}@original\.example",
+            ),
+            (((EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),), r"synthetic\d{2}@original\.example"),
+            (((EntityType.LAST_NAME, CanonicalValue("string", "Person")),), r"person\d{2}@original\.example"),
+        ],
+    )
+    def test_unpatterned_email_uses_name_dependencies(
+        self,
+        dependencies: tuple[tuple[EntityType, CanonicalValue | None], ...],
+        expected: str,
+    ) -> None:
+        request = _request(EntityType.EMAIL, "hughes_b@original.example", dependencies=dependencies)
+
+        assert re.fullmatch(expected, _faker_generator().generate(request))
+
+    @pytest.mark.parametrize(
+        ("full_name", "full_name_pattern", "expected_first"),
+        [
+            ("Person, Synthetic", None, "Synthetic"),
+            ("Synthetic Person, Jr.", None, "Synthetic"),
+            ("Person Synthetic", "{Last} {First}", "Synthetic"),
+            # A comma marks the last name first even when the pattern puts the first name first.
+            ("Person, Synthetic", "{First} {Last}", "Synthetic"),
+        ],
+    )
+    def test_name_parts_are_read_from_a_full_name_dependency(
+        self, full_name: str, full_name_pattern: str | None, expected_first: str
+    ) -> None:
+        dependencies = ((EntityType.FULL_NAME, CanonicalValue("string", full_name)),)
+        first = _request(EntityType.FIRST_NAME, dependencies=dependencies, full_name_pattern=full_name_pattern)
+        email = _request(
+            EntityType.EMAIL, "ada@original.example", dependencies=dependencies, full_name_pattern=full_name_pattern
+        )
+
+        assert _faker_generator().generate(first) == expected_first
+        assert re.fullmatch(r"synthetic\.person\d{2}@original\.example", _faker_generator().generate(email))
+
+    @pytest.mark.parametrize(
+        ("full_name", "locale", "pattern", "expected"),
+        [
+            ("Hopper, Grace Brewster", "en_US", None, ("Grace", "Brewster", "Hopper")),
+            ("Grace Brewster Hopper", "en_US", None, ("Grace", "Brewster", "Hopper")),
+            ("Guido van Rossum", "en_US", None, ("Guido", "", "van Rossum")),
+            ("Martin Luther King, Jr.", "en_US", None, ("Martin", "Luther", "King")),
+            ("Dr. Ada Lovelace", "en_US", None, ("Ada", "", "Lovelace")),
+            ("Cher", "en_US", None, ("Cher", "", "")),
+            ("Lee Eric", "en_US", "{Last} {First}", ("Eric", "", "Lee")),
+            ("Nagy Péter", "hu_HU", None, ("Péter", "", "Nagy")),
+            ("山田 太郎", "ja_JP", None, ("太郎", "", "山田")),
+            ("山田太郎", "ja_JP", None, ("太郎", "", "山田")),
+            ("長谷川あかり", "ja_JP", None, ("あかり", "", "長谷川")),
+            ("太郎 山田", "ja_JP", "{First} {Last}", ("太郎", "", "山田")),
+            ("欧阳小明", "zh_CN", None, ("小明", "", "欧阳")),
+            ("김민준", "ko_KR", None, ("민준", "", "김")),
+        ],
+    )
+    def test_full_names_are_read_in_the_pattern_or_locale_order(
+        self, full_name: str, locale: str, pattern: str | None, expected: tuple[str, str, str]
+    ) -> None:
+        parts = read_full_name(full_name, locale=locale, pattern=pattern)
+
+        assert (parts["first"], parts["middle"], parts["last"]) == expected
+
+    @pytest.mark.parametrize(
+        ("locale", "expected"),
+        [("en_US", "Grace Hopper"), ("fr_FR", "Grace Hopper"), ("ja_JP", "Hopper Grace"), ("zh_CN", "HopperGrace")],
+    )
+    def test_full_names_are_written_in_the_locale_order(self, locale: str, expected: str) -> None:
+        assert write_full_name("Grace", "Hopper", locale) == expected
+
+    @pytest.mark.parametrize(
+        ("full_name", "affixes"),
+        [
+            ("Dr. Ada Lovelace, PhD", ("Dr. ", ", PhD")),
+            ("Prof. Dr. Hans Müller", ("Prof. Dr. ", "")),
+            ("Capt. Jane Doe", ("Capt. ", "")),
+            ("Mr. John A. Smith Jr.", ("", " Jr.")),
+            ("Mr. Dr. John Smith", ("Dr. ", "")),
+            ("Mrs Grace Hopper", ("", "")),
+            ("Herr Hans Müller", ("", "")),
+            ("Sir Ian McKellen", ("", "")),
+            ("Ada Lovelace", ("", "")),
+        ],
+    )
+    def test_name_affixes_keep_titles_of_a_profession_or_office_and_suffixes(
+        self, full_name: str, affixes: tuple[str, str]
+    ) -> None:
+        assert name_affixes(full_name, locale="en_US") == affixes
+
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("Dr. Ada Lovelace", r"Dr\. \S+ \S+"),
+            ("Ada Lovelace, PhD", r"\S+ \S+, PhD"),
+            ("Mrs. Grace Hopper Jr.", r"\S+ \S+ Jr\."),
+        ],
+    )
+    def test_faker_full_name_without_a_pattern_keeps_the_originals_title_and_suffix(
+        self, original: str, shape: str
+    ) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original))
+
+        assert re.fullmatch(shape, replacement), replacement
+
+    @pytest.mark.parametrize(
+        ("original", "pattern", "shape"),
+        [
+            ("Dr. Ada Lovelace", "{First} {Last}", r"\S+ \S+"),
+            ("Ada Lovelace, PhD", "{First} {Last}", r"\S+ \S+"),
+            ("Prof. Dr. Hans Müller", "Dr. {First} {Last}", r"Dr\. \S+ \S+"),
+            ("Ada Lovelace", "Dr. {First} {Last}", r"Dr\. \S+ \S+"),
+        ],
+    )
+    def test_faker_full_name_with_a_pattern_is_written_exactly_as_the_pattern(
+        self, original: str, pattern: str, shape: str
+    ) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.FULL_NAME, original, pattern=pattern))
+
+        assert re.fullmatch(shape, replacement), replacement
+
+    def test_nemotron_personas_full_name_keeps_the_originals_title_and_suffix(self, tmp_path: Path) -> None:
+        people = pd.DataFrame({"first_name": ["Grace"], "last_name": ["Hopper"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+
+        assert generator.generate(_request(EntityType.FULL_NAME, "Dr. Ada Lovelace, PhD")) == "Dr. Grace Hopper, PhD"
+        assert generator.generate(_request(EntityType.FULL_NAME, "Mrs. Ada Lovelace")) == "Grace Hopper"
+        assert (
+            generator.generate(_request(EntityType.FULL_NAME, "Dr. Ada Lovelace, PhD", pattern="{First} {Last}"))
+            == "Grace Hopper"
+        )
+
+    def test_an_unknown_locale_fails_with_the_faker_error(self) -> None:
+        with pytest.raises(GenerationError, match="could not load Faker's name formats for locale 'xx_YY'"):
+            full_name_layout("xx_YY")
+
+    @pytest.mark.parametrize(
+        "locale", ["en_US", "fr_FR", "de_DE", "hu_HU", "ja_JP", "zh_CN", "zh_TW", "ko_KR", "ru_RU"]
+    )
+    def test_a_written_full_name_reads_back_to_its_parts(self, locale: str) -> None:
+        fake = Faker(locale)
+        fake.seed_instance(0)
+        first, last = fake.first_name(), fake.last_name()
+
+        parts = read_full_name(write_full_name(first, last, locale), locale=locale)
+
+        assert (parts["first"], parts["last"]) == (first, last)
+        assert full_name_layout(locale).family_first is (locale not in {"en_US", "fr_FR", "de_DE"})
+
+    @pytest.mark.parametrize(
+        ("organization", "expected"),
+        [
+            ("Straße AG", "strasse-ag"),
+            ("Ørsted", "orsted"),
+            ("Москва Банк", "moskva-bank"),
+            ("北京大学", "beijingdaxue"),
+        ],
+    )
+    def test_organization_domains_are_transliterated_to_ascii(self, organization: str, expected: str) -> None:
+        assert normalize_organization_domain(organization) == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("4111 1111 1111 1111", True), ("4111-1111-1111-1112", False), ("4111²111", False), ("7", False)],
+    )
+    def test_luhn_check_reads_ascii_digits_and_skips_separators(self, value: str, expected: bool) -> None:
+        assert is_luhn_valid(value) is expected
+
+    def test_unpatterned_email_without_name_dependencies_is_sampled_whole(self) -> None:
+        dependencies = ((EntityType.ORGANIZATION, CanonicalValue("string", "Acme")),)
+        request = _request(EntityType.EMAIL, "ada@original.example", dependencies=dependencies)
+
+        replacement = _faker_generator().generate(request)
+
+        assert "@" in replacement
+        assert not replacement.endswith("@original.example")
+
+    def test_card_check_digit_respects_a_restricted_final_position(self) -> None:
+        generator = _faker_generator()
+
+        for seed in range(50):
+            replacement = generator.generate(
+                _request(
+                    EntityType.CREDIT_DEBIT_CARD, "4111-1111-1111-1110", pattern="4###-####-####-###[05]", seed=seed
+                )
+            )
+            digits = [int(character) for character in replacement if character.isdigit()]
+            checksum = sum(digit if index % 2 else sum(divmod(digit * 2, 10)) for index, digit in enumerate(digits))
+
+            assert re.fullmatch(r"4\d{3}-\d{4}-\d{4}-\d{3}[05]", replacement), replacement
+            assert checksum % 10 == 0
+
+    def test_birth_date_shift_is_small_nonzero_and_preserves_pattern(self) -> None:
+        generator = _faker_generator()
+        original = datetime.strptime("12/10/1815", "%m/%d/%Y")
+
+        shifts = []
+        for seed in range(2000):
+            replacement = generator.generate(
+                _request(EntityType.DATE_OF_BIRTH, "12/10/1815", pattern="%m/%d/%Y", seed=seed)
+            )
+            shifts.append((datetime.strptime(replacement, "%m/%d/%Y") - original).days)
+
+        assert all(1 <= abs(days) <= 180 for days in shifts)
+        assert 25 <= statistics.pstdev(shifts) <= 35
+        # Redrawing zero instead of moving it leaves +1 and -1 no more likely than +2 and -2.
+        assert shifts.count(1) + shifts.count(-1) <= 2 * (shifts.count(2) + shifts.count(-2)) + 10
+
+    @pytest.mark.parametrize(
+        ("original", "expected"),
+        [("1990-02-14", r"\d{2}/\d{2}/\d{4}"), ("08/2010", r"\d{2}/\d{2}/\d{4}")],
+    )
+    def test_birth_date_cells_outside_the_pattern_are_still_replaced_in_the_pattern(
+        self,
+        original: str,
+        expected: str,
+    ) -> None:
+        generator = _faker_generator()
+
+        replacement = generator.generate(_request(EntityType.DATE_OF_BIRTH, original, pattern="%m/%d/%Y"))
+
+        assert re.fullmatch(expected, replacement), replacement
+        assert replacement != original
+
+    @pytest.mark.parametrize("pattern", ["%Y-%m-%d %z", "%Y-%m-%dT%H:%M:%S%z", "%d %b %Y %Z"])
+    def test_unparseable_birth_date_fallback_keeps_a_timezone_pattern(self, pattern: str) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "unknown", pattern=pattern))
+
+        datetime.strptime(replacement, pattern)
+
+    def test_birth_date_pattern_supports_named_months(self) -> None:
+        request = _request(
+            EntityType.DATE_OF_BIRTH,
+            "December 10, 1815",
+            pattern="%B %d, %Y",
+        )
+
+        replacement = _faker_generator().generate(request)
+
+        datetime.strptime(replacement, "%B %d, %Y")
+        assert replacement != request.original_value
+
+    @pytest.mark.parametrize("original", ["5 April 1990", "April 5th, 1990", "5 avril 1990"])
+    def test_natural_language_birth_date_is_shifted_to_a_safe_complete_date(self, original: str) -> None:
+        generator = _faker_generator()
+        request = _request(EntityType.DATE_OF_BIRTH, original)
+
+        replacement = generator.generate(request)
+
+        parsed_replacement = datetime.fromisoformat(replacement)
+        assert datetime(1989, 4, 5) <= parsed_replacement <= datetime(1991, 4, 5)
+        assert replacement != original
+
+    def test_numeric_non_date_birth_value_skips_natural_language_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fail_parse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("dateparser must not run for a value without letters")
+
+        monkeypatch.setattr(birth_dates.dateparser, "parse", fail_parse)
+
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "45"))
+
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
+
+    def test_vague_birth_date_is_replaced_with_a_random_complete_date(self) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
+
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
+
+    @pytest.mark.parametrize(
+        "original",
+        ["yesterday", "today", "in 2 days", "last week", "30 years", "2 weeks", "now", "an hour ago"],
+    )
+    def test_relative_date_expression_is_not_parsed_as_a_birth_date(self, original: str) -> None:
+        assert birth_dates.shift_birth_date(original, None, Random(0), locale="en_US") is None
+
+    @pytest.mark.parametrize("original", ["0001-01-01", "9999-12-31"])
+    def test_placeholder_date_at_the_calendar_edge_is_kept(self, original: str) -> None:
+        for seed in range(20):
+            assert birth_dates.shift_birth_date(original, "%Y-%m-%d", Random(seed), locale="en_US") == original
+
+    @pytest.mark.parametrize(
+        ("original", "pattern"), [("1990-02-14T00:00:00+02:00", None), ("1990-04-05 +0000", "%Y-%m-%d %z")]
+    )
+    def test_birth_date_with_a_timezone_is_shifted(self, original: str, pattern: str | None) -> None:
+        replacement = birth_dates.shift_birth_date(original, pattern, Random(0), locale="en_US")
+
+        assert replacement is not None
+        assert replacement != original
+
+    @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
+    def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="en_US")
+
+        assert replacement is not None
+        assert replacement != original
+
+    @pytest.mark.parametrize(
+        ("locale", "written_as", "meant"),
+        [("en_US", "%m/%d/%Y", datetime(1990, 1, 12)), ("fr_FR", "%d/%m/%Y", datetime(1990, 12, 1))],
+    )
+    def test_numeric_birth_date_is_read_month_first_only_for_en_us(
+        self, locale: str, written_as: str, meant: datetime
+    ) -> None:
+        replacement = birth_dates.shift_birth_date("01/12/1990", None, Random(0), locale=locale)
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - meant).days) <= 180
+
+    @pytest.mark.parametrize(
+        ("original", "written_as"),
+        [("05.04.1990", "%d.%m.%Y"), ("1990/04/05", "%Y/%m/%d"), ("1990.04.05", "%Y.%m.%d")],
+    )
+    def test_dotted_and_year_first_birth_dates_keep_their_format(self, original: str, written_as: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="de_DE")
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
+        assert birth_dates.birth_date_is_supported(original)
+
+    @pytest.mark.parametrize(
+        ("locale", "original", "is_valid"),
+        [
+            ("en_US", "797-55-1625", us_ssn.is_valid),
+            ("en_US", "797551625", us_ssn.is_valid),
+            ("en_CA", "653 104 489", None),
+            ("en_CA", "653-104-489", None),
+            ("fr_FR", "285025212136271", fr_nir.is_valid),
+            ("it_IT", "CLBPNL45B55B768H", it_codicefiscale.is_valid),
+            ("ko_KR", "950218-1326531", None),
+            ("nl_NL", "619203870", nl_bsn.is_valid),
+            ("pl_PL", "14230516512", pl_pesel.is_valid),
+            ("pt_BR", "61920387404", br_cpf.is_valid),
+            ("sv_SE", "390206-4397", se_personnummer.is_valid),
+            ("zh_CN", "11010519491231002X", None),
+        ],
+    )
+    def test_national_id_of_the_locales_kind_gets_a_new_one_in_its_layout(
+        self, locale: str, original: str, is_valid: Callable[[str], bool] | None
+    ) -> None:
+        generator = _faker_generator(locale=locale)
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed))
+
+            # Faker's en_CA, ko_KR, and zh_CN IDs do not always pass python-stdnum's check.
+            assert is_valid is None or is_valid(replacement), replacement
+            assert [character.isalnum() for character in replacement] == [character.isalnum() for character in original]
+            assert replacement != original
+
+    @pytest.mark.parametrize(("locale", "original"), [("de_DE", "123-45-6789"), ("en_US", "912-45-6789")])
+    def test_national_id_of_another_kind_keeps_its_layout(self, locale: str, original: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacements = [generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed)) for seed in range(20)]
+
+        assert all(re.fullmatch(r"[0-9]{3}-[0-9]{2}-[0-9]{4}", replacement) for replacement in replacements)
+        # A layout copy draws every digit, so some replacements are not valid SSNs, which Faker never produces.
+        assert not all(us_ssn.is_valid(replacement) for replacement in replacements)
+
+    def test_street_address_stays_on_one_line(self) -> None:
+        generator = _faker_generator(locale="en_GB")
+
+        streets = [
+            generator.generate(_request(EntityType.STREET_ADDRESS, "1 High St", seed=seed)) for seed in range(40)
+        ]
+
+        assert not any("\n" in street for street in streets)
+        assert any(", " in street for street in streets)
+
+    def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
+        generator = _faker_generator()
+        request = _request(
+            EntityType.CREDIT_DEBIT_CARD,
+            "4111-1111-1111-1111",
+            pattern="####-####-####-####",
+            seed=3,
+        )
+
+        replacement = generator.generate(request)
+        digits = [int(character) for character in replacement if character.isdigit()]
+        checksum = sum(digit if index % 2 else sum(divmod(digit * 2, 10)) for index, digit in enumerate(digits))
+
+        assert replacement != request.original_value
+        assert checksum % 10 == 0
+
+    def test_nemotron_personas_generator_reads_the_configured_locale_asset(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["SyntheticAda"],
+                "last_name": ["SyntheticLovelace"],
+                "email_address": ["synthetic@example.test"],
+            }
+        )
+
+        assert _nemotron_personas_generator(tmp_path, people).generate(_request()) == "SyntheticAda"
+
+    def test_nemotron_personas_generator_builds_emails_with_faker_from_name_dependencies(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        # Persona datasets have no email column; any email column in the data is ignored.
+        people = pd.DataFrame({"first_name": ["SampledAda"], "email_address": ["sampled@example.test"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        dependencies = (
+            (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
+            (EntityType.LAST_NAME, CanonicalValue("string", "Person")),
+        )
+
+        named = generator.generate(_request(EntityType.EMAIL, "padams@hotmail.com", dependencies=dependencies))
+        unnamed = generator.generate(_request(EntityType.EMAIL, "padams@hotmail.com"))
+
+        assert re.fullmatch(r"synthetic\.person\d{2}@hotmail\.com", named), named
+        assert unnamed != "sampled@example.test"
+        assert "@" in unnamed
+
+    def test_nemotron_personas_street_address_omits_linked_locality_when_the_original_locality_is_kept(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        people = pd.DataFrame({"street_number": ["42"], "street_name": ["Analytical Engine Way"], "city": ["Boston"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = ReplacementGenerationRequest(
+            entity_type=EntityType.STREET_ADDRESS,
+            original_value="1 Main Street",
+            effective_dependency_tuple=((EntityType.CITY, CanonicalValue("string", "Boston")),),
+            pattern=None,
+            seed=42,
+            resolved_dependency_values=((EntityType.CITY, ("boston",)),),
+            keep_original_locality=True,
+        )
+
+        assert generator.generate(request) == "42 Analytical Engine Way"
+
+    def test_request_rejects_a_non_boolean_keep_original_locality(self) -> None:
+        with pytest.raises(InternalError, match="keep_original_locality must be a boolean"):
+            _construct(
+                ReplacementGenerationRequest,
+                entity_type=EntityType.STREET_ADDRESS,
+                original_value="1 Main Street",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                keep_original_locality="yes",
+            )
+
+    def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "street_number": ["42"],
+                "street_name": ["Analytical Engine Way"],
+            }
+        )
+
+        generator = _nemotron_personas_generator(tmp_path, people)
+        assert generator.generate(_request(EntityType.STREET_ADDRESS, "1 Main Street")) == "42 Analytical Engine Way"
+
+    def test_nemotron_personas_generator_samples_each_value_independently(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["FirstRow", "SecondRow"],
+                "last_name": ["FirstLast", "SecondLast"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+
+        assert generator.generate(_request(seed=0)) == "FirstRow"
+        assert generator.generate(_request(EntityType.LAST_NAME, "Lovelace", seed=1)) == "SecondLast"
+
+    def test_nemotron_personas_generator_matches_dependency_values_case_insensitively(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["Selected", "NotSelected"],
+                "sex": ["female", "male"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Female")),),
+            seed=1,
+        )
+
+        assert generator.generate(request) == "Selected"
+
+    def test_nemotron_personas_generator_maps_one_dependency_value_to_a_candidate_union(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["East", "Identity", "South"],
+                "ethnic_background": ["east asian", "Asian", "south asian"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(
+            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
+            seed=1,
+            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
+        )
+
+        assert generator.generate(request) == "South"
+
+    def test_nemotron_personas_generator_caches_positions_by_resolved_dependency_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["EastWoman", "SouthWoman", "EastMan", "OtherWoman"],
+                "sex": ["female", "female", "male", "female"],
+                "ethnic_background": ["east asian", "south asian", "east asian", "white"],
+            }
+        )
+        original_intersect = np.intersect1d
+        intersection_count = 0
+
+        def count_intersection(
+            first: np.ndarray,
+            second: np.ndarray,
+            *,
+            assume_unique: bool = False,
+        ) -> np.ndarray:
+            nonlocal intersection_count
+            intersection_count += 1
+            return original_intersect(first, second, assume_unique=assume_unique)
+
+        monkeypatch.setattr(np, "intersect1d", count_intersection)
+        generator = _nemotron_personas_generator(tmp_path, people)
+
+        def generate(dataset_value: str, seed: int) -> str:
+            return generator.generate(
+                _request(
+                    dependencies=(
+                        (EntityType.GENDER, CanonicalValue("string", "female")),
+                        (EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", dataset_value)),
+                    ),
+                    seed=seed,
+                    resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
+                )
+            )
+
+        assert generate("Asian", 0) == "EastWoman"
+        assert generate("AAPI", 1) == "SouthWoman"
+        assert intersection_count == 1
+
+    def test_nemotron_personas_generator_listing_every_value_allows_any_candidate(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["First", "Second"],
+                "sex": ["female", "male"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
+            seed=1,
+            resolved_values=((EntityType.GENDER, ("female", "male")),),
+        )
+
+        assert generator.generate(request) == "Second"
+
+    def test_nemotron_personas_generator_rejects_a_dependency_with_no_candidates(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Secret Source Label")),),
+            seed=1,
+        )
+
+        with pytest.raises(ParameterError, match="gender.*candidate_count=0") as error:
+            generator.generate(request)
+        assert "Secret Source Label" not in str(error.value)
+
+    def test_nemotron_personas_generator_requires_its_locale_dataset(self, tmp_path: Path) -> None:
+        with pytest.raises(ParameterError, match="no Nemotron-Personas data for locale 'en_US' was found"):
+            NemotronPersonasReplacementGenerator(
+                sampler=PiiSamplerConfig(
+                    backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+                    nemotron_personas_path=str(tmp_path),
+                ),
+                locale="en_US",
+            )
+
+    def test_nemotron_personas_generator_fails_when_its_dataset_cannot_be_read(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        generator = _nemotron_personas_generator(tmp_path)
+
+        with pytest.raises(ParameterError, match="could not be read") as error:
+            generator.generate(_request())
+        assert error.value.__cause__ is not None
+
+    def test_nemotron_personas_generator_names_a_missing_dependency_column(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(
+            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
+            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
+        )
+
+        with pytest.raises(ParameterError, match=r"conditions on 'ethnic_background'.*'en_US' has no column") as error:
+            generator.generate(request)
+        assert "'ethnicity'" in str(error.value)
+
+    def test_nemotron_personas_generator_reads_selected_columns_and_reuses_candidate_indexes(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["Selected", "NotSelected"],
+                "sex": ["female", "male"],
+                "persona": ["unused", "unused"],
+                "detailed_persona": ["unused", "unused"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        reads: list[dict[str, object]] = []
+        real_read_parquet = pd.read_parquet
+
+        def read_parquet(path: Path, *, columns: list[str], dtype_backend: Literal["pyarrow"]) -> pd.DataFrame:
+            reads.append({"columns": columns, "dtype_backend": dtype_backend})
+            return real_read_parquet(path, columns=columns, dtype_backend=dtype_backend)
+
+        monkeypatch.setattr(pd, "read_parquet", read_parquet)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "female")),),
+            seed=0,
+        )
+
+        assert generator.generate(request) == "Selected"
+        assert generator.generate(request) == "Selected"
+        assert reads == [{"columns": ["first_name", "sex"], "dtype_backend": "pyarrow"}]
+
+    def test_nemotron_personas_generator_combines_casefolded_arrow_dependency_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["First", "Second", "NotSelected"],
+                "sex": ["Female", "FEMALE", None],
+            }
+        ).convert_dtypes(dtype_backend="pyarrow")
+        generator = _nemotron_personas_generator(tmp_path, people)
+
+        def generate(seed: int) -> str:
+            return generator.generate(
+                _request(
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "female")),),
+                    seed=seed,
+                )
+            )
+
+        assert generate(0) == "First"
+        assert generate(1) == "Second"
+
+    def test_nemotron_personas_generator_leaves_unchanged_candidate_for_executor_to_resample(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def fail_if_faker_is_used(
+            _generator: FakerReplacementGenerator,
+            _request: ReplacementGenerationRequest,
+        ) -> str:
+            pytest.fail("an unchanged Nemotron-Personas value should be resampled, not delegated to Faker")
+
+        monkeypatch.setattr(FakerReplacementGenerator, "generate", fail_if_faker_is_used)
+        generator = _nemotron_personas_generator(tmp_path, pd.DataFrame({"first_name": ["Ada"]}))
+        request = _request()
+
+        assert generator.generate(request) == request.original_value
+
+    def test_nemotron_personas_generator_delegates_the_same_value_request_when_persona_data_is_incomplete(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame({"first_name": ["PersonaFirst"]})
+        delegated_requests = _record_faker_fallback(monkeypatch, "Faker Full Name")
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = _request(EntityType.FULL_NAME, "Ada Lovelace")
+
+        assert generator.generate(request) == "Faker Full Name"
+        assert delegated_requests == [request]
+
+    def test_nemotron_personas_generator_delegates_patterned_phone_generation_to_faker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        delegated_requests = _record_faker_fallback(monkeypatch, "202-555-0101")
+        generator = _nemotron_personas_generator(tmp_path, pd.DataFrame({"first_name": ["Persona"]}))
+        request = _request(
+            EntityType.PHONE_NUMBER,
+            "202-555-9999",
+            pattern="###-###-####",
+        )
+
+        assert generator.generate(request) == "202-555-0101"
+        assert delegated_requests == [request]
+
+    @pytest.mark.parametrize("sampler_value", ["female", "femme", "Female"])
+    def test_nemotron_personas_matches_localized_sex_by_female_or_the_locale_word(
+        self, tmp_path: Path, sampler_value: str
+    ) -> None:
+        people = pd.DataFrame(
+            {"first_name": ["Claire", "Louis"], "last_name": ["Martin", "Martin"], "sex": ["Femme", "Homme"]}
+        )
+        generator = _nemotron_personas_generator(tmp_path, people, locale="fr_FR")
+
+        names = {
+            generator.generate(
+                _request(
+                    EntityType.FIRST_NAME,
+                    "Marie",
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "F")),),
+                    resolved_values=((EntityType.GENDER, (sampler_value,)),),
+                    seed=seed,
+                )
+            )
+            for seed in range(10)
+        }
+
+        assert names == {"Claire"}
+
+    def test_nemotron_personas_faker_fallback_keeps_localized_sex_conditioning(self, tmp_path: Path) -> None:
+        # fr_FR personas write sex as Femme and Homme and have no middle names, so middle names come from Faker.
+        people = pd.DataFrame(
+            {
+                "first_name": ["Claire", "Louis"],
+                "middle_name": [None, None],
+                "last_name": ["Martin", "Martin"],
+                "sex": ["Femme", "Homme"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people, locale="fr_FR")
+
+        names = {
+            generator.generate(
+                _request(
+                    EntityType.MIDDLE_NAME,
+                    "Marie",
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "F")),),
+                    resolved_values=((EntityType.GENDER, ("femme",)),),
+                    seed=seed,
+                )
+            )
+            for seed in range(40)
+        }
+
+        assert names <= frozenset(FrenchFakerPersonProvider.first_names_female)

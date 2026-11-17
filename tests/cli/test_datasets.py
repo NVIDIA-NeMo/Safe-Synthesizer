@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry
+from nemo_safe_synthesizer.cli import datasets as datasets_module
+from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry, file_extension
 
 
 class TestDatasetInfo:
@@ -149,6 +151,61 @@ class TestDatasetInfo:
         assert list(result.columns) == ["col1", "col2"]
         assert len(result) == 2
 
+    def test_fetch_reads_an_uppercase_extension(self, tmp_path: Path):
+        """Test fetch picks the reader from the extension regardless of letter case."""
+        parquet_file = tmp_path / "test.PARQUET"
+        pd.DataFrame({"zip": ["02054"]}).to_parquet(parquet_file)
+
+        result = DatasetInfo(name="test", url=str(parquet_file)).fetch()
+
+        assert result["zip"].tolist() == ["02054"]
+
+    @pytest.mark.parametrize(
+        ("url", "extension"),
+        [
+            ("people.PARQUET", "parquet"),
+            ("https://host/people.parquet?token=abc", "parquet"),
+            ("file:///data/people.csv", "csv"),
+            ("C:\\data\\people.JSONL", "jsonl"),
+            ("data/no_extension", ""),
+            ("https://host/people.CSV.GZ?token=abc", "csv"),
+            ("people.jsonl.zst", "jsonl"),
+            ("people.csv.tar.gz", "csv"),
+            ("archive.gz", "gz"),
+        ],
+    )
+    def test_file_extension_ignores_case_and_query_strings(self, url: str, extension: str):
+        assert file_extension(url) == extension
+
+    def test_failed_read_does_not_log_url_credentials(self, monkeypatch: pytest.MonkeyPatch):
+        url = "https://user:secret@host.invalid/people.csv?token=abc"  # pragma: allowlist secret
+
+        def failing_read(path: str, **kwargs: object) -> None:
+            raise OSError(f"could not open {path}")
+
+        logged = MagicMock()
+        monkeypatch.setattr(datasets_module.pd, "read_csv", failing_read)
+        monkeypatch.setattr(datasets_module.logger, "error", logged)
+
+        with pytest.raises(OSError):
+            DatasetInfo(name="test", url=url).fetch()
+
+        message = logged.call_args.args[0]
+        assert "https://host.invalid/people.csv" in message
+        assert "secret" not in message
+        assert "token" not in message
+
+    def test_fetch_reads_a_gzipped_csv(self, tmp_path: Path):
+        csv_file = tmp_path / "people.csv.gz"
+        pd.DataFrame({"zip": ["02054"]}).to_csv(csv_file, index=False)
+
+        info = DatasetInfo(name="test", url=str(csv_file))
+
+        assert info.fetch()["zip"].tolist() == [2054]
+        source = info.fetch_csv_source()
+        assert source is not None
+        assert source.read_text()["zip"].tolist() == ["02054"]
+
     def test_fetch_unsupported_extension(self, tmp_path: Path):
         """Test fetch raises ValueError for unsupported file extension."""
         xml_file = tmp_path / "test.xml"
@@ -180,6 +237,45 @@ class TestDatasetInfo:
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["col1", "col2"]
         assert len(result) == 2
+
+    def test_fetch_csv_source_text_keeps_cells_as_written(self, tmp_path: Path):
+        """Test the text read keeps zero padding, blanks, and placeholders while the typed read applies load_args."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("zip;count;note\n02054;7;N/A\n10001;;None\n")
+
+        info = DatasetInfo(
+            name="test",
+            url=str(csv_file),
+            load_args={"sep": ";", "dtype": {"zip": int}, "na_values": ["N/A"]},
+        )
+        source = info.fetch_csv_source()
+
+        assert source is not None
+        assert source.read()["zip"].tolist() == [2054, 10001]
+        assert source.read_text().to_dict("list") == {
+            "zip": ["02054", "10001"],
+            "count": ["7", ""],
+            "note": ["N/A", "None"],
+        }
+
+    def test_fetch_csv_source_reads_the_file_once(self, tmp_path: Path):
+        """Test the typed and text reads parse the bytes read by fetch_csv_source, not the file's later content."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("zip\n02054\n")
+
+        source = DatasetInfo(name="test", url=str(csv_file)).fetch_csv_source()
+        csv_file.write_text("zip\n99999\n")
+
+        assert source is not None
+        assert source.read()["zip"].tolist() == [2054]
+        assert source.read_text()["zip"].tolist() == ["02054"]
+
+    def test_fetch_csv_source_skips_typed_formats(self, tmp_path: Path):
+        """Test fetch_csv_source returns None for formats that keep their own types."""
+        json_file = tmp_path / "test.json"
+        json_file.write_text('[{"col1": 1}]')
+
+        assert DatasetInfo(name="test", url=str(json_file)).fetch_csv_source() is None
 
     def test_fetch_rejects_non_dataframe_reader_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test fetch raises a clear error when a pandas reader returns an unexpected type."""

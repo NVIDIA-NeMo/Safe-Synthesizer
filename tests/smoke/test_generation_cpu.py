@@ -24,8 +24,7 @@ def test_generate_with_schema_prompt(fixture_tiny_model, fixture_stub_tokenizer)
     )
     input_ids = fixture_stub_tokenizer(prompt, return_tensors="pt")["input_ids"]
     output = fixture_tiny_model.generate(input_ids, max_new_tokens=20, do_sample=False)
-    decoded = fixture_stub_tokenizer.decode(output[0], skip_special_tokens=True)
-    assert len(decoded) > len(prompt)  # model produced something
+    assert output.shape[1] > input_ids.shape[1]  # model produced new tokens
 
 
 def test_processor_parses_generated_text(fixture_tiny_model, fixture_stub_tokenizer):
@@ -33,8 +32,8 @@ def test_processor_parses_generated_text(fixture_tiny_model, fixture_stub_tokeni
     # Generate some text (will be garbage from random model)
     input_ids = fixture_stub_tokenizer("test", return_tensors="pt")["input_ids"]
     output = fixture_tiny_model.generate(input_ids, max_new_tokens=50, do_sample=False)
+    assert output.shape[1] > input_ids.shape[1]  # model produced new tokens
     generated_text = fixture_stub_tokenizer.decode(output[0], skip_special_tokens=True)
-    assert len(generated_text) > 0
 
     # Create a schema and processor
     schema = {"properties": {"col1": {"type": "string"}, "col2": {"type": "integer"}}}

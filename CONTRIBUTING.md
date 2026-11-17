@@ -14,6 +14,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   - [Branch Protection](#branch-protection)
 - [Classification and Project Tracking](#classification-and-project-tracking)
 - [Pull Request Process](#pull-request-process)
+  - [Issue triage for external pull requests](#issue-triage-for-external-pull-requests)
 - [Issues and Discussions](#issues-and-discussions)
 - [Developer Certificate of Origin](#developer-certificate-of-origin)
 - [Testing](#testing)
@@ -356,7 +357,7 @@ Set both in the [project view](https://github.com/orgs/NVIDIA-NeMo/projects/74) 
 
 ### Labels
 
-Labels are repo-scoped and apply to both issues and PRs. There is no required minimum set per issue or PR; apply labels that add useful signal.
+Labels are repo-scoped and apply to both issues and PRs. External PRs must link an open issue labeled `triaged`; otherwise, apply labels that add useful signal.
 
 #### Type
 
@@ -402,6 +403,8 @@ Other "who acts next" signaling on PRs is done via Assignees -- see the [Pull Re
 | Label | Use for |
 | --- | --- |
 | `community-request` | Issue or PR from an external contributor or user |
+| `triaged` | Issue reviewed by a maintainer and eligible for an external PR |
+| `keep-open` | Maintainer override that prevents automatic PR closure; the linked-issue check still applies |
 | `stale` | Auto-applied to inactive issues/PRs |
 
 #### Dependabot
@@ -414,7 +417,17 @@ This section is the canonical source. To add, rename, or remove a label, open a 
 
 ## Pull Request Process
 
-1. Create an issue first (if one doesn't exist) to discuss the change
+### Issue triage for external pull requests
+
+Before submitting an external PR, link it to an existing, open issue that a maintainer has reviewed and labeled `triaged`. If no issue exists, [open one](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new/choose) and wait for that label before submitting a PR, including a draft. Use `Fixes #NNN`, `Closes #NNN`, or `Resolves #NNN` in the PR description. At least one referenced issue must be open and labeled `triaged`; references inside HTML comments do not count, and linking another PR does not satisfy the requirement.
+
+A newly opened or reopened external PR without an open, triaged issue is automatically closed with a comment explaining the requirement. Check the issue for the `triaged` label; once a maintainer adds it, you may reopen the PR. Later PR edits and changes to a referenced issue (closing, reopening, or adding or removing `triaged`) update the linked-issue check without automatically closing a PR already under review.
+
+Maintainers can add `keep-open` to prevent automatic closure; it does not make the linked-issue check pass. Repository collaborators with write or admin permission and Dependabot are exempt from the linked-issue requirement. Maintainers still review whether the PR addresses the referenced issue.
+
+### Submission and review
+
+1. Create an issue first (if one doesn't exist) to discuss the change. External contributors must wait for a maintainer to add `triaged` before submitting a PR.
 2. Create a branch following the [naming convention](#branch-naming-convention):
   ```bash
    git checkout -b <username>/<issue-id>-<description>
@@ -428,7 +441,7 @@ This section is the canonical source. To add, rename, or remove a label, open a 
   ```bash
    git push origin <your-branch>
   ```
-6. Open a Pull Request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
+6. Open a Pull Request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md) and link the issue in its description
 7. Address review feedback — reviewers from [CODEOWNERS](.github/CODEOWNERS) will be automatically assigned
    - Respond to comments in the github console, be sure to submit as pending comments are only visible to you
    - Resolve comments where the requested change has been made or otherwise addressed.
