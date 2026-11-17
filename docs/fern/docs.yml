@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 instances:
-- url: nemo-safe-synthesizer.docs.buildwithfern.com
+- url: nvidia-nemo-safe-synthesizer.docs.buildwithfern.com/nemo/safe-synthesizer
+  custom-domain: docs.nvidia.com/nemo/safe-synthesizer
   multi-source: true
 title: NeMo Safe Synthesizer
 global-theme: nvidia
