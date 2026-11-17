@@ -190,6 +190,43 @@ def test_group_frame_sorts_stably_by_timestamp():
     assert ordered["value"].tolist() == [1, 2, 0]
 
 
+@pytest.mark.parametrize(
+    ("times", "timestamp_format", "expected"),
+    [
+        pytest.param(["01/02/2026", "31/01/2026", "15/01/2026"], "%d/%m/%Y", [2, 1, 0], id="configured_format"),
+        pytest.param(["31/01/2026", "01/02/2026", "15/01/2026"], None, [2, 0, 1], id="inferred_format"),
+        pytest.param(["10", "9", "100"], None, [1, 0, 2], id="numbers_as_text"),
+        pytest.param(["b", "c", "a"], None, [2, 0, 1], id="unparseable_text"),
+    ],
+)
+def test_group_frame_sorts_text_timestamps_by_time(times: list[str], timestamp_format: str | None, expected: list[int]):
+    frame = pd.DataFrame({"time": times, "value": range(len(times))})
+
+    ordered = group_frame(frame, None, None, "time", timestamp_format)
+
+    assert ordered["value"].tolist() == expected
+
+
+def test_evaluate_pairs_orders_each_group_by_the_configured_timestamp_format():
+    days = pd.date_range("2026-01-25", periods=12, freq="D")
+    frame = pd.DataFrame({"group": "A", "time": days.strftime("%d/%m/%Y"), "value": np.arange(12.0)})
+    shuffled = frame.sample(frac=1, random_state=3)
+    config = SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by="group"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time", timestamp_format="%d/%m/%Y"),
+    )
+
+    def score_pair(training: pd.Series, synthetic: pd.Series) -> PairResult:
+        in_order = training.is_monotonic_increasing and synthetic.is_monotonic_increasing
+        return {"similarity": 1.0 if in_order else 0.0}, None
+
+    score, _ = evaluate_pairs(
+        _datasets(shuffled, shuffled.copy()), config, RollingStatsSimilarityParameters(), score_pair
+    )
+
+    assert score.score == 10.0
+
+
 @pytest.mark.parametrize("dtype", [pd.Int64Dtype(), pd.Float64Dtype()], ids=["Int64", "Float64"])
 def test_prepare_values_treats_nullable_missing_values_as_gaps(dtype: pd.Int64Dtype | pd.Float64Dtype):
     values = pd.Series([1, pd.NA, 3, pd.NA], dtype=dtype)

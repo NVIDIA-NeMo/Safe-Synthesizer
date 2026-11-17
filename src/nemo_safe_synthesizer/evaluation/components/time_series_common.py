@@ -26,6 +26,7 @@ from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
+from ...data_processing.actions.utils import guess_datetime_format
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.assets.text.multi_modal_tooltips import tooltips
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
@@ -148,6 +149,7 @@ def _evaluate_pairs(
     """Run ``evaluate_pairs`` without failure isolation."""
     label = cfg.metric_label.lower()
     timestamp_column = config.time_series.timestamp_column if config is not None else None
+    timestamp_format = config.time_series.timestamp_format if config is not None else None
     group_column, group_error = resolve_group_column(datasets, config)
     if group_error is not None:
         return EvaluationScore(notes=group_error), {}
@@ -173,8 +175,8 @@ def _evaluate_pairs(
     profiles: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     for group_value in groups:
-        training_group = group_frame(datasets.training, group_column, group_value, timestamp_column)
-        synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column)
+        training_group = group_frame(datasets.training, group_column, group_value, timestamp_column, timestamp_format)
+        synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column, timestamp_format)
         group_label = None if group_column is None else str(group_value)
         for column in columns:
             result, reason = score_pair(training_group[column], synthetic_group[column])
@@ -432,25 +434,63 @@ def group_frame(
     group_column: str | None,
     group_value: Any,
     timestamp_column: str | None,
+    timestamp_format: str | None = None,
 ) -> pd.DataFrame:
-    """Return one sequence in deterministic timestamp order.
+    """Return one sequence in deterministic chronological order.
 
     ``mergesort`` preserves input order for equal timestamps, which makes
-    repeated runs stable without inventing a secondary ordering key.
+    repeated runs stable without inventing a secondary ordering key. Text
+    timestamps are sorted by the time they represent, see
+    ``timestamp_sort_key``.
 
     Args:
         df: Dataset containing one or more sequences.
         group_column: Optional sequence identifier column.
         group_value: Group to select, or ``None`` for the full dataset.
         timestamp_column: Optional column used to order the selected rows.
+        timestamp_format: ``time_series.timestamp_format``, used to parse text
+            timestamps. ``None`` infers the format from the first timestamp.
 
     Returns:
         A filtered and time-ordered DataFrame view or copy.
     """
     frame = df if group_column is None else df[df[group_column] == group_value]
     if timestamp_column and timestamp_column in frame:
-        frame = frame.sort_values(timestamp_column, kind="mergesort")
+        frame = frame.sort_values(
+            timestamp_column, kind="mergesort", key=lambda values: timestamp_sort_key(values, timestamp_format)
+        )
     return frame
+
+
+def timestamp_sort_key(values: pd.Series, timestamp_format: str | None = None) -> pd.Series:
+    """Return timestamps as values that sort chronologically.
+
+    Numeric and datetime columns sort as they are. Text holding only numbers
+    sorts as numbers. Other text is parsed with ``timestamp_format``, or with a
+    format inferred from the first timestamp, so ``"31/01/2026"`` sorts before
+    ``"01/02/2026"``. If the text can't all be parsed, the raw values are
+    returned and sort as text.
+
+    Args:
+        values: Timestamp column of one sequence.
+        timestamp_format: A ``strftime`` format, ``"elapsed_seconds"``, or ``None``.
+
+    Returns:
+        A series aligned with ``values`` to sort by.
+    """
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_datetime64_any_dtype(values):
+        return values
+    present = values.notna()
+    numeric = pd.to_numeric(values, errors="coerce")
+    if numeric[present].notna().all():
+        return numeric
+    if timestamp_format is None or timestamp_format == "elapsed_seconds":
+        first = values[present]
+        timestamp_format = guess_datetime_format(str(first.iloc[0])) if len(first) else None
+    if timestamp_format is None:
+        return values
+    parsed = pd.to_datetime(values, format=timestamp_format, errors="coerce")
+    return parsed if parsed[present].notna().all() else values
 
 
 def summaries(profiles: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
