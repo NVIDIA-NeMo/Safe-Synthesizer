@@ -8,7 +8,7 @@ when the migration is complete; see [CONTRIBUTING.md](../../CONTRIBUTING.md#fern
 for how to run and use Fern.
 
 1. DONE - PR to add `.mdx` content, Fern configuration, and GitHub workflows.
-2. Ask in the `cdd-fern` Slack channel for the official docs URL and `FERN_TOKEN`.
+2. DONE - Ask in the `cdd-fern` Slack channel for the official docs URL and `FERN_TOKEN`.
 3. Review the `buildwithfern` preview and iterate on the content as needed.
    Continue this review alongside the following steps until Fern docs are public.
 4. PR to provide a way to reach old documentation versions at
