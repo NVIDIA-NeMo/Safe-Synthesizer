@@ -132,6 +132,6 @@ Structured columns follow the plan. In free-text columns, such as notes, GLiNER2
 
 ## Next Steps
 
-The results above assume the replacement plan correctly identifies every PII column, its pattern, and its dependencies. Each auto-discovery run is stochastic and can write a slightly different plan. The next note covers that plan. It shows how to read it, change it, and train with the version you reviewed. The [tutorial](../../tutorials/pii-replacement-review.ipynb) is the runnable version of the same workflow.
+The results above assume the replacement plan correctly identifies every PII column, its pattern, and its dependencies. Each auto-discovery run is stochastic and can write a slightly different plan. The [next note](review-the-pii-replacement-plan.md) covers that plan. It shows how to read it, change it, and train with the version you reviewed. The [tutorial](../../tutorials/pii-replacement-review.ipynb) is the runnable version of the same workflow.
 
 Have questions or want to share what you are building? Open a [GitHub discussion](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions) or file a [feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
