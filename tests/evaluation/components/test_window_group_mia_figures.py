@@ -50,6 +50,18 @@ def test_distance_figure_spans_the_distances_per_value_from_zero(with_holdout: b
         assert not figure.layout.shapes
 
 
+def test_distance_figure_keeps_the_holdout_and_threshold_in_view_when_training_copies_dominate():
+    details = dict(_DETAILS)
+    details["distances"] = {"training": [0.0] * 20_000, "holdout": list(np.linspace(2.0, 6.0, 100))}
+
+    figure = generate_window_group_mia_distance_figure(details)
+
+    _, high = figure.layout.xaxis.range
+    holdout = figure.data[1].x
+    assert high >= np.quantile(holdout, 0.99)
+    assert figure.layout.shapes[0].x0 < high
+
+
 def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over_holdout():
     rates = [0.05, 0.5, 1.0, *([0.2] * 12)]
     per_group = [

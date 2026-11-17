@@ -56,8 +56,15 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
         raise DataError("At least one training window distance is required.")
     holdout = np.asarray(distances.get("holdout", []), dtype=float)
     scale = float(np.sqrt(details["window_size"] * len(details["columns"])))
-    combined = np.concatenate([training, holdout]) / scale
-    top = max(float(np.quantile(combined, _DISTANCE_RANGE_QUANTILE)), 1e-6) * 1.05
+    attack = details.get("attack")
+    # Clip each distribution's tail separately, so many exact training copies
+    # can't push the holdout windows or the threshold off the chart.
+    limits = [
+        float(np.quantile(values / scale, _DISTANCE_RANGE_QUANTILE)) for values in (training, holdout) if values.size
+    ]
+    if attack is not None:
+        limits.append(attack["threshold"] / scale)
+    top = max([*limits, 1e-6]) * 1.05
     bins = {"start": 0.0, "end": top, "size": top / _DISTANCE_BINS}
     figure = go.Figure()
     figure.add_trace(
@@ -83,7 +90,6 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
                 hovertemplate="Holdout windows<br>difference %{x}<br>%{y:.1f}% of windows<extra></extra>",
             )
         )
-    attack = details.get("attack")
     if attack is not None:
         figure.add_vline(
             x=attack["threshold"] / scale,
