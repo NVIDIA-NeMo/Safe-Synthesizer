@@ -11,9 +11,9 @@ authors:
 
 NeMo Safe Synthesizer replaces personally identifiable information (PII) in the training data it fine-tunes on by default. We just released version 0.2.0, with a brand-new implementation of the PII replacement step that is designed for tabular data. It improves the user experience and quality of PII replacement in three major ways:
 
-1. **Simpler configuration.** An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.
-2. **Consistent replacement across rows and columns.** A new email follows the new name it is built from. A repeated value, such as a first name in a notes column, gets the same replacement everywhere it appears. When most cells in a column share a format, the new values follow that format.
-3. **Better detection accuracy.** Detection covers fewer entity types, which cuts false positives, and it is more accurate on the types it still covers.
+1. Simpler configuration. An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.
+2. Consistent content across a row, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, so medical record numbers keep their prefix and length.
+3. Better detection accuracy. Detection covers fewer entity types, which cuts false positives, and it is more accurate on the types it still covers.
 
 Treat PII replacement as a pre-processing step, not a standalone anonymizer. We keep quasi-identifiers, such as gender and ethnicity, unchanged. These columns rarely identify someone on their own, and the rest of the pipeline generates new records, so the privacy risk of keeping them is low. For stronger standalone anonymization, see our sister library, [NeMo Anonymizer](https://github.com/NVIDIA-NeMo/Anonymizer).
 
@@ -96,7 +96,7 @@ Detection is limited to direct identifiers and to free text that repeats them. C
 
 Leaving those columns unchanged also keeps the patterns the model is supposed to learn. Replacing a city, a diagnosis, or a lab value would change them. The synthetic records are generated later, after this pre-processing step and LLM fine-tuning.
 
-On the entities detection still covers, we tuned the GLiNER2 confidence threshold for each type to favor precision over recall. Regex checks on values with a fixed format, such as emails and UUIDs, remove more false positives. Compared with the previous version, the new version achieves a 37% increase in precision and a 9% increase in recall.
+On the entities detection still covers, we tuned the GLiNER2 confidence threshold for each type to favor precision over recall. Regex checks on values with a fixed format, such as emails, payment card numbers, and IP addresses, remove more false positives. Compared with the previous version, the new version achieves a 37% increase in precision and a 9% increase in recall.
 
 ## Where Replacement Sits
 
