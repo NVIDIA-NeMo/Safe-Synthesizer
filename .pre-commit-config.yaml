@@ -31,7 +31,6 @@ repos:
           | ^docs/(.*/)?.*\.md(/|$)
           | (^|/)\.vscode(/|$)
           | (^|/)build(/|$)
-          | (^|/)venv(/|$)
           | ^(.*/)?.*\.ipynb(/|$)
 
       - id: mixed-line-ending
