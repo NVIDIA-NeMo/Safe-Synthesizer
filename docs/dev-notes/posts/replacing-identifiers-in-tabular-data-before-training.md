@@ -1,7 +1,7 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-date: 2026-11-23
+date: 2026-11-20
 authors:
   - nina-xu
   - zywind
@@ -22,7 +22,7 @@ The row below comes from the simulated hospital admissions table in the [review 
 <!-- more -->
 
 ## Example
-Here's an example of one admission record, before and after PII replacement. A repeated value keeps one color. The replacement of an entity is a darker shade of that color. Quyen and the q in the original email share a color, and Phi and phi are a darker shade of it. The date of birth and the medical record number follow the same rule in the table and in the discharge note.
+Here's an example of one admission record, before and after PII replacement. A repeated value keeps one color. The replacement of an entity is a darker shade of that color. Quyen and the q in the original email share a color, and Phi and phi are a darker shade of it. The date of birth and the medical record number follow the same rule in the table and in the discharge note. Phone and address changed too, so each has a before shade and a darker after shade.
 
 <style>
 .pii-mark { border-radius: 0.2em; padding: 0 0.15em; color: #111; }
@@ -31,6 +31,10 @@ Here's an example of one admission record, before and after PII replacement. A r
 .pii-mid-b { background: #F6C9C4; }
 .pii-last-b { background: #F8E7A0; }
 .pii-last-a { background: #D4B44A; }
+.pii-phone-b { background: #E6D4F5; }
+.pii-phone-a { background: #C49AD8; }
+.pii-addr-b { background: #D2F3EE; }
+.pii-addr-a { background: #6EBEB4; }
 .pii-dob-b { background: #D7EDD4; }
 .pii-dob-a { background: #7EBE86; }
 .pii-mrn-b { background: #D4E4F7; }
@@ -41,8 +45,8 @@ Here's an example of one admission record, before and after PII replacement. A r
 |---|---|---|
 | `full_name` | <span class="pii-mark pii-first-b">Quyen</span> <span class="pii-mark pii-mid-b">Roxas</span> <span class="pii-mark pii-last-b">Truong</span> | <span class="pii-mark pii-first-a">Phi</span> <span class="pii-mark pii-last-a">Tran</span> |
 | `email` | <span class="pii-mark pii-last-b">truong</span><span class="pii-mark pii-first-b">q</span>16@gmail.com | <span class="pii-mark pii-first-a">phi</span>.<span class="pii-mark pii-last-a">tran</span>64@gmail.com |
-| `phone` | 813-421-0211 | 813-750-3946 |
-| `address` | 127 Dylan Dr Suite 104 | 99 Range Rd |
+| `phone` | <span class="pii-mark pii-phone-b">813-421-0211</span> | <span class="pii-mark pii-phone-a">813-750-3946</span> |
+| `address` | <span class="pii-mark pii-addr-b">127 Dylan Dr Suite 104</span> | <span class="pii-mark pii-addr-a">99 Range Rd</span> |
 | `date_of_birth` | <span class="pii-mark pii-dob-b">1978-02-16</span> | <span class="pii-mark pii-dob-a">1978-03-28</span> |
 | `mrn` | <span class="pii-mark pii-mrn-b">MRN-29FD1584F9</span> | <span class="pii-mark pii-mrn-a">MRN-2ET7CSBZD0</span> |
 | `city` | Tampa | Tampa |
