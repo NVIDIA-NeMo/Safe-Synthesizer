@@ -27,7 +27,7 @@ run = [
 
 ["check:type"]
 description = "Run ty type checks under the root ty.toml. Requires Python dependencies installed; does not modify files."
-run = "ty check"
+run = "uv run --locked --all-groups --all-packages ty check"
 
 ["check:lock"]
 description = "Verify generated CUDA metadata and uv.lock match their sources without modifying tracked files."

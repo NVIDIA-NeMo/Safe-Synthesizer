@@ -25,7 +25,7 @@ uv = "0.13.5"
 ruff = "0.17.2"
 ty = "0.0.92"
 
-"aqua:j178/prek" = "latest"
+prek = "0.5.10"
 python = "3.13.17"
 rumdl = "0.3.0"
 
@@ -46,3 +46,4 @@ lockfile = true
 minimum_release_age = "7d" # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
 lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
 idiomatic_version_file_enable_tools = []
+python.uv_venv_auto = "source"
