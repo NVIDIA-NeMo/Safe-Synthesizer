@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -15,7 +14,9 @@ from jupyter_client.kernelspec import KernelSpecManager
 from jupyter_client.manager import KernelManager
 from nbclient import NotebookClient
 
-TUTORIALS = Path(__file__).resolve().parents[2] / "docs" / "tutorials"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TUTORIALS = REPO_ROOT / "docs" / "tutorials"
+PLANNING_PROFILE = REPO_ROOT / "tests" / "test_data" / "local_inference" / "gpt-oss-20b.yaml"
 
 
 @pytest.mark.e2e
@@ -23,8 +24,11 @@ TUTORIALS = Path(__file__).resolve().parents[2] / "docs" / "tutorials"
 @pytest.mark.timeout(5400)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_safe_synthesizer_101_notebook_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # An empty value skips the notebook's getpass prompt, which cannot be answered here.
-    monkeypatch.setenv("NSS_INFERENCE_KEY", os.environ.get("NSS_INFERENCE_KEY", ""))
+    # The notebook's default planning model needs an 80 GB GPU, and the CI runners have 40 GB.
+    # Plan with a smaller local model instead; the kernel inherits this environment.
+    monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", str(PLANNING_PROFILE))
+    for name in ("NSS_INFERENCE_ENDPOINT", "NSS_INFERENCE_MODEL", "NSS_INFERENCE_KEY"):
+        monkeypatch.delenv(name, raising=False)
     notebook = nbformat.read(TUTORIALS / "safe-synthesizer-101.ipynb", as_version=4)
     # The tagged install cell pins the latest release, which would replace the checkout under test.
     notebook.cells = [
