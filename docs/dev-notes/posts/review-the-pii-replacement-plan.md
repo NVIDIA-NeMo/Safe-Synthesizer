@@ -33,7 +33,7 @@ flowchart LR
 
 The YAML below is an auto-discovered plan for the simulated hospital admissions table in the [review tutorial](../../tutorials/pii-replacement-review.ipynb). Each row is one stay, with the patient's identifiers, the clinical record, and the attending physician, and the plan decides which of those change before training. Note that a discovery rerun can write a slightly different plan.
 
-```yaml
+```yaml hl_lines="9-15"
 columns_to_replace:
 - column_name: patient_id
   entity_type: unique_identifier
@@ -83,7 +83,7 @@ Put the `depends_on` lines on `full_name` instead. The starting plan replaces th
 
 The rest of the file stays. `email` is still built from the new full name. `address` is still a street address. `discharge_summary` is still `free_text`, so identifiers inside the note change and the clinical sentences stay.
 
-```yaml
+```yaml hl_lines="9-13"
 columns_to_replace:
 - column_name: patient_id
   entity_type: unique_identifier
