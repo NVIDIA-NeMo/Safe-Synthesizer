@@ -52,7 +52,7 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Install docs dependencies
-        run: mise run bootstrap-nss dev
+        run: mise run deps:sync dev
 
       - name: Configure git for mike
         run: |

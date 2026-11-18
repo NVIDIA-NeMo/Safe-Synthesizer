@@ -64,8 +64,8 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make setup # installs pinned mise, pinned tools from mise.lock, and .venv
-mise run bootstrap-nss cuda
+make setup # pinned mise and tools, all dependencies (CUDA 13.0 on Linux), and Git hooks
+mise run deps:sync cu129 # optional: switch .venv to CUDA 12.9
 ```
 
 ### Run the public container

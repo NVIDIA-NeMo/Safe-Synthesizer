@@ -21,7 +21,7 @@ See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python
 
 Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.14 with modern syntax (`X | Y`, `list[str]`, `Self`).
 
-Common commands: `mise run test` (unit tests), `mise run format` (auto-fix formatting + lint + Markdown + copyright), `mise run check` (all read-only local quality checks), `mise run check ::: test` (the local pre-PR gate), and `mise run check:type` (ty only). Prefer the mise tasks; when running `ruff`, `rumdl`, `dprint`, or `ty` directly, use the versions `.mise.toml` pins (on `PATH` in the mise environment). Use `uv run` for Python execution. When in doubt, inspect `mise tasks` and `uv run --frozen pytest --markers`.
+Common commands: `make setup` (first run: installs and trusts Mise, then `mise run setup`), `mise run deps:sync <profile>` (sync Python dependencies: `dev`, `all`, `ci`, `cpu`, `cu129`, `cu130`, or `engine`), `mise run test` (unit tests), `mise run format` (auto-fix formatting + lint + Markdown + copyright), `mise run check` (all read-only local quality checks), `mise run check ::: test` (the local pre-PR gate), and `mise run check:type` (ty only). Prefer the mise tasks; when running `ruff`, `rumdl`, `dprint`, or `ty` directly, use the versions `.mise.toml` pins (on `PATH` in the mise environment). Use `uv run` for Python execution. When in doubt, inspect `mise tasks` and `uv run --frozen pytest --markers`.
 
 The canonical `uv sync` command for a full GPU/dev environment is:
 

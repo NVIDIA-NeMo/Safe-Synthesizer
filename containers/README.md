@@ -132,7 +132,7 @@ before enabling a platform in CI.
 `Dockerfile.test_ci` provides a CPU-only image for running unit tests locally
 or in CI without a GPU. Its `setup` stage installs system packages and
 mise-managed tools, while `install-deps` creates the Python environment with
-`mise run bootstrap-nss cpu`. The separate `wheel-install` stage installs the
+`mise run deps:sync ci`, the CI profile with CPU PyTorch. The separate `wheel-install` stage installs the
 built wheel without project sources, runs CPU package and CLI checks, and
 resolves the CUDA dependency set.
 

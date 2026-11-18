@@ -17,7 +17,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /workspace
 
-# Install mise and all dev tools including uv (cached until .mise.toml or task files change)
+# Install mise and its pinned tools, including uv (cached until .mise.toml or task files change)
 COPY .mise.toml .
 COPY .mise/tasks/ .mise/tasks/
 COPY mise.lock .
@@ -29,7 +29,7 @@ RUN MISE_REQUIRE_SIGNED_INSTALL=1 \
     MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
     bash tools/install-mise.sh && \
     MISE_YES=1 mise trust && \
-    PYTHON_VERSION="${PYTHON_VERSION}" MISE_YES=1 mise run setup
+    MISE_YES=1 mise install
 
 FROM setup AS wheel-install
 
@@ -66,6 +66,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130
 
 FROM setup AS install-deps
+ARG PYTHON_VERSION
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
 COPY pyproject.toml .
 COPY ruff.toml .
@@ -74,6 +75,6 @@ COPY README.md .
 COPY uv.lock .
 COPY src/ src/
 COPY tests/ tests/
-RUN mise run bootstrap-nss cpu
+RUN UV_PYTHON="${PYTHON_VERSION}" mise run deps:sync ci
 
 RUN git config --global --add safe.directory /workspace

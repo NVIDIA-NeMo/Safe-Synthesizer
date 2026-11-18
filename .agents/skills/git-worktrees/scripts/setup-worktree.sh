@@ -18,4 +18,4 @@ fi
 unset UV_PROJECT_ENVIRONMENT UV_NO_SYNC UV_PROJECT UV_WORKING_DIR PYTHONPATH VIRTUAL_ENV
 uv sync --frozen
 echo "Base environment ready: $(pwd)/.venv"
-echo "For a complete profile run: mise run setup && mise run bootstrap-nss cpu (or cu129)"
+echo "For a complete profile run: mise run deps:sync all (or cpu, cu129, cu130)"

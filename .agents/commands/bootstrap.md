@@ -6,20 +6,23 @@ description: Bootstrap development environment
 
 Set up the development environment from scratch.
 
-1. Install development tools (uv, ruff, ty, yq, etc.):
+1. Install mise and the development tools, sync every dependency group and
+   extra (`deps:sync all`), and install the Git hooks:
 
    ```bash
    make setup
    ```
 
-2. Install Python dependencies (choose one):
+2. To switch to another dependency profile, sync it. `uv sync` is exact, so a
+   profile removes what it does not name:
 
    ```bash
-   mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss engine # Engine dependencies only (no torch)
-   mise run bootstrap-nss dev    # Minimal dev dependencies only
+   mise run deps:sync all    # Every group and extra: CUDA 13.0 on Linux, CPU on macOS
+   mise run deps:sync cpu    # CPU-only PyTorch (macOS or Linux without GPU)
+   mise run deps:sync cu129  # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run deps:sync cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
+   mise run deps:sync engine # Engine dependencies only (no torch)
+   mise run deps:sync dev    # The default dependency groups only
    ```
 
-Note: `cuda` is an alias for `cu129`. Both are equivalent.
+The `cpu`, `cu129`, and `cu130` extras conflict; a profile installs at most one.

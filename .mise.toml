@@ -30,9 +30,7 @@ python = "3.13.17"
 rumdl = "0.3.0"
 
 [env]
-# Activate the project virtualenv (equivalent to the old .envrc "layout python3").
-VIRTUAL_ENV = "{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}"
-_.path = ["{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}/bin"]
+# python.uv_venv_auto in [settings] activates each checkout's own uv project environment.
 _.file = [".env", { path = ".env.local", redact = true }]
 
 [task_config]

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Install the project's Python dependencies for a profile with uv sync --locked. Exact: removes what the profile does not name. Modifies .venv or UV_PROJECT_ENVIRONMENT."
+#USAGE arg "[profile]" help="Dependency profile: dev (default groups), all, ci (all, with CPU PyTorch), engine, cpu, cu129, or cu130" default="dev" {
+#USAGE   choices "dev" "all" "ci" "engine" "cpu" "cu129" "cu130"
+#USAGE }
+
+# The cpu, cu129, and cu130 extras conflict, so a profile installs at most one.
+# all keeps cu130 on Linux and cpu on macOS; ci keeps cpu, since CI runners are
+# CPU-only Linux. The dev group, a default group, comes with every profile.
+# uv reads the Python version from UV_PYTHON, else .python-version.
+
+set -euo pipefail
+
+case "${usage_profile:-dev}" in
+  dev)
+    uv sync --locked
+    ;;
+  all)
+    case "$(uname -s)" in
+      Darwin)
+        uv sync --locked --all-groups --all-extras --no-extra cu129 --no-extra cu130
+        ;;
+      *)
+        uv sync --locked --all-groups --all-extras --no-extra cpu --no-extra cu129
+        ;;
+    esac
+    ;;
+  ci)
+    uv sync --locked --all-groups --all-extras --no-extra cu129 --no-extra cu130
+    ;;
+  engine)
+    uv sync --locked --extra engine
+    ;;
+  cpu)
+    uv sync --locked --extra cpu --extra engine
+    ;;
+  cu129)
+    uv sync --locked --extra cu129 --extra engine
+    ;;
+  cu130)
+    uv sync --locked --extra cu130 --extra engine
+    ;;
+  *)
+    echo "Error: unknown profile '${usage_profile}'. Use one of: dev all ci engine cpu cu129 cu130" >&2
+    exit 1
+    ;;
+esac

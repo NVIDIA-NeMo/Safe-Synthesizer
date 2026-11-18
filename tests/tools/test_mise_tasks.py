@@ -44,30 +44,25 @@ def _mise_tasks(repo_root: Path) -> dict[str, dict[str, object]]:
 
 
 @pytest.fixture
-def fake_uv(tmp_path: Path) -> Path:
-    uv = tmp_path / "uv"
-    uv.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n")
-    uv.chmod(0o755)
-    return uv
+def fake_bin(tmp_path: Path) -> Path:
+    """A directory with a uv that prints its arguments and a uname that prints $FAKE_UNAME."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("uv", "printf '%s\\n' \"$@\""), ("uname", "printf '%s\\n' \"$FAKE_UNAME\"")):
+        tool = bin_dir / name
+        tool.write_text(f"#!/usr/bin/env bash\n{body}\n")
+        tool.chmod(0o755)
+    return bin_dir
 
 
-def _sync_dependencies(
-    repo_root: Path,
-    fake_uv: Path,
-    profile: str,
-    *,
-    python_version: str | None = None,
-    python_override: str | None = None,
-) -> list[str]:
-    command = 'source "$1"; sync_nss_dependencies "$2" "${3:-}"'
-    env = os.environ | {"MISE_CONFIG_ROOT": str(repo_root), "NSS_UV_BIN": str(fake_uv)}
-    if python_version is not None:
-        env["PYTHON_VERSION"] = python_version
-    else:
-        env.pop("PYTHON_VERSION", None)
+def _sync_dependencies(repo_root: Path, fake_bin: Path, profile: str | None, *, system: str = "Linux") -> list[str]:
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}", "FAKE_UNAME": system}
+    env.pop("usage_profile", None)
+    if profile is not None:
+        env["usage_profile"] = profile
 
     result = subprocess.run(
-        ["bash", "-c", command, "bash", str(repo_root / ".mise/tasks/_lib.sh"), profile, python_override or ""],
+        ["bash", str(repo_root / ".mise/tasks/deps/sync")],
         check=False,
         capture_output=True,
         env=env,
@@ -78,55 +73,33 @@ def _sync_dependencies(
     return result.stdout.splitlines()
 
 
-@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13"])
-def test_sync_dependencies_passes_requested_python(
-    pytestconfig: pytest.Config, fake_uv: Path, python_version: str
-) -> None:
-    args = _sync_dependencies(Path(pytestconfig.rootpath), fake_uv, "dev", python_version=python_version)
-
-    assert args == ["sync", "--frozen", "--python", python_version, "--group", "dev"]
-
-
 @pytest.mark.parametrize(
-    ("profile", "expected"),
+    ("profile", "system", "expected"),
     [
-        ("dev", ["--group", "dev"]),
-        ("engine", ["--extra", "engine", "--group", "dev"]),
-        ("cpu", ["--extra", "cpu", "--extra", "engine", "--group", "dev"]),
-        ("cuda", ["--extra", "cu129", "--extra", "engine", "--group", "dev"]),
-        ("cu129", ["--extra", "cu129", "--extra", "engine", "--group", "dev"]),
-        ("cu130", ["--extra", "cu130", "--extra", "engine", "--group", "dev"]),
+        (None, "Linux", []),
+        ("dev", "Linux", []),
+        ("all", "Linux", ["--all-groups", "--all-extras", "--no-extra", "cpu", "--no-extra", "cu129"]),
+        ("all", "Darwin", ["--all-groups", "--all-extras", "--no-extra", "cu129", "--no-extra", "cu130"]),
+        ("ci", "Linux", ["--all-groups", "--all-extras", "--no-extra", "cu129", "--no-extra", "cu130"]),
+        ("engine", "Linux", ["--extra", "engine"]),
+        ("cpu", "Linux", ["--extra", "cpu", "--extra", "engine"]),
+        ("cu129", "Linux", ["--extra", "cu129", "--extra", "engine"]),
+        ("cu130", "Linux", ["--extra", "cu130", "--extra", "engine"]),
     ],
 )
-def test_sync_dependencies_preserves_profile_arguments(
-    pytestconfig: pytest.Config, fake_uv: Path, profile: str, expected: list[str]
+def test_deps_sync_profile_arguments(
+    pytestconfig: pytest.Config, fake_bin: Path, profile: str | None, system: str, expected: list[str]
 ) -> None:
-    args = _sync_dependencies(Path(pytestconfig.rootpath), fake_uv, profile, python_version="3.12")
+    args = _sync_dependencies(Path(pytestconfig.rootpath), fake_bin, profile, system=system)
 
-    assert args == ["sync", "--frozen", "--python", "3.12", *expected]
-
-
-def test_sync_dependencies_accepts_explicit_python_override(pytestconfig: pytest.Config, fake_uv: Path) -> None:
-    args = _sync_dependencies(
-        Path(pytestconfig.rootpath),
-        fake_uv,
-        "dev",
-        python_version="3.13",
-        python_override="/lustre/python3.12",
-    )
-
-    assert args == ["sync", "--frozen", "--python", "/lustre/python3.12", "--group", "dev"]
+    assert args == ["sync", "--locked", *expected]
 
 
-def test_sync_dependencies_propagates_python_resolution_failure(
-    pytestconfig: pytest.Config, fake_uv: Path, tmp_path: Path
-) -> None:
-    repo_root = Path(pytestconfig.rootpath)
-    env = os.environ | {"MISE_CONFIG_ROOT": str(tmp_path), "NSS_UV_BIN": str(fake_uv)}
-    env.pop("PYTHON_VERSION", None)
+def test_deps_sync_rejects_unknown_profile(pytestconfig: pytest.Config, fake_bin: Path) -> None:
+    env = os.environ | {"PATH": f"{fake_bin}:{os.environ['PATH']}", "usage_profile": "cuda"}
 
     result = subprocess.run(
-        ["bash", "-c", 'source "$1"; sync_nss_dependencies dev', "bash", str(repo_root / ".mise/tasks/_lib.sh")],
+        ["bash", str(Path(pytestconfig.rootpath) / ".mise/tasks/deps/sync")],
         check=False,
         capture_output=True,
         env=env,
@@ -134,7 +107,7 @@ def test_sync_dependencies_propagates_python_resolution_failure(
     )
 
     assert result.returncode != 0
-    assert "PYTHON_VERSION is unset" in result.stderr
+    assert "unknown profile 'cuda'" in result.stderr
     assert result.stdout == ""
 
 

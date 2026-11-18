@@ -56,16 +56,21 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    ```bash
    cd Safe-Synthesizer
 
-   # Install dev tools via mise (installs mise itself if missing)
+   # Install mise if missing, trust this checkout's Mise config, then run
+   # `mise run setup`: the pinned tools, every dependency group and extra
+   # (`deps:sync all`), and the Git hooks
    make setup
 
-   # Install Python dependencies (choose one)
-   mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
-   mise run bootstrap-nss engine # Engine dependencies only
-   mise run bootstrap-nss dev    # Minimal dev dependencies only
+   # Switch to another dependency profile when needed (choose one)
+   mise run deps:sync all    # Every group and extra: CUDA 13.0 on Linux, CPU on macOS
+   mise run deps:sync cpu    # CPU-only PyTorch (macOS or Linux without GPU)
+   mise run deps:sync cu129  # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run deps:sync cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
+   mise run deps:sync engine # Engine dependencies only (no torch)
+   mise run deps:sync dev    # The default dependency groups only
    ```
+
+   `deps:sync all` installs CUDA 13.0 PyTorch on Linux and CPU PyTorch on macOS, since the `cpu`, `cu129`, and `cu130` extras conflict and a profile keeps at most one. `uv sync` is exact: a profile removes what it does not name. Mise activates each checkout's own `.venv`. The hooks install into `.git/hooks`; a `core.hooksPath` left over from another hook manager silently disables them, so unset it (`git config --unset core.hooksPath`) before `mise run hooks:install`.
 
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
@@ -570,7 +575,7 @@ We use `dprint` for TOML, `ruff` for Python formatting and linting (including th
 
 Some configuration comes from a development baseline shared with other NVIDIA NeMo repositories: `.house.toml`, `.house-tool.sh`, `.rumdl.toml`, `dprint.json`, `ty.toml`, the `managed: house` block in `.gitignore`, and the tool pins in `.mise.toml`. Maintainers update it periodically. Change those files through a PR as usual, but a later baseline upgrade may undo a change, so mention it in the PR.
 
-CI calls the same tools through atomic read-only `check:*` tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` aggregates the read-only static checks. The standard local gate is the explicit `mise run check ::: test`; no shorthand alias is defined. Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the Mise tasks.
+CI calls the same tools through atomic read-only `check:*` tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` aggregates the read-only static checks. The standard local gate is the explicit `mise run check ::: test`; no shorthand alias is defined. Git hooks (`mise run hooks:install`, which runs `prek install`) provide faster feedback by checking only staged files, but are not a substitute for the Mise tasks.
 
 Useful task graph commands:
 
@@ -609,7 +614,7 @@ This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/
 
 ### Local Preview
 
-Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `mise run bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
+Documentation dependencies are in the `docs` group, which the default `dev` group includes, so every `deps:sync` profile installs them. If you already ran `make setup` or `mise run deps:sync <profile>`, you're set. Otherwise install them directly:
 
 ```bash
 uv sync --group docs

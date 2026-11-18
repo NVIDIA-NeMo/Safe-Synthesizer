@@ -13,16 +13,18 @@ Package management with uv, extras for CPU/CUDA, hatch build, and dynamic versio
 ## Bootstrap Commands
 
 ```bash
-# Full dev environment (tools + Python + CPU deps)
-mise run setup && mise run bootstrap-nss cpu
+# Full dev environment: tools, every group and extra (CUDA 13.0 on Linux,
+# CPU on macOS), and Git hooks. Takes no arguments.
+mise run setup
 
-# Pick a variant:
-mise run bootstrap-nss dev       # dev tools only (no engine/torch)
-mise run bootstrap-nss cpu       # + engine + CPU PyTorch
-mise run bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
-mise run bootstrap-nss cu130     # + engine + CUDA 13.0 PyTorch
-mise run bootstrap-nss cuda      # alias for cu129
-mise run bootstrap-nss engine    # + engine (no torch)
+# Pick a profile (uv sync is exact: it removes what the profile does not name):
+mise run deps:sync dev        # default groups only (no engine/torch)
+mise run deps:sync all        # every group and extra, one PyTorch variant
+mise run deps:sync ci         # every group and extra with CPU PyTorch (CI)
+mise run deps:sync cpu        # + engine + CPU PyTorch
+mise run deps:sync cu129      # + engine + CUDA 12.9 PyTorch
+mise run deps:sync cu130      # + engine + CUDA 13.0 PyTorch
+mise run deps:sync engine     # + engine (no torch)
 
 # Slurm: force Python, caches, and the project venv onto Lustre
 LUSTRE_DIR="/path/to/container-visible/project/directory" \
@@ -30,11 +32,11 @@ LUSTRE_DIR="/path/to/container-visible/project/directory" \
   MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
 
-Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
+Under the hood: `uv sync --locked` with the profile's flags; see `.mise/tasks/deps/sync`.
 
 `bootstrap-nss-slurm` requires `LUSTRE_DIR`, installs the pinned Python under
 that directory, recreates `.venv` if its interpreter is not container-visible,
-then runs the same frozen profile sync as `bootstrap-nss`.
+then runs `deps:sync` for the profile with that interpreter.
 
 ## Extras and Conflicts
 

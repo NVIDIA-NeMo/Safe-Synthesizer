@@ -235,7 +235,7 @@ this is the tag without the leading `v`; on non-tag builds, it is
 
 The `setup` stage installs system packages and mise-managed dev tools
 (ruff, ty, uv, etc.). The `install-deps` stage extends it with the Python
-environment (`mise run bootstrap-nss cpu`). `mise run container:build:test` builds
+environment (`mise run deps:sync ci`, with CPU PyTorch). `mise run container:build:test` builds
 the full image; `mise run container:build:test-setup` builds only the `setup`
 stage for fast tool-installation verification (`mise run test:tool-install`).
 
