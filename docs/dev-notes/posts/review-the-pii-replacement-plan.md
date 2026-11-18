@@ -126,7 +126,7 @@ builder.run()
 
 ## A Few More Controls
 
-- **Value mapping.** `data_to_sampler_value_mapping` is for a guiding column whose values are not labels the sampler already knows. This table does not need one. `Female` and `Male` already match, and every `race_ethnicity` value is already a Nemotron-Personas ethnicity label. A column that uses other words needs an entry. Here `W` maps to `female`, and `Unknown` can draw from either sampler gender.
+- Value mapping. `data_to_sampler_value_mapping` is for a guiding column whose values are not labels the sampler already knows. This table does not need one. `Female` and `Male` already match, and every `race_ethnicity` value is already a Nemotron-Personas ethnicity label. A column that uses other words needs an entry. Here `W` maps to `female`, and `Unknown` can draw from either sampler gender.
 
   ```yaml
   data_to_sampler_value_mapping:
@@ -138,10 +138,10 @@ builder.run()
         - male
   ```
 
-- **Inline plan.** Put `columns_to_replace` under `replace_pii.replacement_plan` when you do not want a planning model at all.
-- **Where names come from.** Nemotron-Personas supplies names and street addresses when that locale's dataset is installed. Faker fills in the rest, including emails, and it is the fallback when the dataset is missing.
-- **Free text.** Only detected spans change. GLiNER2 finds PII in the text, and regex checks catch email addresses, payment card numbers, and IP addresses. With `find_and_replace` on, known values from the same record are also rewritten, as whole words and ignoring case. A value written another way, such as without its prefix or with a different separator, is not matched.
-- **Reuse.** Pass the same path on a later run.
+- Inline plan. Put `columns_to_replace` under `replace_pii.replacement_plan` when you do not want a planning model at all.
+- Where names come from. Nemotron-Personas supplies names and street addresses when that locale's dataset is installed. Faker fills in the rest, including emails, and it is the fallback when the dataset is missing.
+- Free text. Only detected spans change. GLiNER2 finds PII in the text, and regex checks catch email addresses, payment card numbers, and IP addresses. With `find_and_replace` on, known values from the same record are also rewritten, as whole words and ignoring case. A value written another way, such as without its prefix or with a different separator, is not matched.
+- Reuse. Pass the same path on a later run.
 
 [Customizing PII Replacement](../../user-guide/customize-pii-replacement.md) covers entity types, pattern symbols, thresholds, and locales. The [review tutorial](../../tutorials/pii-replacement-review.ipynb) is the runnable version of this workflow.
 
