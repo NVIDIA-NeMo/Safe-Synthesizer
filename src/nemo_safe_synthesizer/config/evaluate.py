@@ -29,7 +29,6 @@ __all__ = [
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
 WINDOW_GROUP_MIA_MIN_WINDOWS = 20
-WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS = 2
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -89,10 +88,10 @@ class WindowGroupMIAParameters(TimeSeriesMetricParameters):
     """Control window membership inference protection evaluation.
 
     Timestamp ordering and sequence grouping use the top-level time-series and
-    data settings. The score needs grouped data and a holdout of at least
-    ``WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS`` whole groups, which the pipeline
-    creates when ``data.group_training_examples_by`` is set. Without them,
-    only copy diagnostics are reported.
+    data settings. The score needs grouped data and a holdout of at least two
+    whole groups, which the pipeline creates when
+    ``data.group_training_examples_by`` is set. Without them, only copy
+    diagnostics are reported.
     """
 
     metric_label: ClassVar[str] = "Window membership inference"

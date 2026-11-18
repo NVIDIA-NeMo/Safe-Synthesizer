@@ -26,7 +26,6 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from ...config.evaluate import (
-    WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS,
     WINDOW_GROUP_MIA_MIN_WINDOWS,
     WindowGroupMIAParameters,
 )
@@ -52,6 +51,7 @@ from .window_group_mia_figures import (
 logger = get_logger(__name__)
 
 WINDOW_GROUP_MIA_FLAG_RATE = 0.05
+WINDOW_GROUP_MIA_MIN_HOLDOUT_GROUPS = 2
 WINDOW_GROUP_MIA_MAX_SYNTHETIC_WINDOWS = 50_000
 _OFFSET_SPLITS = 6
 _SAMPLING_SEED = 2112
