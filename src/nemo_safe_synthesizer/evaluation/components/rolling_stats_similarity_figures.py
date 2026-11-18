@@ -197,16 +197,24 @@ def _add_median_traces(
 
 
 def _segment_matrix(profiles: Sequence[Mapping[str, Any]], key: str) -> np.ndarray:
-    """Stack segment profiles onto the ten segment midpoints, NaN where a profile has no value."""
+    """Stack segment profiles onto the ten segment midpoints, NaN where a profile has no value.
+
+    Shorter profiles are interpolated onto the midpoints. A shorter profile
+    with one finite segment keeps that value at the nearest midpoint only.
+    """
     matrix = np.full((len(profiles), ROLLING_STATS_SEGMENTS), np.nan)
     for row, item in enumerate(profiles):
         values = np.array([np.nan if value is None else value for value in item[key]], dtype=float)
         finite = np.isfinite(values)
         if len(values) == ROLLING_STATS_SEGMENTS:
             matrix[row] = values
-        elif np.sum(finite) >= 2:
-            positions = 100 * (np.arange(len(values)) + 0.5) / len(values)
+            continue
+        positions = 100 * (np.arange(len(values)) + 0.5) / len(values)
+        if np.sum(finite) >= 2:
             matrix[row] = np.interp(_POSITIONS, positions[finite], values[finite])
+        elif np.any(finite):
+            nearest = int(np.argmin(np.abs(_POSITIONS - positions[finite][0])))
+            matrix[row, nearest] = values[finite][0]
     return matrix
 
 

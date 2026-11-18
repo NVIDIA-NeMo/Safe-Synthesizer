@@ -84,6 +84,20 @@ def test_profile_figure_interpolates_pairs_with_fewer_segments_onto_ten_position
     assert training.y[-1] == pytest.approx(1.0)
 
 
+def test_profile_figure_keeps_a_shorter_pair_with_one_usable_segment():
+    level = [3.0] + [None] * 7
+    profiles = [_profile(None, "sparse", level, level, 1.0, spread=[0.5] + [None] * 7)]
+
+    profile_figure = generate_rolling_stats_profile_figure(profiles)
+    difference_figure = generate_rolling_stats_segment_difference_figure(profiles)
+
+    training = _trace(profile_figure, "Training median local average")
+    assert list(training.x) == pytest.approx([_POSITIONS[0]])
+    assert list(training.y) == pytest.approx([3.0])
+    assert list(_trace(profile_figure, "Training median local spread").y) == pytest.approx([0.5])
+    assert any(len(trace.x) for trace in difference_figure.data)
+
+
 def test_segment_difference_figure_averages_paired_gaps_so_opposite_groups_cannot_cancel():
     rising, falling = _TEN, [-value for value in _TEN]
     profiles = [
