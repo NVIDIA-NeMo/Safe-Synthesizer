@@ -9876,10 +9876,6 @@
 from LLM output to tabular data.</p>
 
     
-      <p>Config:</p>
-      <ul>
-          <li><code>default</code>: <code class="highlight language-python"><span class="n">pydantic_model_config</span></code></li>
-      </ul>
 
         <p>Fields:</p>
         <ul>
@@ -9925,6 +9921,12 @@ from LLM output to tabular data.</p>
             </li>
         </ul>
 
+        <p>Validators:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.generate.ValidationParameters._reject_removed_legacy_fields">_reject_removed_legacy_fields</span></code>
+            </li>
+        </ul>
 
 
 
@@ -10134,6 +10136,9 @@ is built.</p>
 
         <p>Validators:</p>
         <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.generate.StructuredGenerationParameters._reject_removed_legacy_fields">_reject_removed_legacy_fields</span></code>
+            </li>
             <li>
               <code><span title="nemo_safe_synthesizer.config.generate.StructuredGenerationParameters._validate_structural_tag_backend">_validate_structural_tag_backend</span></code>
             </li>
@@ -10402,6 +10407,12 @@ They affect the quality, diversity, and validity of the generated synthetic reco
             </li>
         </ul>
 
+        <p>Validators:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.generate.GenerateParameters._reject_removed_legacy_fields">_reject_removed_legacy_fields</span></code>
+            </li>
+        </ul>
 
 
 
