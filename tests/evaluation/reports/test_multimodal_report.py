@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection 
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.pii_replay import PIIReplay, PIIReplayData
+from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
@@ -297,16 +298,23 @@ def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     cards = report.jinja_context["time_series_cards"]
-    assert cards == [report.jinja_context["autocorrelation_similarity"]]
+    card_ids = [card["card_id"] for card in cards]
+    assert cards[0] == report.jinja_context["autocorrelation_similarity"]
     assert cards[0]["card_id"] == "autocorrelation-similarity"
     assert cards[0]["template"] == "jinja/components/autocorrelation_similarity.j2"
     assert cards[0]["score_colored_traces"] is True
+    assert report.jinja_context["rolling_stats_similarity"] in cards
+    assert card_ids.index("autocorrelation-similarity") < card_ids.index("rolling-stats-similarity")
     assert report.jinja_context["with_time_series"] is True
     output = render_report(report)
     assert output is not None
     assert 'id="autocorrelation-similarity"' in output
     assert "Measures whether numeric columns change over time like the training data" in output
     assert 'class="time-series-charts" data-score-colored-traces' in output
+    rolling_card = output[output.index('id="rolling-stats-similarity"') :]
+    assert output.index('id="autocorrelation-similarity"') < output.index('id="rolling-stats-similarity"')
+    assert "Measures whether the local average and spread of numeric columns change over time" in rolling_card
+    assert "Training median local average" in rolling_card
 
 
 def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -316,6 +324,7 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
+    assert not any(isinstance(component, RollingStatsSimilarity) for component in report.components)
     assert report.jinja_context["time_series_cards"] == []
     assert report.jinja_context["with_time_series"] is False
 

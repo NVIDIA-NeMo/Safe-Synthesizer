@@ -23,32 +23,24 @@ from pydantic import Field
 from ...config.evaluate import AutocorrelationSimilarityParameters
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from ...evaluation.data_model.evaluation_score import EvaluationScore
-from ...observability import get_logger
 from .autocorrelation_similarity_figures import (
-    AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
+    AUTOCORRELATION_FIGURE_HEIGHT,
     AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN,
     generate_autocorrelation_lag_error_figure,
-    generate_autocorrelation_pair_score_figure,
     generate_autocorrelation_summary_figure,
-    order_autocorrelation_columns,
 )
 from .time_series_common import (
     FigureSpec,
+    PairResult,
     TimeSeriesComponent,
-    excluded_columns_note,
-    group_frame,
-    resolve_group_column,
-    select_value_columns,
-    shared_groups,
-    summaries,
+    evaluate_pairs,
+    is_effectively_constant,
+    prepare_values,
+    profile_details,
 )
-
-logger = get_logger(__name__)
+from .time_series_common_figures import PAIR_SCORE_MAX_COLUMNS, generate_pair_score_figure, order_columns_by_score
 
 _MIN_VALID_PAIRS = 3
-_GROUP_SELECTION_SEED = 2112
-_CONSTANT_TOLERANCE_FACTOR = 32.0
 
 
 class AutocorrelationSimilarity(TimeSeriesComponent):
@@ -103,16 +95,16 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
                 ),
                 (
                     "Pair scores",
-                    generate_autocorrelation_pair_score_figure(profiles, self.score.score),
+                    generate_pair_score_figure(profiles, self.score.score, height=AUTOCORRELATION_FIGURE_HEIGHT),
                     False,
                     "autocorrelation_pair_scores_info",
                 ),
             ]
-            summary_columns = order_autocorrelation_columns(profiles)
+            summary_columns = order_columns_by_score(profiles)
         context["figures"] = self.figure_rows(figures)
         context["summary_columns"] = summary_columns
         context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
-        context["pair_score_column_count"] = min(len(summary_columns), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)
+        context["pair_score_column_count"] = min(len(summary_columns), PAIR_SCORE_MAX_COLUMNS)
         context["evaluated_profile_count"] = len(profiles)
         context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
         context["evaluated_column_count"] = len({item["column"] for item in profiles})
@@ -139,13 +131,13 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
             A component containing the score, diagnostic details, and notes.
         """
         cfg = AutocorrelationSimilarity._resolve_config(config)
-        # Optional metrics must fail independently so one diagnostic cannot
-        # prevent the rest of the evaluation report from being produced.
-        try:
-            return AutocorrelationSimilarity._evaluate(evaluation_datasets, cfg, config)
-        except Exception as exc:
-            logger.exception("Failed to compute Autocorrelation Similarity.")
-            return AutocorrelationSimilarity(score=EvaluationScore(notes=str(exc)))
+        score, details = evaluate_pairs(
+            evaluation_datasets,
+            config,
+            cfg,
+            lambda training, synthetic: AutocorrelationSimilarity._profile_score(training, synthetic, cfg),
+        )
+        return AutocorrelationSimilarity(score=score, details=details)
 
     @staticmethod
     def _resolve_config(config: SafeSynthesizerParameters | None) -> AutocorrelationSimilarityParameters:
@@ -155,168 +147,11 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
         return config.evaluation.time_series.autocorrelation
 
     @staticmethod
-    def _evaluate(
-        datasets: EvaluationDatasets,
-        cfg: AutocorrelationSimilarityParameters,
-        config: SafeSynthesizerParameters | None,
-    ) -> AutocorrelationSimilarity:
-        """Compute per-group/column profiles and aggregate the component score.
-
-        Args:
-            datasets: Training and synthetic datasets to compare.
-            cfg: Resolved autocorrelation metric parameters.
-            config: Optional top-level configuration used for inherited columns.
-
-        Returns:
-            A scored component, or an unavailable component with explanatory
-            notes when no usable comparison remains.
-        """
-        timestamp_column = config.time_series.timestamp_column if config is not None else None
-        group_column, group_error = resolve_group_column(datasets, config)
-        if group_error is not None:
-            return AutocorrelationSimilarity(score=EvaluationScore(notes=group_error))
-
-        columns, column_error, excluded_columns = select_value_columns(
-            datasets, cfg.value_columns, timestamp_column, group_column, "autocorrelation"
-        )
-        if column_error is not None:
-            return AutocorrelationSimilarity(score=EvaluationScore(notes=column_error))
-        if not columns:
-            return AutocorrelationSimilarity._unavailable("No shared numeric value columns.", excluded_columns)
-
-        groups, missing_training, missing_synthetic, shared_group_count = shared_groups(
-            datasets.training,
-            datasets.synthetic,
-            group_column,
-            cfg.max_groups,
-            _GROUP_SELECTION_SEED,
-        )
-        if not groups:
-            return AutocorrelationSimilarity._unavailable("No shared groups to evaluate.", excluded_columns)
-        omitted_groups = shared_group_count - len(groups)
-        group_selection = {
-            "shared_groups": shared_group_count,
-            "evaluated_groups": len(groups),
-            "omitted_shared_groups": omitted_groups,
-            "policy": "seeded_random_sample" if omitted_groups else "all_shared_groups",
-        }
-
-        profiles: list[dict[str, Any]] = []
-        skipped: list[dict[str, Any]] = []
-        for group_value in groups:
-            training_group = group_frame(datasets.training, group_column, group_value, timestamp_column)
-            synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column)
-            for column in columns:
-                result, reason = AutocorrelationSimilarity._profile_score(
-                    training_group[column], synthetic_group[column], cfg
-                )
-                group_label = None if group_column is None else str(group_value)
-                AutocorrelationSimilarity._record_profile_result(
-                    profiles,
-                    skipped,
-                    group_label,
-                    column,
-                    result,
-                    reason,
-                )
-
-        if not profiles:
-            unavailable_note = "No usable group/column autocorrelation profiles."
-            if omitted_groups:
-                unavailable_note += (
-                    f" Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
-                )
-            return AutocorrelationSimilarity._unavailable(
-                unavailable_note,
-                excluded_columns,
-                {
-                    "counts": {
-                        "groups": len(groups),
-                        "shared_groups": shared_group_count,
-                        "omitted_shared_groups": omitted_groups,
-                        "columns": len(columns),
-                        "evaluated_profiles": 0,
-                        "skipped": len(skipped),
-                    },
-                    "group_selection": group_selection,
-                    "skipped": skipped,
-                    "groups_only_in_training": missing_training,
-                    "groups_only_in_synthetic": missing_synthetic,
-                },
-            )
-
-        similarity = float(np.mean([item["similarity"] for item in profiles]))
-        score = EvaluationScore.finalize_grade(raw_score=similarity, score=10.0 * similarity)
-        notes: list[str] = []
-        if skipped:
-            notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
-        if omitted_groups:
-            notes.append(f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample.")
-        excluded_note = excluded_columns_note(excluded_columns)
-        if excluded_note is not None:
-            notes.append(excluded_note)
-        if notes:
-            score.notes = " ".join(notes)
-
-        details = {
-            "evaluation_mode": "per_group" if group_column else "global",
-            "timestamp_column": timestamp_column,
-            "group_column": group_column,
-            "max_lag": cfg.max_lag,
-            "min_points": cfg.min_points,
-            "counts": {
-                "groups": len(groups),
-                "shared_groups": shared_group_count,
-                "omitted_shared_groups": omitted_groups,
-                "columns": len(columns),
-                "evaluated_profiles": len(profiles),
-                "skipped": len(skipped),
-            },
-            "group_selection": group_selection,
-            "per_group": summaries(profiles, "group"),
-            "per_column": summaries(profiles, "column"),
-            "profiles": profiles,
-            "skipped": skipped,
-            "excluded_columns": excluded_columns,
-            "groups_only_in_training": missing_training,
-            "groups_only_in_synthetic": missing_synthetic,
-        }
-        return AutocorrelationSimilarity(score=score, details=details)
-
-    @staticmethod
-    def _unavailable(
-        note: str,
-        excluded_columns: list[str],
-        details: dict[str, Any] | None = None,
-    ) -> AutocorrelationSimilarity:
-        """Return an unscored component whose notes and details still name left-out columns."""
-        excluded_note = excluded_columns_note(excluded_columns)
-        return AutocorrelationSimilarity(
-            score=EvaluationScore(notes=note if excluded_note is None else f"{note} {excluded_note}"),
-            details={**(details or {}), "excluded_columns": excluded_columns},
-        )
-
-    @staticmethod
-    def _record_profile_result(
-        profiles: list[dict[str, Any]],
-        skipped: list[dict[str, Any]],
-        group_label: str | None,
-        column: str,
-        result: dict[str, Any] | None,
-        reason: str | None,
-    ) -> None:
-        """Record one successful or skipped group-and-column profile."""
-        if result is None:
-            skipped.append({"group": group_label, "column": column, "reason": reason})
-            return
-        profiles.append({"group": group_label, "column": column, **result})
-
-    @staticmethod
     def _profile_score(
         training: pd.Series,
         synthetic: pd.Series,
         cfg: AutocorrelationSimilarityParameters,
-    ) -> tuple[dict[str, Any] | None, str | None]:
+    ) -> PairResult:
         """Compare one training and synthetic autocorrelation profile.
 
         For each lag, Pearson correlation is computed over positions whose two
@@ -334,14 +169,14 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
             Profile score details and ``None`` on success, or ``None`` and a
             human-readable skip reason when the comparison is unusable.
         """
-        training_values = AutocorrelationSimilarity._prepare_values(training)
-        synthetic_values = AutocorrelationSimilarity._prepare_values(synthetic)
+        training_values = prepare_values(training)
+        synthetic_values = prepare_values(synthetic)
         training_count = int(np.sum(np.isfinite(training_values)))
         synthetic_count = int(np.sum(np.isfinite(synthetic_values)))
         n = min(training_count, synthetic_count)
         if n < cfg.min_points:
             return None, f"Each sequence needs at least {cfg.min_points} finite observations."
-        if AutocorrelationSimilarity._is_effectively_constant(training_values):
+        if is_effectively_constant(training_values):
             return None, "The training sequence is constant or indistinguishable from constant at its numeric scale."
 
         # The lag cap bounds work and avoids profiles dominated by the short
@@ -355,7 +190,7 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
 
         lags = list(range(1, effective_max_lag + 1))
         synthetic_acf, synthetic_support = AutocorrelationSimilarity._acf_profile(synthetic_values, effective_max_lag)
-        if AutocorrelationSimilarity._is_effectively_constant(synthetic_values):
+        if is_effectively_constant(synthetic_values):
             return {
                 "lags": lags,
                 "effective_max_lag": effective_max_lag,
@@ -363,7 +198,7 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
                 "error": 1.0,
                 "similarity": 0.0,
                 "reason": "The synthetic sequence is constant or indistinguishable from constant at its numeric scale.",
-                "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
+                "training_acf": profile_details(training_acf),
                 "synthetic_acf": [None] * effective_max_lag,
                 "training_pair_support": training_support.tolist(),
                 "synthetic_pair_support": synthetic_support.tolist(),
@@ -387,8 +222,8 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
             "evaluated_lags": int(np.sum(shared_valid_lags)),
             "error": error,
             "similarity": 1.0 - error,
-            "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
-            "synthetic_acf": AutocorrelationSimilarity._profile_details(synthetic_acf),
+            "training_acf": profile_details(training_acf),
+            "synthetic_acf": profile_details(synthetic_acf),
             "training_pair_support": training_support.tolist(),
             "synthetic_pair_support": synthetic_support.tolist(),
         }, None
@@ -442,30 +277,6 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
         return float(np.clip(np.sqrt(max(excess, 0.0) / np.sum(weight * magnitude**2)), 0.0, 1.0))
 
     @staticmethod
-    def _prepare_values(values: pd.Series) -> NDArray[np.float64]:
-        """Convert a series to floats while preserving non-finite positions as gaps."""
-        numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
-        return np.where(np.isfinite(numeric_values), numeric_values, np.nan)
-
-    @staticmethod
-    def _profile_details(values: NDArray[np.float64]) -> list[float | None]:
-        """Convert an ACF vector into JSON-safe full-precision details."""
-        return [float(value) if np.isfinite(value) else None for value in values]
-
-    @staticmethod
-    def _is_effectively_constant(values: NDArray[np.float64]) -> bool:
-        """Return whether finite variation is negligible relative to value scale."""
-        finite_values = values[np.isfinite(values)]
-        if finite_values.size == 0:
-            return True
-        scale = float(np.max(np.abs(finite_values)))
-        if scale == 0.0:
-            return True
-        normalized_std = float(np.std(finite_values / scale))
-        tolerance = _CONSTANT_TOLERANCE_FACTOR * np.finfo(float).eps
-        return bool(normalized_std <= tolerance)
-
-    @staticmethod
     def _acf_profile(
         values: NDArray[np.float64],
         max_lag: int,
@@ -495,9 +306,9 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
                 continue
             earlier = values[:-lag][valid_pairs]
             later = values[lag:][valid_pairs]
-            if AutocorrelationSimilarity._is_effectively_constant(earlier):
+            if is_effectively_constant(earlier):
                 continue
-            if AutocorrelationSimilarity._is_effectively_constant(later):
+            if is_effectively_constant(later):
                 continue
             correlation = float(np.corrcoef(earlier, later)[0, 1])
             acf[lag - 1] = np.clip(correlation, -1.0, 1.0)

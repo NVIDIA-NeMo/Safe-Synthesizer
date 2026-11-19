@@ -37,7 +37,7 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
   range and interval. Flexible generation learns a final-row marker, and the
   maximum observed group length is a hard limit for synthetic groups.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
-- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
+- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity and Rolling Stats Similarity.
 
 ---
 
@@ -120,7 +120,7 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 ### Evaluation Parameters (In Progress)
 
 Time-series evaluation is configured under `evaluation.time_series`, defined in `src/nemo_safe_synthesizer/config/evaluate.py`.
-Each metric has its own nested section; Autocorrelation Similarity is available today, and more metrics are being added.
+Each metric has its own nested section; Autocorrelation Similarity and Rolling Stats Similarity are available today, and more metrics are being added.
 
 ```yaml
 evaluation:
@@ -131,10 +131,15 @@ evaluation:
       max_lag: 20          # largest lag compared; capped for short sequences
       min_points: 4        # minimum finite observations in each sequence
       max_groups: 128      # reproducible sample of shared groups above this count
+    rolling_stats:
+      value_columns: null  # null evaluates every numeric training column
+      window_size: 20      # values in each rolling window; smaller for short sequences, at least 3
+      min_points: 4        # minimum finite training observations; sparser synthetic sequences score 0
+      max_groups: 128      # reproducible sample of shared groups above this count
 ```
 
 Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; each metric chooses only which value columns it evaluates, with `value_columns`.
-See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) for how to read the score and choose these values.
+See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) and the [Rolling Stats Similarity guide](../../docs/user-guide/time-series-metrics/rolling-stats-similarity.md) for how to read each score and choose these values.
 
 ---
 
@@ -472,6 +477,14 @@ Purpose: Measures how well the synthetic data preserves temporal autocorrelation
 It compares training and synthetic autocorrelation profiles for each shared group and numeric column, discounts differences explained by sampling noise, and averages the pair similarities into a 0--10 score.
 See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the full calculation.
 
+### Rolling Stats Similarity
+
+Located in `src/nemo_safe_synthesizer/evaluation/components/rolling_stats_similarity.py`.
+
+This metric measures whether the local average (rolling mean) and local spread (rolling standard deviation) of synthetic sequences change from beginning to end like the training sequences.
+It averages both rolling statistics over ten aligned segments of each shared group and numeric column, discounts differences explained by chance, and averages the pair similarities into a 0--10 score.
+See `docs/user-guide/time-series-metrics/rolling-stats-similarity.md` for the full calculation.
+
 Auto-Enable: When `is_timeseries=True`, time-series evaluation runs even without explicit evaluation config.
 
 ### Integration with Multimodal Report
@@ -481,14 +494,15 @@ It is enabled by default when `is_timeseries=True`, and can be turned off with `
 
 Shared pieces every time-series metric uses:
 
-- `evaluation/components/time_series_common.py`: the `TimeSeriesComponent` base class with the card attributes, plus grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries.
+- `evaluation/components/time_series_common.py`: the `TimeSeriesComponent` base class with the card attributes, plus grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries. It also holds `evaluate_pairs`, the evaluation flow for metrics that score each group and column pair, and the helpers that convert values to floats with gaps.
+- `evaluation/components/time_series_common_figures.py`: the Pair scores chart, the column order the charts share, and column label shortening.
 - `evaluation/assets/jinja/components/time_series_charts.j2`: `comparison_notes` and `chart_grid` macros for the card body.
 - `TimeSeriesValueColumnCheck` in `preflight/checks/dataframe.py`: validates `value_columns` for every `TimeSeriesMetricParameters` field.
 
 ### Adding a time-series metric
 
 1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
-2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
+2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. A metric that scores each group and column pair passes its pair scorer to `evaluate_pairs`. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
 3. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
 4. Add the component class to `TIME_SERIES_COMPONENTS`.
 5. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
@@ -657,6 +671,8 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
-| `evaluation/components/time_series_common.py` | Component base class and grouping and column helpers shared by time-series metrics |
+| `evaluation/components/rolling_stats_similarity.py` | Rolling statistics evaluation metric |
+| `evaluation/components/time_series_common.py` | Component base class, pair evaluation flow, and grouping, column, and value helpers shared by time-series metrics |
+| `evaluation/components/time_series_common_figures.py` | Pair scores chart and column order shared by time-series metrics |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |
