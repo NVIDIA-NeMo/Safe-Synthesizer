@@ -127,9 +127,7 @@ See [Configuration -- Evaluation](configuration.md#evaluation) for the full list
 ### Report Charts
 
 Column distribution charts in the report may not match a histogram you plot
-yourself from the training data. Numeric bins have rounded edges, and
-categories with fewer than 5 training records are grouped into one
-"Other (N categories)" bar. The Deep Structure Stability and Text Semantic
+yourself from the training data since the report has some protections to reduce privacy risk when sharing the report. The histograms for numeric column use bins with rounded edges. The histograms for categorical columns will group rare categories with fewer than 5 training records into a single "Other (N categories)" bar. The Deep Structure Stability and Text Semantic
 Similarity charts plot one point per record on two principal components;
 these are projections, not column values.
 
