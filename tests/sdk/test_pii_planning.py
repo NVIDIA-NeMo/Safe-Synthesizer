@@ -24,7 +24,7 @@ from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer, TransformResult
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event
-from nemo_safe_synthesizer.telemetry import NSSTrainingAndGenerationEvent, TaskStatusEnum
+from nemo_safe_synthesizer.telemetry import NSSTrainingAndGenerationEvent, RunStageEnum, TaskStatusEnum
 
 
 @pytest.fixture(autouse=True)
@@ -480,3 +480,35 @@ def test_replace_pii_does_not_report_results_from_an_earlier_run(
     assert [
         (e.num_records_generated, e.synthetic_quality_score, e.data_privacy_score) for e in fixture_no_telemetry_network
     ] == [(-1, -1.0, -1.0)]
+
+
+def test_plan_pii_replacement_reports_planning_when_the_frame_is_already_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # process_data() calls plan_pii_replacement() after loading the frame, so a failure there is a planning failure.
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com"]}))
+
+    def failing_resolve(self):
+        raise ParameterError("bad planning settings")
+
+    monkeypatch.setattr(SafeSynthesizer, "resolve", failing_resolve)
+
+    with pytest.raises(ParameterError, match="bad planning settings"):
+        nss.plan_pii_replacement()
+
+    assert nss._stage == RunStageEnum.PII_PLANNING
+
+
+def test_plan_pii_replacement_reports_data_loading_when_the_source_is_not_loaded(tmp_path: Path) -> None:
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()),
+        save_path=tmp_path,
+    ).with_data_source(str(tmp_path / "missing.csv"))
+
+    with pytest.raises(FileNotFoundError):
+        nss.plan_pii_replacement()
+
+    assert nss._stage == RunStageEnum.DATA_LOADING

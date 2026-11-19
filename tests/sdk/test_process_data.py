@@ -217,6 +217,29 @@ class TestProcessDataRunStage:
 
         assert builder._stage == RunStageEnum.PREFLIGHT
 
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_training_model_metadata_errors_leave_the_preflight_stage(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
+        mock_metadata_cls.from_config.side_effect = OSError("model not found")
+
+        with pytest.raises(OSError, match="model not found"):
+            builder.process_data()
+
+        assert builder._stage == RunStageEnum.PREFLIGHT
+
     def test_data_source_errors_leave_the_data_loading_stage(self, fixture_workdir):
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(replace_pii=None), workdir=fixture_workdir)
         builder._data_source = str(fixture_workdir.base_path / "missing.csv")

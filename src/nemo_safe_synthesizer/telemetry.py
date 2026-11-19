@@ -285,7 +285,8 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         serialization_alias="piiPlanSource",
         description=(
             "How the PII replacement plan was supplied: 'auto_discovery', or 'provided' for an inline plan or "
-            "plan file. 'undefined' when PII replacement is disabled."
+            "plan file. 'undefined' when PII replacement is disabled, or when the run loaded a saved config "
+            "(such as 'run generate') and did not plan."
         ),
     )
     pii_replaced_columns_bucket: str = Field(
@@ -301,10 +302,11 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         serialization_alias="piiLlmMode",
         description=(
-            "Where LLM-assisted PII plan discovery ran: 'none' (a user-supplied plan, which needs no LLM), "
-            "'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' when the "
-            "inference settings could not be resolved. 'undefined' when PII replacement is disabled. "
-            "The endpoint URL is never reported."
+            "Where LLM-assisted PII plan discovery is configured to run: 'none' (a user-supplied plan, which "
+            "needs no LLM), 'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' "
+            "when the inference settings could not be resolved. Reported from the configuration, so a run that "
+            "fails before planning starts still reports it. 'undefined' when PII replacement is disabled or "
+            "piiPlanSource is 'undefined'. The endpoint URL is never reported."
         ),
     )
     pii_llm_model: str = Field(
@@ -313,8 +315,9 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         description=(
             "Planning model: the local profile's model_id or the endpoint's model ID, sanitized like the "
             "pretrained model, so local model paths are reported as 'local_path'. 'other' when the repo ID does "
-            "not fit the telemetry schema. 'undefined' when no LLM planning ran. Use "
-            "sanitize_model_for_telemetry()."
+            "not fit the telemetry schema. 'undefined' when no LLM planning is configured. Like piiLlmMode, it "
+            "is reported from the configuration, so a run that fails before planning starts still reports it. "
+            "Use sanitize_model_for_telemetry()."
         ),
     )
     pii_locale: str = Field(

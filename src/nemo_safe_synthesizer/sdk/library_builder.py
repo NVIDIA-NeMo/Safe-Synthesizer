@@ -150,12 +150,14 @@ def _build_telemetry_event(
     pii_llm_model = "undefined"
     if replace_pii_config is not None:
         pii_sampler_backend = replace_pii_config.sampler.backend.value
-        # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
-        pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
         if replace_pii_config.inline_plan is not None:
             pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
         pii_locale = sanitize_locale_for_telemetry(replace_pii_config.locale)
-        pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
+        # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
+        # A config loaded from a save path was already resolved by an earlier run, so its source is unknown.
+        if ss._pii_plan_source is not None or not ss._loaded_from_save_path:
+            pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
+            pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -496,7 +498,11 @@ class SafeSynthesizer(ConfigBuilder):
                 f"output_path cannot be named {PII_REPLACEMENT_PLAN_FILENAME}; NSS writes the replacement plan to that "
                 "file next to the configuration"
             )
-        self._stage = RunStageEnum.DATA_LOADING
+        # process_data() calls this after the frame is loaded; only a standalone call still has data to load.
+        if isinstance(self._data_source, pd.DataFrame):
+            self._stage = RunStageEnum.PII_PLANNING
+        else:
+            self._stage = RunStageEnum.DATA_LOADING
         self._ensure_observability()
         self.resolve()
         self._stage = RunStageEnum.PII_PLANNING
@@ -807,6 +813,9 @@ class SafeSynthesizer(ConfigBuilder):
             )
             self._stage = RunStageEnum.DATA_PROCESSING
 
+        # The training model's metadata is loaded for preflight's token budget checks, so a missing or
+        # unloadable model is reported as a preflight failure.
+        self._stage = RunStageEnum.PREFLIGHT
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
         if metadata_for_preflight is None:
@@ -836,7 +845,6 @@ class SafeSynthesizer(ConfigBuilder):
             save_config(self._nss_config, config_path)
             self._preflight_config_path = config_path
 
-        self._stage = RunStageEnum.PREFLIGHT
         preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
         self.preflight_report = preflight
         for issue in preflight.warnings:

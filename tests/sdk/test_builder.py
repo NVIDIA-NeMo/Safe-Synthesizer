@@ -458,6 +458,22 @@ class TestTelemetryEmission:
         assert event.pii_plan_source == "auto_discovery"
         assert event.pii_replaced_columns_bucket == "1-5"
 
+    def test_build_telemetry_event_leaves_plan_source_undefined_for_a_saved_config(self):
+        # run generate loads a config an earlier run already resolved, so whether its plan was discovered is unknown.
+        resolved = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            )
+        )
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=resolved)
+        builder._loaded_from_save_path = True
+
+        event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert (event.pii_plan_source, event.pii_llm_mode, event.pii_llm_model) == ("undefined",) * 3
+        assert event.pii_replaced_columns_bucket == "1-5"
+
     @pytest.mark.parametrize(
         ("locale", "expected"),
         [("fr_FR", "fr_FR"), ("/Users/alice/locales/custom", "other")],
