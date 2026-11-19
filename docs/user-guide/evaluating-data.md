@@ -124,6 +124,13 @@ SQS reports are limited to `sqs_report_columns=250` columns and
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
 See [Configuration -- Evaluation](configuration.md#evaluation) for the full list of `evaluation` fields.
 
+### Report Charts
+
+Column distribution charts in the report may not match a histogram you plot
+yourself from the training data since the report has some protections to reduce privacy risk when sharing the report. The histograms for numeric column use bins with rounded edges. The histograms for categorical columns will group rare categories with fewer than 5 training records into a single "Other (N categories)" bar. The Deep Structure Stability and Text Semantic
+Similarity charts plot one point per record on two principal components;
+these are projections, not column values.
+
 ### Low SQS Scores
 
 If the SQS (Synthetic Quality Score) report shows low quality scores:

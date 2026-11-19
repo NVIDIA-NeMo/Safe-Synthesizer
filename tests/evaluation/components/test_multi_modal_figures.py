@@ -10,6 +10,7 @@ import pytest
 
 from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     bar_chart,
+    binned_percent_bars,
     combine_subplots,
     correlation_heatmap,
     degree_to_radian,
@@ -23,6 +24,7 @@ from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     histogram,
     histogram_figure,
     pie,
+    safe_bin_edges,
     scatter,
     scatter_plot,
     structure_stability_figure,
@@ -136,6 +138,166 @@ class TestPie:
         fig = pie(labels, values, textinfo="percent")
 
         assert isinstance(fig, go.Figure)
+
+
+@pytest.fixture
+def fixture_training_values() -> np.ndarray:
+    """300 normal training values, each ending in distinctive decimals so leaks are easy to spot."""
+    return np.round(np.random.default_rng(0).normal(5000, 1500, 300), 6) + 0.123457
+
+
+@pytest.fixture
+def fixture_synthetic_values() -> np.ndarray:
+    """300 synthetic values from the same distribution as the training fixture, with a different seed."""
+    return np.round(np.random.default_rng(1).normal(5000, 1500, 300), 6) + 0.123457
+
+
+class TestSafeBinEdges:
+    """Tests for safe_bin_edges."""
+
+    def test_edges_are_multiples_of_a_round_step_and_never_training_values(
+        self, fixture_training_values, fixture_synthetic_values
+    ):
+        training = fixture_training_values
+        edges = safe_bin_edges(training, fixture_synthetic_values)
+
+        step = edges[1] - edges[0]
+        assert np.allclose(np.diff(edges), step)
+        assert np.allclose(edges / step, np.round(edges / step))
+        assert not np.isin(np.round(edges, 6), np.round(training, 6)).any()
+
+    def test_range_covers_every_value_rounded_outward(self, fixture_training_values, fixture_synthetic_values):
+        training = fixture_training_values
+        synthetic = fixture_synthetic_values
+        edges = safe_bin_edges(training, synthetic)
+        values = np.concatenate([training, synthetic])
+
+        assert edges[0] < values.min()
+        assert edges[-1] > values.max()
+        assert edges[1] > values.min()
+        assert edges[-2] < values.max()
+
+    def test_integer_training_values_get_whole_number_steps(self):
+        rng = np.random.default_rng(0)
+        edges = safe_bin_edges(rng.integers(0, 40, 300), rng.integers(0, 40, 300))
+
+        assert edges[1] - edges[0] >= 1
+        assert np.allclose(edges, np.round(edges))
+
+    def test_small_whole_number_ranges_get_one_centered_bin_per_value(self):
+        counts = np.random.default_rng(0).integers(1, 4, 300)
+        edges = safe_bin_edges(counts, counts)
+
+        assert list(edges) == [0.5, 1.5, 2.5, 3.5]
+        training_bar, _ = binned_percent_bars(counts, counts, edges)
+        assert list(training_bar.x) == [1.0, 2.0, 3.0]
+        assert list(training_bar.customdata) == ["1", "2", "3"]
+
+    def test_top_value_on_an_edge_gets_its_own_bin(self):
+        values = np.concatenate([np.zeros(10), np.full(10, 10.0), np.linspace(1, 9, 50)])
+        edges = safe_bin_edges(values, values)
+        counts, _ = np.histogram(values, bins=edges)
+
+        assert counts[-1] == 10
+
+    def test_caps_bins_for_pathological_distribution(self):
+        training = np.concatenate([np.full(5000, 1.0), np.linspace(2, 1e9, 20)])
+        edges = safe_bin_edges(training, np.full(5000, 1.0000001))
+
+        assert 2 <= len(edges) <= 202
+
+    def test_no_values_give_one_default_bin(self):
+        assert list(safe_bin_edges(np.array([]), np.array([]))) == [0.0, 1.0]
+
+    def test_histogram_figure_ignores_non_finite_values(self):
+        training = pd.Series([np.nan, np.inf, -np.inf, *range(20)], dtype=float)
+
+        fig = histogram_figure(training, training)
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
+
+    @pytest.mark.parametrize(
+        "values",
+        [[1e16] * 20, [1e16, 1e16 + 2, 1e16 + 4] * 10, [1.0, 1.0 + 2.2e-16] * 10],
+        ids=["large_constant", "large_narrow", "below_float_spacing"],
+    )
+    def test_edges_stay_increasing_when_the_step_is_below_float_spacing(self, values):
+        values = np.array(values)
+        edges = safe_bin_edges(values, values)
+
+        assert np.all(np.diff(edges) > 0)
+        assert np.histogram(values, bins=edges)[0].sum() == values.size
+
+    @pytest.mark.parametrize(
+        ("training", "synthetic"),
+        [
+            (pd.Series([1.0, 2.5, pd.NA] * 10, dtype="Float64"), pd.Series([1.0, 2.5, pd.NA] * 10, dtype="Float64")),
+            (pd.Series([1, 2, pd.NA] * 10, dtype="Int64"), pd.Series([1, 2, pd.NA] * 10, dtype="Int64")),
+            (pd.Series([1.0, 2.0, 3.0] * 10), pd.Series(["a", None, "b"] * 10, dtype="string")),
+        ],
+        ids=["nullable_float", "nullable_int", "string_synthetic"],
+    )
+    def test_histogram_figure_handles_nullable_dtypes(self, training, synthetic):
+        fig = histogram_figure(training, synthetic)
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
+
+    def test_large_constant_column_with_non_numeric_synthetic_values_still_charts(self):
+        fig = histogram_figure(pd.Series([1e16] * 20), pd.Series(["x"] * 20))
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0)
+
+    def test_constant_training_values_give_one_bin(self):
+        edges = safe_bin_edges(np.full(20, 5.0), np.full(20, 5.0))
+
+        assert len(edges) == 2
+        assert edges[0] <= 5.0 < edges[1]
+
+
+class TestBinnedPercentBars:
+    """Tests for binned_percent_bars."""
+
+    def test_returns_training_and_synthetic_bars_summing_to_100(
+        self, fixture_training_values, fixture_synthetic_values
+    ):
+        training = fixture_training_values
+        synthetic = fixture_synthetic_values
+        bars = binned_percent_bars(training, synthetic, safe_bin_edges(training, synthetic))
+
+        assert [bar.name for bar in bars] == ["Training", "Synthetic"]
+        assert all(isinstance(bar, go.Bar) and bar.meta == "binned" for bar in bars)
+        assert sum(bars[1].y) == pytest.approx(100.0, abs=0.01)
+
+    def test_bars_leave_a_gap_inside_each_bin(self, fixture_training_values):
+        training = fixture_training_values
+        edges = safe_bin_edges(training, training)
+        training_bar, _ = binned_percent_bars(training, training, edges)
+
+        assert np.all(np.asarray(training_bar.width) < np.diff(edges))
+
+    def test_counts_every_bin_including_sparse_ones(self):
+        training = np.concatenate([np.full(50, 1.0), np.full(3, 5.5), np.full(47, 9.0)])
+        edges = np.array([0.0, 2.0, 4.0, 6.0, 8.0, 10.0])
+        training_bar, synthetic_bar = binned_percent_bars(training, np.full(10, 5.5), edges)
+
+        assert list(training_bar.y) == [50.0, 0.0, 3.0, 0.0, 47.0]
+        assert list(training_bar.customdata) == ["[0, 2)", "[2, 4)", "[4, 6)", "[6, 8)", "[8, 10)"]
+        assert synthetic_bar.y[2] == pytest.approx(100.0)
+
+    def test_range_labels_stay_distinct_for_large_offsets(self):
+        timestamps = np.random.default_rng(0).uniform(1.7e9, 1.7e9 + 86_400, 500)
+        edges = safe_bin_edges(timestamps, timestamps)
+        training_bar, _ = binned_percent_bars(timestamps, timestamps, edges)
+
+        assert len(set(training_bar.customdata)) == len(edges) - 1
+
+    def test_carries_no_training_values(self, fixture_training_values):
+        training = fixture_training_values
+        bars = binned_percent_bars(training, training, safe_bin_edges(training, training))
+
+        for bar in bars:
+            assert len(bar.y) < len(training)
+            assert not np.isin(np.round(np.asarray(bar.x, dtype=float), 6), np.round(training, 6)).any()
 
 
 class TestScatter:
@@ -445,10 +607,10 @@ class TestBarChart:
     """Tests for bar_chart function."""
 
     def test_bar_chart_basic(self):
-        ref_dist = {"A": 0.3, "B": 0.5, "C": 0.2}
-        out_dist = {"A": 0.25, "B": 0.55, "C": 0.2}
+        ref_dist = {"A": 30.0, "B": 50.0, "C": 20.0}
+        out_dist = {"A": 25.0, "B": 55.0, "C": 20.0}
 
-        fig = bar_chart(ref_dist, out_dist)
+        fig = bar_chart(ref_dist, out_dist, training_count=100)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 2  # Training and Synthetic bars
@@ -456,10 +618,10 @@ class TestBarChart:
 
     def test_bar_chart_missing_keys(self):
         # Synthetic distribution has a key that training doesn't have
-        ref_dist = {"A": 0.5, "B": 0.5}
-        out_dist = {"A": 0.4, "C": 0.6}
+        ref_dist = {"A": 50.0, "B": 50.0}
+        out_dist = {"A": 40.0, "C": 60.0}
 
-        fig = bar_chart(ref_dist, out_dist)
+        fig = bar_chart(ref_dist, out_dist, training_count=100)
 
         assert isinstance(fig, go.Figure)
         # Should include all keys: A, B, C
@@ -467,23 +629,31 @@ class TestBarChart:
         assert len(bar_trace.x) == 3
 
     def test_bar_chart_empty_distributions(self):
-        ref_dist = {}
-        out_dist = {}
-
-        fig = bar_chart(ref_dist, out_dist)
+        fig = bar_chart({}, {}, training_count=0)
 
         assert isinstance(fig, go.Figure)
 
     def test_bar_chart_many_columns(self):
         # More than 60 columns should use narrower bars
-        ref_dist = {f"col_{i}": 1 / 70 for i in range(70)}
-        out_dist = {f"col_{i}": 1 / 70 for i in range(70)}
+        ref_dist = {f"col_{i}": 100 / 70 for i in range(70)}
+        out_dist = {f"col_{i}": 100 / 70 for i in range(70)}
 
-        fig = bar_chart(ref_dist, out_dist)
+        fig = bar_chart(ref_dist, out_dist, training_count=7000)
 
         assert isinstance(fig, go.Figure)
         # Bars should have explicit width set
         assert len(fig.data[0].width) == 70
+
+    def test_bar_chart_folds_rare_training_categories_into_other(self):
+        ref_dist = {"common": 96.0, "rare_a": 1.0, "rare_b": 3.0}
+        out_dist = {"common": 90.0, "rare_a": 4.0, "synthetic_only": 6.0}
+
+        fig = bar_chart(ref_dist, out_dist, training_count=100)
+
+        labels = list(fig.data[0].x)
+        assert labels == ["common", "synthetic_only", "Other (2 categories)"]
+        assert list(fig.data[0].y) == [96.0, 0.0, 4.0]
+        assert list(fig.data[1].y) == [90.0, 6.0, 4.0]
 
 
 class TestHistogramFigure:
@@ -496,7 +666,8 @@ class TestHistogramFigure:
         fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Training and Synthetic histograms
+        assert [(trace.type, trace.name) for trace in fig.data] == [("bar", "Training"), ("bar", "Synthetic")]
+        assert fig.layout.barmode == "overlay"
 
     def test_histogram_figure_with_nans(self):
         training = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
@@ -512,9 +683,10 @@ class TestHistogramFigure:
 
         fig = histogram_figure(training, synthetic)
 
-        # Should return empty figure when one series is all NaN
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 0
+        assert [(trace.type, tuple(trace.text)) for trace in fig.data] == [
+            ("scatter", ("No numeric training values to chart",))
+        ]
 
     def test_histogram_figure_same_values(self):
         training = pd.Series([5.0, 5.0, 5.0, 5.0])
@@ -523,6 +695,35 @@ class TestHistogramFigure:
         fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
+
+    def test_few_training_values_are_still_binned(self):
+        fig = histogram_figure(pd.Series([41.0, 42.0, 43.0]), pd.Series(np.arange(20.0)))
+
+        assert [(trace.type, trace.name) for trace in fig.data] == [("bar", "Training"), ("bar", "Synthetic")]
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
+
+    def test_non_numeric_synthetic_values_keep_the_training_bars_with_a_note(self):
+        training = pd.Series(np.random.default_rng(0).normal(size=200))
+        synthetic = pd.Series(["a", "b"] * 100)
+
+        fig = histogram_figure(training, synthetic)
+
+        assert [(trace.type, trace.name) for trace in fig.data] == [
+            ("bar", "Training"),
+            ("bar", "Synthetic"),
+            ("scatter", "Note"),
+        ]
+        assert sum(fig.data[0].y) > 90
+        assert sum(fig.data[1].y) == 0
+        assert fig.data[2].text == ("No numeric synthetic values",)
+
+    def test_tiny_value_ranges_keep_distinct_bins(self):
+        values = np.linspace(1e-15, 9e-15, 100)
+
+        edges = safe_bin_edges(values, values)
+
+        assert len(edges) > 2
+        assert np.all(np.diff(edges) > 0)
 
 
 class TestGenerateTextStructureSimilarityFigures:
