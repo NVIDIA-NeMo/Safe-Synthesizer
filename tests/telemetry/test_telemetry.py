@@ -24,7 +24,6 @@ from nemo_safe_synthesizer.telemetry import (
     build_payload,
     sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
-    sanitize_pii_llm_model_for_telemetry,
 )
 
 telemetry_module = importlib.import_module("nemo_safe_synthesizer.telemetry")
@@ -152,8 +151,6 @@ class TestSanitizeModelForTelemetry:
     def test_empty_values_are_undefined(self, model):
         assert sanitize_model_for_telemetry(model) == "undefined"
 
-
-class TestSanitizePiiLlmModelForTelemetry:
     @pytest.mark.parametrize(
         "model",
         [
@@ -164,19 +161,15 @@ class TestSanitizePiiLlmModelForTelemetry:
         ],
     )
     def test_repo_ids_the_schema_accepts_are_preserved(self, model):
-        assert sanitize_pii_llm_model_for_telemetry(model) == model
-
-    @pytest.mark.parametrize(("model", "expected"), [(None, "undefined"), ("/srv/alice/planner", "local_path")])
-    def test_missing_and_local_path_labels_are_kept(self, model, expected):
-        assert sanitize_pii_llm_model_for_telemetry(model) == expected
+        assert sanitize_model_for_telemetry(model) == model
 
     def test_an_organization_the_schema_rejects_is_other(self):
-        assert sanitize_pii_llm_model_for_telemetry("o" * 65 + "/planner") == "other"
+        assert sanitize_model_for_telemetry("o" * 65 + "/planner") == "other"
 
     @pytest.mark.parametrize("model", ["café/planner", "planner-ü"])
     def test_non_ascii_names_are_never_sent(self, model):
         # Newer huggingface_hub versions reject these names (local_path); older ones accept them (other).
-        assert sanitize_pii_llm_model_for_telemetry(model) in {"local_path", "other"}
+        assert sanitize_model_for_telemetry(model) in {"local_path", "other"}
 
 
 class TestSanitizeLocaleForTelemetry:

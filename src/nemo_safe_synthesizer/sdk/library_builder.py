@@ -37,7 +37,6 @@ from ..telemetry import (
     bucket_records,
     sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
-    sanitize_pii_llm_model_for_telemetry,
 )
 from .config_builder import ConfigBuilder
 
@@ -116,8 +115,8 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
         # ParameterError is a ValueError; a malformed endpoint URL raises a plain ValueError from urlparse.
         return "invalid", "undefined"
     if isinstance(inference, LocalServerRequest):
-        return "local", sanitize_pii_llm_model_for_telemetry(inference.profile.model_id)
-    return "endpoint", sanitize_pii_llm_model_for_telemetry(inference.model_id)
+        return "local", sanitize_model_for_telemetry(inference.profile.model_id)
+    return "endpoint", sanitize_model_for_telemetry(inference.model_id)
 
 
 def _build_telemetry_event(
