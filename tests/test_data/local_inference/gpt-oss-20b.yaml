@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# GPT-OSS-20B for e2e tests on 40 GB GPUs, where the bundled 80 GB profiles do not fit.
+# Settings follow the bundled gpt-oss-120b profile. The MXFP4 weights take about 13 GB.
+model_id: openai/gpt-oss-20b
+revision: 6cee5e81ee83917806bbde320786a8fb61efebee  # pragma: allowlist secret
+# About 34 GiB on a 40 GB A100, which reports 39.5 GiB.
+gpu_memory_utilization: 0.85
+min_gpu_memory_gib: 39
+# One classification request carries up to 48 KiB of column samples,
+# roughly 12-16k tokens before instructions and reasoning.
+max_model_len: 32768
+# Matches the default replace_pii.llm.max_workers.
+max_num_seqs: 8
+extra_args:
+  # Let the model reason before its schema-constrained answer.
+  - --reasoning-parser=openai_gptoss
+request_options:
+  temperature: 1.0
+  top_p: 1.0
+request_timeout_seconds: 300
+# Allows for the first-run download of about 13 GB.
+startup_timeout_seconds: 1200
+shutdown_timeout_seconds: 60
