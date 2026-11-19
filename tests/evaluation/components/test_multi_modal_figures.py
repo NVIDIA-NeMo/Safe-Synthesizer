@@ -142,11 +142,13 @@ class TestPie:
 
 @pytest.fixture
 def fixture_training_values() -> np.ndarray:
+    """300 normal training values, each ending in distinctive decimals so leaks are easy to spot."""
     return np.round(np.random.default_rng(0).normal(5000, 1500, 300), 6) + 0.123457
 
 
 @pytest.fixture
 def fixture_synthetic_values() -> np.ndarray:
+    """300 synthetic values from the same distribution as the training fixture, with a different seed."""
     return np.round(np.random.default_rng(1).normal(5000, 1500, 300), 6) + 0.123457
 
 
@@ -213,6 +215,23 @@ class TestSafeBinEdges:
         fig = histogram_figure(training, training)
 
         assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
+
+    @pytest.mark.parametrize(
+        "values",
+        [[1e16] * 20, [1e16, 1e16 + 2, 1e16 + 4] * 10, [1.0, 1.0 + 2.2e-16] * 10],
+        ids=["large_constant", "large_narrow", "below_float_spacing"],
+    )
+    def test_edges_stay_increasing_when_the_step_is_below_float_spacing(self, values):
+        values = np.array(values)
+        edges = safe_bin_edges(values, values)
+
+        assert np.all(np.diff(edges) > 0)
+        assert np.histogram(values, bins=edges)[0].sum() == values.size
+
+    def test_large_constant_column_with_non_numeric_synthetic_values_still_charts(self):
+        fig = histogram_figure(pd.Series([1e16] * 20), pd.Series(["x"] * 20))
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0)
 
     def test_constant_training_values_give_one_bin(self):
         edges = safe_bin_edges(np.full(20, 5.0), np.full(20, 5.0))

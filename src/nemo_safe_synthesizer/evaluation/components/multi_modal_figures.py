@@ -209,19 +209,30 @@ def safe_bin_edges(training: np.ndarray, synthetic: np.ndarray) -> np.ndarray:
     low, high = float(values.min()), float(values.max())
     if high <= low:
         if integer:
-            return np.array([low - 0.5, low + 0.5])
-        step = _nice_step(abs(low)) if low != 0 else 1.0
-        start = np.floor(low / step) * step
-        return np.array([start, start + step])
+            edges = np.array([low - 0.5, low + 0.5])
+        else:
+            edges = _step_edges(low, low, _nice_step(abs(low)) if low != 0 else 1.0)
+    else:
+        bins = len(get_numeric_distribution_bins(pd.Series(training), pd.Series(synthetic))) - 1
+        bins = int(min(max(bins, 1), _MAX_DISPLAY_BINS))
+        step = _nice_step((high - low) / bins, integer=integer)
+        if integer and step == 1:
+            count = int(np.floor(high) - np.floor(low)) + 1
+            edges = np.floor(low) - 0.5 + np.arange(count + 1)
+        else:
+            edges = _step_edges(low, high, step)
+    if np.all(np.diff(edges) > 0):
+        return edges
+    # A step below the float spacing at this magnitude collapses the edges.
+    return _step_edges(low, high, _nice_step(max(abs(low), abs(high))))
 
-    bins = len(get_numeric_distribution_bins(pd.Series(training), pd.Series(synthetic))) - 1
-    bins = int(min(max(bins, 1), _MAX_DISPLAY_BINS))
-    step = _nice_step((high - low) / bins, integer=integer)
-    if integer and step == 1:
-        count = int(np.floor(high) - np.floor(low)) + 1
-        return np.floor(low) - 0.5 + np.arange(count + 1)
+
+def _step_edges(low: float, high: float, step: float) -> np.ndarray:
+    """Return edges at multiples of ``step`` covering ``low`` to ``high``.
+
+    The top value gets a bin of its own even when it sits on an edge.
+    """
     first = np.floor(low / step)
-    # The top value gets a bin of its own even when it sits on an edge.
     count = int(np.floor(high / step) - first) + 1
     return (first + np.arange(count + 1)) * step
 
