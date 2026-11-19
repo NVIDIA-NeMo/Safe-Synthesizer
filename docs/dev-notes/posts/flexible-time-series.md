@@ -9,9 +9,9 @@ compact_tables: true
 
 # Flexible Time Series
 
-Sequence data from real-world applications is messy. Bank accounts open and close on different days and transact whenever their owners shop. Support conversations run for six turns or seventy-five. Sensors drop out and come back. Until recently, NeMo Safe Synthesizer's time-series mode required every sequence in a dataset to look the same, with the same length, the same start and stop time, and the same fixed interval between records.
+Sequence data from real-world applications is messy. Bank accounts open and close on different days and transact whenever their owners shop. Support conversations run for six turns or seventy-five. Sensors drop out and come back. Until recently, NeMo Safe Synthesizer's time series mode required every sequence in a dataset to look the same, with the same length, the same start and stop time, and the same fixed interval between records.
 
-That requirement is gone now. As of release `v0.1.15`, time-series mode accepts groups with different lengths, different start and stop times, and irregular intervals. There is no new setting to turn on. You point NeMo Safe Synthesizer at your data, configure the timestamp column, and it learns where each sequence begins, how it moves through time, and when it ends.
+That requirement is gone now. As of release `v0.1.15`, time series mode accepts groups with different lengths, different start and stop times, and irregular intervals. There is no new setting to turn on. You point NeMo Safe Synthesizer at your data, configure the timestamp column, and it learns where each sequence begins, how it moves through time, and when it ends.
 
 <!-- more -->
 
@@ -19,7 +19,7 @@ In this dev note, we cover why the old rules existed, what the workaround cost, 
 
 ## How Time Series Mode Used to Work
 
-Time-series mode was built for a simple setting. If every group shares the same start time, stop time, interval, and length, the generator can calculate exactly how many rows each synthetic group needs. It starts at the common start timestamp, steps forward by the interval, and stops at the common stop timestamp. The model never has to decide when a sequence is finished.
+Time series mode was built for a simple setting. If every group shares the same start time, stop time, interval, and length, the generator can calculate exactly how many rows each synthetic group needs. It starts at the common start timestamp, steps forward by the interval, and stops at the common stop timestamp. The model never has to decide when a sequence is finished.
 
 That design works well for synchronized data, such as a fleet of sensors that all report every 15 minutes over the same day. It breaks down for most other ordered data.
 
@@ -31,7 +31,7 @@ Users asked us how to use the library for exactly these styles of input data, bu
 
 ### The cost of padding every sequence to one length
 
-Our own [financial transactions case study](does-nemo-safe-synthesizer-actually-work.md) is a good example. Its transaction ledger was generated for that case study and contains no real customer data. In a deployment, the input data would be your organization's own records. The ledger's 50 accounts hold between 62 and 94 transactions each, with irregular timestamps. To run it in time-series mode, the tutorial dataset padded every account to 94 rows and added a `txn_index` column, numbered 1 to 94 in each account, to stand in for the timestamp.
+Our own [financial transactions case study](does-nemo-safe-synthesizer-actually-work.md) is a good example. Its transaction ledger was generated for that case study and contains no real customer data. In a deployment, the input data would be your organization's own records. The ledger's 50 accounts hold between 62 and 94 transactions each, with irregular timestamps. To run it in time series mode, the tutorial dataset padded every account to 94 rows and added a `txn_index` column, numbered 1 to 94 in each account, to stand in for the timestamp.
 
 <figure markdown="span">
   ![Before flexible time series, 720 of the 4,700 tutorial rows were empty padding](assets/flexible-time-series/padded-tutorial-dataset.png){: style="max-width: 820px; width: 100%; display: block; margin: 1.25rem auto;"}
@@ -41,7 +41,7 @@ Our own [financial transactions case study](does-nemo-safe-synthesizer-actually-
 The workaround had three costs.
 
 - 720 of 4,700 training rows, about 15%, contained no transaction at all, and the model still had to learn them.
-- The model also had to generate the padding rows for every shorter account. Generation is often the slowest step in time-series mode, so every unused token made that step slower.
+- The model also had to generate the padding rows for every shorter account. Generation is often the slowest step in time series mode, so every unused token made that step slower.
 - The synthetic output could contain padding rows, so users had to remove them manually from the output of NeMo Safe Synthesizer before any analysis.
 
 ## How Flexible Time Series Works
@@ -166,12 +166,12 @@ The deterministic path does not have to guess. It calculates each group's endpoi
 
 ## Takeaways
 
-- Time-series mode now accepts sequences as they are. Groups can differ in length, start time, stop time, and interval, with no new configuration.
+- Time series mode now accepts sequences as they are. Groups can differ in length, start time, stop time, and interval, with no new configuration.
 - Routing is automatic. Fixed-shape data keeps deterministic generation, and everything else learns its own endpoint through a final-row marker.
 - No padding is needed. In our experiments, the final-row marker used fewer generation tokens and failed less often than padding on every dataset where both completed. On ABCD, with the same time budget, the final-row marker finished while padding timed out after generating 72% of the conversations.
 
 ## Try It
 
-The [financial transactions tutorial](../../tutorials/time-series-financial-transactions.ipynb) now runs on the raw transaction ledger, with its original irregular timestamps and no padding. The [time-series configuration reference](../../user-guide/configuration.md#time-series) covers the timestamp and interval settings, and the [time-series troubleshooting guide](../../user-guide/troubleshooting.md#time-series) explains common validation errors.
+The [financial transactions tutorial](../../tutorials/time-series-financial-transactions.ipynb) now runs on the raw transaction ledger, with its original irregular timestamps and no padding. The [time series configuration reference](../../user-guide/configuration.md#time-series) covers the timestamp and interval settings, and the [time series troubleshooting guide](../../user-guide/troubleshooting.md#time-series) explains common validation errors.
 
 Have a sequence dataset that still does not fit? Open a [GitHub discussion](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions) or file a [feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
