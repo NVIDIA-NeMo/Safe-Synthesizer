@@ -94,7 +94,7 @@ def _pii_plan_source(config: ReplacePiiConfig) -> str:
     return "auto_discovery" if config.is_auto_discovery else "provided"
 
 
-def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
+def _pii_planning_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
     """Return the telemetry ``(mode, model)`` labels for LLM-assisted PII planning.
 
     Resolves where planning runs the same way plan discovery does, without
@@ -146,8 +146,8 @@ def _build_telemetry_event(
     pii_plan_source = "undefined"
     pii_columns_bucket = "undefined"
     pii_locale = "undefined"
-    pii_llm_mode = "undefined"
-    pii_llm_model = "undefined"
+    pii_planning_llm_mode = "undefined"
+    pii_planning_llm_model = "undefined"
     if replace_pii_config is not None:
         pii_sampler_backend = replace_pii_config.sampler.backend.value
         if replace_pii_config.inline_plan is not None:
@@ -157,7 +157,7 @@ def _build_telemetry_event(
         # A config loaded from a save path was already resolved by an earlier run, so its source is unknown.
         if ss._pii_plan_source is not None or not ss._loaded_from_save_path:
             pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
-            pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
+            pii_planning_llm_mode, pii_planning_llm_model = _pii_planning_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -188,8 +188,8 @@ def _build_telemetry_event(
         pii_plan_source=pii_plan_source,
         pii_replaced_columns_bucket=pii_columns_bucket,
         pii_locale=pii_locale,
-        pii_llm_mode=pii_llm_mode,
-        pii_llm_model=pii_llm_model,
+        pii_planning_llm_mode=pii_planning_llm_mode,
+        pii_planning_llm_model=pii_planning_llm_model,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,

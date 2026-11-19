@@ -209,8 +209,8 @@ class TestNSSTrainingAndGenerationEvent:
         assert event.pii_plan_source == "undefined"
         assert event.pii_replaced_columns_bucket == "undefined"
         assert event.pii_locale == "undefined"
-        assert event.pii_llm_mode == "undefined"
-        assert event.pii_llm_model == "undefined"
+        assert event.pii_planning_llm_mode == "undefined"
+        assert event.pii_planning_llm_model == "undefined"
         assert event.differential_privacy_enabled is False
         assert event.time_series_enabled is False
         assert event.group_by_enabled is False
@@ -286,8 +286,8 @@ class TestNSSTrainingAndGenerationEvent:
             pii_plan_source="provided",
             pii_replaced_columns_bucket="1-5",
             pii_locale="en_US",
-            pii_llm_mode="local",
-            pii_llm_model="openai/gpt-oss-120b",
+            pii_planning_llm_mode="local",
+            pii_planning_llm_model="openai/gpt-oss-120b",
         )
         dumped = event.model_dump(by_alias=True)
         assert "nemoSource" in dumped
@@ -307,8 +307,8 @@ class TestNSSTrainingAndGenerationEvent:
         assert dumped["piiPlanSource"] == "provided"
         assert dumped["piiReplacedColumnsBucket"] == "1-5"
         assert dumped["piiLocale"] == "en_US"
-        assert dumped["piiLlmMode"] == "local"
-        assert dumped["piiLlmModel"] == "openai/gpt-oss-120b"
+        assert dumped["piiPlanningLlmMode"] == "local"
+        assert dumped["piiPlanningLlmModel"] == "openai/gpt-oss-120b"
 
 
 # =============================================================================

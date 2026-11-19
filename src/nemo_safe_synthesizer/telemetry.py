@@ -41,7 +41,7 @@ MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
 LOCAL_MODEL_LABEL = "local_path"
 OTHER_LABEL = "other"
-# These two patterns match the piiLocale and piiLlmModel patterns in the shared
+# These two patterns match the piiLocale and piiPlanningLlmModel patterns in the shared
 # NeMo telemetry schema. The collector rejects a whole event when one field does
 # not match its pattern, so values are checked here and reported as "other".
 # The model pattern is applied to the pretrained model too, so both model fields
@@ -119,7 +119,7 @@ def sanitize_model_for_telemetry(model: str | None) -> str:
     Hugging Face repo IDs are safe to report, but local model paths may embed
     user or machine details. Prefer the coarse local label when the value looks
     path-like or does not satisfy Hugging Face repo ID syntax. A repo ID the
-    telemetry schema's piiLlmModel pattern does not accept, such as one with an
+    telemetry schema's piiPlanningLlmModel pattern does not accept, such as one with an
     organization longer than 64 characters, is reported as ``"other"``.
 
     A name with non-ASCII letters is never sent as is, but its label depends on
@@ -298,9 +298,9 @@ class NSSTrainingAndGenerationEvent(BaseModel):
             "or the plan was not resolved."
         ),
     )
-    pii_llm_mode: str = Field(
+    pii_planning_llm_mode: str = Field(
         default="undefined",
-        serialization_alias="piiLlmMode",
+        serialization_alias="piiPlanningLlmMode",
         description=(
             "Where LLM-assisted PII plan discovery is configured to run: 'none' (a user-supplied plan, which "
             "needs no LLM), 'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' "
@@ -309,13 +309,13 @@ class NSSTrainingAndGenerationEvent(BaseModel):
             "piiPlanSource is 'undefined'. The endpoint URL is never reported."
         ),
     )
-    pii_llm_model: str = Field(
+    pii_planning_llm_model: str = Field(
         default="undefined",
-        serialization_alias="piiLlmModel",
+        serialization_alias="piiPlanningLlmModel",
         description=(
             "Planning model: the local profile's model_id or the endpoint's model ID, sanitized like the "
             "pretrained model, so local model paths are reported as 'local_path'. 'other' when the repo ID does "
-            "not fit the telemetry schema. 'undefined' when no LLM planning is configured. Like piiLlmMode, it "
+            "not fit the telemetry schema. 'undefined' when no LLM planning is configured. Like piiPlanningLlmMode, it "
             "is reported from the configuration, so a run that fails before planning starts still reports it. "
             "Use sanitize_model_for_telemetry()."
         ),
@@ -373,7 +373,7 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         description=(
             "The pretrained model used for training/generation: a Hugging Face model ID, 'local_path' for a "
-            "local path, or 'other' when the repo ID does not fit the piiLlmModel pattern. Use "
+            "local path, or 'other' when the repo ID does not fit the piiPlanningLlmModel pattern. Use "
             "sanitize_model_for_telemetry()."
         ),
     )

@@ -271,8 +271,8 @@ _SCHEMA_FIELD_RULES = {
     "piiSamplerBackend": _LABEL_RULE,
     "piiPlanSource": _LABEL_RULE,
     "piiReplacedColumnsBucket": (32, r"undefined|[0-9]+(-[0-9]+|\+)?"),
-    "piiLlmMode": _LABEL_RULE,
-    "piiLlmModel": (
+    "piiPlanningLlmMode": _LABEL_RULE,
+    "piiPlanningLlmModel": (
         192,
         r"undefined|local_path|other|([A-Za-z0-9][A-Za-z0-9._-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,126}",
     ),
@@ -441,7 +441,7 @@ class TestTelemetryEmission:
 
         assert event.pii_plan_source == "provided"
         assert event.pii_replaced_columns_bucket == "1-5"
-        assert (event.pii_llm_mode, event.pii_llm_model) == ("none", "undefined")
+        assert (event.pii_planning_llm_mode, event.pii_planning_llm_model) == ("none", "undefined")
 
     def test_build_telemetry_event_prefers_plan_source_recorded_before_resolution(self):
         resolved = ReplacePiiConfig(
@@ -471,7 +471,7 @@ class TestTelemetryEmission:
 
         event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
-        assert (event.pii_plan_source, event.pii_llm_mode, event.pii_llm_model) == ("undefined",) * 3
+        assert (event.pii_plan_source, event.pii_planning_llm_mode, event.pii_planning_llm_model) == ("undefined",) * 3
         assert event.pii_replaced_columns_bucket == "1-5"
 
     @pytest.mark.parametrize(
@@ -553,7 +553,7 @@ class TestTelemetryEmission:
             "endpoint-malformed-url",
         ],
     )
-    def test_build_telemetry_event_reports_pii_llm_mode_and_model(
+    def test_build_telemetry_event_reports_pii_planning_llm_mode_and_model(
         self,
         monkeypatch: pytest.MonkeyPatch,
         llm: dict | None,
@@ -572,7 +572,7 @@ class TestTelemetryEmission:
 
         event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
-        assert (event.pii_llm_mode, event.pii_llm_model) == (expected_mode, expected_model)
+        assert (event.pii_planning_llm_mode, event.pii_planning_llm_model) == (expected_mode, expected_model)
 
     @pytest.mark.parametrize(
         ("model_id", "expected_model"),
@@ -592,7 +592,7 @@ class TestTelemetryEmission:
 
         event = _build_checked_telemetry_event(builder, TaskStatusEnum.COMPLETED)
 
-        assert (event.pii_llm_mode, event.pii_llm_model) == ("local", expected_model)
+        assert (event.pii_planning_llm_mode, event.pii_planning_llm_model) == ("local", expected_model)
 
     def test_build_telemetry_event_reports_undefined_backend_without_config(self):
         builder = _builder_for_telemetry()
@@ -606,8 +606,8 @@ class TestTelemetryEmission:
         assert event.pii_plan_source == "undefined"
         assert event.pii_replaced_columns_bucket == "undefined"
         assert event.pii_locale == "undefined"
-        assert event.pii_llm_mode == "undefined"
-        assert event.pii_llm_model == "undefined"
+        assert event.pii_planning_llm_mode == "undefined"
+        assert event.pii_planning_llm_model == "undefined"
 
     @pytest.mark.parametrize(
         ("status", "stage", "expected"),
