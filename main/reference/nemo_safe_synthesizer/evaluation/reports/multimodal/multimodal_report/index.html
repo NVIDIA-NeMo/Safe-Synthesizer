@@ -1342,6 +1342,8 @@
       
         
       
+        
+      
     
     
     
@@ -1404,6 +1406,34 @@
     
   
     Autocorrelation Similarity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../../user-guide/time-series-metrics/window-membership-inference-protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Window Membership Inference Protection
   
 
     
@@ -4243,6 +4273,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -4781,6 +4815,62 @@
     
   
     time_series_common
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../components/window_group_mia/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    window_group_mia
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../components/window_group_mia_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    window_group_mia_figures
   
 
     
@@ -9268,7 +9358,7 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            TIME_SERIES_COMPONENTS = (AutocorrelationSimilarity,)
+            <td><code><a class="autorefs autorefs-internal" title="            TIME_SERIES_COMPONENTS = (AutocorrelationSimilarity, WindowGroupMIA)
 
   
       module-attribute
@@ -9305,7 +9395,7 @@
 
 
 <h3 id="nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report.TIME_SERIES_COMPONENTS" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">TIME_SERIES_COMPONENTS</span> <span class="o">=</span> <span class="p">(</span><span class="n">AutocorrelationSimilarity</span><span class="p">,)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">TIME_SERIES_COMPONENTS</span> <span class="o">=</span> <span class="p">(</span><span class="n">AutocorrelationSimilarity</span><span class="p">,</span> <span class="n">WindowGroupMIA</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -9629,14 +9719,7 @@ components (quality and privacy), and assembles them into a report.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/reports/multimodal/multimodal_report.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-262">262</a></span>
-<span class="normal"><a href="#__codelineno-0-263">263</a></span>
-<span class="normal"><a href="#__codelineno-0-264">264</a></span>
-<span class="normal"><a href="#__codelineno-0-265">265</a></span>
-<span class="normal"><a href="#__codelineno-0-266">266</a></span>
-<span class="normal"><a href="#__codelineno-0-267">267</a></span>
-<span class="normal"><a href="#__codelineno-0-268">268</a></span>
-<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-269">269</a></span>
 <span class="normal"><a href="#__codelineno-0-270">270</a></span>
 <span class="normal"><a href="#__codelineno-0-271">271</a></span>
 <span class="normal"><a href="#__codelineno-0-272">272</a></span>
@@ -9752,130 +9835,137 @@ components (quality and privacy), and assembles them into a report.</p>
 <span class="normal"><a href="#__codelineno-0-382">382</a></span>
 <span class="normal"><a href="#__codelineno-0-383">383</a></span>
 <span class="normal"><a href="#__codelineno-0-384">384</a></span>
-<span class="normal"><a href="#__codelineno-0-385">385</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dataframes</span><span class="p">(</span>
-</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="n">training</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="n">synthetic</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="n">test</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="n">column_statistics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ColumnStatistics</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="n">pii_replay_skipped_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MultimodalReport</span><span class="p">:</span>
-</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a complete multi-modal evaluation report from dataframes.</span>
-</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>
-</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">    Constructs an ``EvaluationDatasets``, runs all enabled evaluation</span>
-</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">    components (quality and privacy), and assembles them into a report.</span>
-</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>
-</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        training: Training dataframe.</span>
-</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">        synthetic: Synthetic dataframe.</span>
-</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">        test: Optional holdout dataframe for privacy metrics.</span>
-</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        column_statistics: Per-column PII entity metadata.</span>
-</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">        config: Pipeline configuration controlling which metrics are enabled.</span>
-</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">        pii_replay_skipped_reason: Why PII replay could not run, shown in the report, or ``None``.</span>
-</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>
-</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">        A fully populated ``MultimodalReport`` ready for rendering.</span>
-</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="n">evaluation_datasets</span> <span class="o">=</span> <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
-</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
-</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
-</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
-</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
-</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="n">rows</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_rows&quot;</span><span class="p">,</span> <span class="n">DEFAULT_RECORD_COUNT</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="n">cols</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_columns&quot;</span><span class="p">,</span> <span class="n">DEFAULT_SQS_REPORT_COLUMNS</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>        <span class="n">mandatory_columns</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;mandatory_columns&quot;</span><span class="p">,</span> <span class="p">[],</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>    <span class="p">)</span>
-</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>
-</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>    <span class="n">components</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Component</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>
-</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="n">attribute_inference_protection</span> <span class="o">=</span> <span class="n">AttributeInferenceProtection</span><span class="p">(</span>
-</span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">)</span>
-</span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="p">)</span>
-</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aia_enabled&quot;</span><span class="p">):</span>
-</span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a>        <span class="n">attribute_inference_protection</span> <span class="o">=</span> <span class="n">AttributeInferenceProtection</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
-</span><span id="__span-0-304"><a id="__codelineno-0-304" name="__codelineno-0-304"></a>            <span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span>
-</span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="p">)</span>
-</span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">attribute_inference_protection</span><span class="p">)</span>
-</span><span id="__span-0-307"><a id="__codelineno-0-307" name="__codelineno-0-307"></a>
-</span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a>    <span class="n">membership_inference_protection</span> <span class="o">=</span> <span class="n">MembershipInferenceProtection</span><span class="p">(</span>
-</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">)</span>
-</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a>    <span class="p">)</span>
-</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mia_enabled&quot;</span><span class="p">):</span>
-</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>        <span class="n">membership_inference_protection</span> <span class="o">=</span> <span class="n">MembershipInferenceProtection</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
-</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a>            <span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span>
-</span><span id="__span-0-314"><a id="__codelineno-0-314" name="__codelineno-0-314"></a>        <span class="p">)</span>
-</span><span id="__span-0-315"><a id="__codelineno-0-315" name="__codelineno-0-315"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">membership_inference_protection</span><span class="p">)</span>
-</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a>
-</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a>    <span class="n">data_privacy_score</span> <span class="o">=</span> <span class="n">DataPrivacyScore</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">))</span>
-</span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="k">if</span> <span class="n">attribute_inference_protection</span> <span class="ow">or</span> <span class="n">membership_inference_protection</span><span class="p">:</span>
-</span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a>        <span class="n">data_privacy_score</span> <span class="o">=</span> <span class="n">DataPrivacyScore</span><span class="o">.</span><span class="n">from_components</span><span class="p">(</span>
-</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a>            <span class="p">[</span><span class="n">attribute_inference_protection</span><span class="p">,</span> <span class="n">membership_inference_protection</span><span class="p">]</span>
+<span class="normal"><a href="#__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#__codelineno-0-386">386</a></span>
+<span class="normal"><a href="#__codelineno-0-387">387</a></span>
+<span class="normal"><a href="#__codelineno-0-388">388</a></span>
+<span class="normal"><a href="#__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#__codelineno-0-392">392</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dataframes</span><span class="p">(</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="n">training</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="n">synthetic</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">test</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="n">column_statistics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ColumnStatistics</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>    <span class="n">pii_replay_skipped_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MultimodalReport</span><span class="p">:</span>
+</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a complete multi-modal evaluation report from dataframes.</span>
+</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>
+</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">    Constructs an ``EvaluationDatasets``, runs all enabled evaluation</span>
+</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">    components (quality and privacy), and assembles them into a report.</span>
+</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">        training: Training dataframe.</span>
+</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">        synthetic: Synthetic dataframe.</span>
+</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">        test: Optional holdout dataframe for privacy metrics.</span>
+</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">        column_statistics: Per-column PII entity metadata.</span>
+</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">        config: Pipeline configuration controlling which metrics are enabled.</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">        pii_replay_skipped_reason: Why PII replay could not run, shown in the report, or ``None``.</span>
+</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>
+</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">        A fully populated ``MultimodalReport`` ready for rendering.</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="n">evaluation_datasets</span> <span class="o">=</span> <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
+</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
+</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
+</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
+</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="n">rows</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_rows&quot;</span><span class="p">,</span> <span class="n">DEFAULT_RECORD_COUNT</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="n">cols</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_columns&quot;</span><span class="p">,</span> <span class="n">DEFAULT_SQS_REPORT_COLUMNS</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>        <span class="n">mandatory_columns</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;mandatory_columns&quot;</span><span class="p">,</span> <span class="p">[],</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="p">)</span>
+</span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a>
+</span><span id="__span-0-304"><a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="n">components</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Component</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a>
+</span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">attribute_inference_protection</span> <span class="o">=</span> <span class="n">AttributeInferenceProtection</span><span class="p">(</span>
+</span><span id="__span-0-307"><a id="__codelineno-0-307" name="__codelineno-0-307"></a>        <span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">)</span>
+</span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a>    <span class="p">)</span>
+</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aia_enabled&quot;</span><span class="p">):</span>
+</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a>        <span class="n">attribute_inference_protection</span> <span class="o">=</span> <span class="n">AttributeInferenceProtection</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
+</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>            <span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span>
+</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>        <span class="p">)</span>
+</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">attribute_inference_protection</span><span class="p">)</span>
+</span><span id="__span-0-314"><a id="__codelineno-0-314" name="__codelineno-0-314"></a>
+</span><span id="__span-0-315"><a id="__codelineno-0-315" name="__codelineno-0-315"></a>    <span class="n">membership_inference_protection</span> <span class="o">=</span> <span class="n">MembershipInferenceProtection</span><span class="p">(</span>
+</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a>        <span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">)</span>
+</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a>    <span class="p">)</span>
+</span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mia_enabled&quot;</span><span class="p">):</span>
+</span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a>        <span class="n">membership_inference_protection</span> <span class="o">=</span> <span class="n">MembershipInferenceProtection</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
+</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a>            <span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span>
 </span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a>        <span class="p">)</span>
-</span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data_privacy_score</span><span class="p">)</span>
+</span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">membership_inference_protection</span><span class="p">)</span>
 </span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a>
-</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>    <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">PIIReplay</span><span class="p">(</span><span class="n">skipped_reason</span><span class="o">=</span><span class="n">pii_replay_skipped_reason</span><span class="p">)</span>
-</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="k">if</span> <span class="p">(</span>
-</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pii_replay_enabled&quot;</span><span class="p">)</span>
-</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="ow">and</span> <span class="p">(</span><span class="n">column_statistics</span> <span class="ow">or</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pii_replay_columns&quot;</span><span class="p">))</span>
-</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="p">):</span>
-</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="c1"># PII Replay requires full df&#39;s. Make a one-off dataset for that call.</span>
-</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">PIIReplay</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
-</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>            <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
-</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a>                <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
-</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a>                <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
-</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a>                <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
-</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a>                <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
-</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>                <span class="n">rows</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_rows&quot;</span><span class="p">,</span> <span class="n">DEFAULT_RECORD_COUNT</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a>                <span class="n">cols</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_columns&quot;</span><span class="p">,</span> <span class="n">DEFAULT_SQS_REPORT_COLUMNS</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>                <span class="n">mandatory_columns</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;mandatory_columns&quot;</span><span class="p">,</span> <span class="p">[],</span> <span class="n">config</span><span class="p">),</span>
-</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a>                <span class="n">enable_sampling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a>            <span class="p">),</span>
-</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-343"><a id="__codelineno-0-343" name="__codelineno-0-343"></a>        <span class="p">)</span>
-</span><span id="__span-0-344"><a id="__codelineno-0-344" name="__codelineno-0-344"></a>        <span class="c1"># Configured columns can run after automatic detection failed; keep the failure in the report.</span>
-</span><span id="__span-0-345"><a id="__codelineno-0-345" name="__codelineno-0-345"></a>        <span class="k">if</span> <span class="n">pii_replay_skipped_reason</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-346"><a id="__codelineno-0-346" name="__codelineno-0-346"></a>            <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">pii_replay</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;skipped_reason&quot;</span><span class="p">:</span> <span class="n">pii_replay_skipped_reason</span><span class="p">})</span>
-</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pii_replay</span><span class="p">)</span>
-</span><span id="__span-0-348"><a id="__codelineno-0-348" name="__codelineno-0-348"></a>
-</span><span id="__span-0-349"><a id="__codelineno-0-349" name="__codelineno-0-349"></a>    <span class="n">dataset_statistics</span> <span class="o">=</span> <span class="n">DatasetStatistics</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-350"><a id="__codelineno-0-350" name="__codelineno-0-350"></a>
-</span><span id="__span-0-351"><a id="__codelineno-0-351" name="__codelineno-0-351"></a>    <span class="n">column_distribution</span> <span class="o">=</span> <span class="n">ColumnDistribution</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-352"><a id="__codelineno-0-352" name="__codelineno-0-352"></a>    <span class="n">correlation</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-353"><a id="__codelineno-0-353" name="__codelineno-0-353"></a>    <span class="n">deep_structure</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-354"><a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="n">text_semantic_similarity</span> <span class="o">=</span> <span class="n">TextSemanticSimilarity</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-355"><a id="__codelineno-0-355" name="__codelineno-0-355"></a>    <span class="n">text_structure_similarity</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
-</span><span id="__span-0-356"><a id="__codelineno-0-356" name="__codelineno-0-356"></a>    <span class="n">sqs_score</span> <span class="o">=</span> <span class="n">SQSScore</span><span class="o">.</span><span class="n">from_components</span><span class="p">(</span>
-</span><span id="__span-0-357"><a id="__codelineno-0-357" name="__codelineno-0-357"></a>        <span class="p">[</span><span class="n">column_distribution</span><span class="p">,</span> <span class="n">correlation</span><span class="p">,</span> <span class="n">deep_structure</span><span class="p">,</span> <span class="n">text_semantic_similarity</span><span class="p">,</span> <span class="n">text_structure_similarity</span><span class="p">]</span>
-</span><span id="__span-0-358"><a id="__codelineno-0-358" name="__codelineno-0-358"></a>    <span class="p">)</span>
-</span><span id="__span-0-359"><a id="__codelineno-0-359" name="__codelineno-0-359"></a>
-</span><span id="__span-0-360"><a id="__codelineno-0-360" name="__codelineno-0-360"></a>    <span class="n">components</span> <span class="o">+=</span> <span class="p">[</span>
-</span><span id="__span-0-361"><a id="__codelineno-0-361" name="__codelineno-0-361"></a>        <span class="n">dataset_statistics</span><span class="p">,</span>
-</span><span id="__span-0-362"><a id="__codelineno-0-362" name="__codelineno-0-362"></a>        <span class="n">column_distribution</span><span class="p">,</span>
-</span><span id="__span-0-363"><a id="__codelineno-0-363" name="__codelineno-0-363"></a>        <span class="n">correlation</span><span class="p">,</span>
-</span><span id="__span-0-364"><a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="n">deep_structure</span><span class="p">,</span>
-</span><span id="__span-0-365"><a id="__codelineno-0-365" name="__codelineno-0-365"></a>        <span class="n">text_semantic_similarity</span><span class="p">,</span>
-</span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="n">text_structure_similarity</span><span class="p">,</span>
-</span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a>        <span class="n">sqs_score</span><span class="p">,</span>
-</span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a>    <span class="p">]</span>
-</span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>
-</span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">time_series_evaluation_enabled</span><span class="p">:</span>
-</span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a>        <span class="n">time_series_datasets</span> <span class="o">=</span> <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
-</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a>            <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
-</span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a>            <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
-</span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a>            <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
-</span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
-</span><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a>            <span class="n">enable_sampling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a>        <span class="p">)</span>
-</span><span id="__span-0-378"><a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">components</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
-</span><span id="__span-0-379"><a id="__codelineno-0-379" name="__codelineno-0-379"></a>            <span class="n">component_cls</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">time_series_datasets</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
-</span><span id="__span-0-380"><a id="__codelineno-0-380" name="__codelineno-0-380"></a>            <span class="k">for</span> <span class="n">component_cls</span> <span class="ow">in</span> <span class="n">TIME_SERIES_COMPONENTS</span>
-</span><span id="__span-0-381"><a id="__codelineno-0-381" name="__codelineno-0-381"></a>        <span class="p">)</span>
-</span><span id="__span-0-382"><a id="__codelineno-0-382" name="__codelineno-0-382"></a>
-</span><span id="__span-0-383"><a id="__codelineno-0-383" name="__codelineno-0-383"></a>    <span class="n">report</span> <span class="o">=</span> <span class="n">MultimodalReport</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">evaluation_datasets</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="n">components</span><span class="p">)</span>
-</span><span id="__span-0-384"><a id="__codelineno-0-384" name="__codelineno-0-384"></a>    <span class="n">report</span><span class="o">.</span><span class="n">evaluation_datasets</span> <span class="o">=</span> <span class="n">evaluation_datasets</span>
-</span><span id="__span-0-385"><a id="__codelineno-0-385" name="__codelineno-0-385"></a>    <span class="k">return</span> <span class="n">report</span>
+</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>    <span class="n">data_privacy_score</span> <span class="o">=</span> <span class="n">DataPrivacyScore</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">grade</span><span class="o">=</span><span class="n">PrivacyGrade</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">))</span>
+</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="k">if</span> <span class="n">attribute_inference_protection</span> <span class="ow">or</span> <span class="n">membership_inference_protection</span><span class="p">:</span>
+</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">data_privacy_score</span> <span class="o">=</span> <span class="n">DataPrivacyScore</span><span class="o">.</span><span class="n">from_components</span><span class="p">(</span>
+</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="p">[</span><span class="n">attribute_inference_protection</span><span class="p">,</span> <span class="n">membership_inference_protection</span><span class="p">]</span>
+</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="p">)</span>
+</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data_privacy_score</span><span class="p">)</span>
+</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>
+</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">PIIReplay</span><span class="p">(</span><span class="n">skipped_reason</span><span class="o">=</span><span class="n">pii_replay_skipped_reason</span><span class="p">)</span>
+</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">if</span> <span class="p">(</span>
+</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a>        <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pii_replay_enabled&quot;</span><span class="p">)</span>
+</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a>        <span class="ow">and</span> <span class="p">(</span><span class="n">column_statistics</span> <span class="ow">or</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pii_replay_columns&quot;</span><span class="p">))</span>
+</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a>    <span class="p">):</span>
+</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>        <span class="c1"># PII Replay requires full df&#39;s. Make a one-off dataset for that call.</span>
+</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a>        <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">PIIReplay</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span>
+</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>            <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
+</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a>                <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
+</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a>                <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
+</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a>                <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
+</span><span id="__span-0-343"><a id="__codelineno-0-343" name="__codelineno-0-343"></a>                <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-344"><a id="__codelineno-0-344" name="__codelineno-0-344"></a>                <span class="n">rows</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_rows&quot;</span><span class="p">,</span> <span class="n">DEFAULT_RECORD_COUNT</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-345"><a id="__codelineno-0-345" name="__codelineno-0-345"></a>                <span class="n">cols</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;sqs_report_columns&quot;</span><span class="p">,</span> <span class="n">DEFAULT_SQS_REPORT_COLUMNS</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-346"><a id="__codelineno-0-346" name="__codelineno-0-346"></a>                <span class="n">mandatory_columns</span><span class="o">=</span><span class="n">MultimodalReport</span><span class="o">.</span><span class="n">_get_config_value</span><span class="p">(</span><span class="s2">&quot;mandatory_columns&quot;</span><span class="p">,</span> <span class="p">[],</span> <span class="n">config</span><span class="p">),</span>
+</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a>                <span class="n">enable_sampling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-348"><a id="__codelineno-0-348" name="__codelineno-0-348"></a>            <span class="p">),</span>
+</span><span id="__span-0-349"><a id="__codelineno-0-349" name="__codelineno-0-349"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-350"><a id="__codelineno-0-350" name="__codelineno-0-350"></a>        <span class="p">)</span>
+</span><span id="__span-0-351"><a id="__codelineno-0-351" name="__codelineno-0-351"></a>        <span class="c1"># Configured columns can run after automatic detection failed; keep the failure in the report.</span>
+</span><span id="__span-0-352"><a id="__codelineno-0-352" name="__codelineno-0-352"></a>        <span class="k">if</span> <span class="n">pii_replay_skipped_reason</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-353"><a id="__codelineno-0-353" name="__codelineno-0-353"></a>            <span class="n">pii_replay</span> <span class="o">=</span> <span class="n">pii_replay</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;skipped_reason&quot;</span><span class="p">:</span> <span class="n">pii_replay_skipped_reason</span><span class="p">})</span>
+</span><span id="__span-0-354"><a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pii_replay</span><span class="p">)</span>
+</span><span id="__span-0-355"><a id="__codelineno-0-355" name="__codelineno-0-355"></a>
+</span><span id="__span-0-356"><a id="__codelineno-0-356" name="__codelineno-0-356"></a>    <span class="n">dataset_statistics</span> <span class="o">=</span> <span class="n">DatasetStatistics</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-357"><a id="__codelineno-0-357" name="__codelineno-0-357"></a>
+</span><span id="__span-0-358"><a id="__codelineno-0-358" name="__codelineno-0-358"></a>    <span class="n">column_distribution</span> <span class="o">=</span> <span class="n">ColumnDistribution</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-359"><a id="__codelineno-0-359" name="__codelineno-0-359"></a>    <span class="n">correlation</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-360"><a id="__codelineno-0-360" name="__codelineno-0-360"></a>    <span class="n">deep_structure</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-361"><a id="__codelineno-0-361" name="__codelineno-0-361"></a>    <span class="n">text_semantic_similarity</span> <span class="o">=</span> <span class="n">TextSemanticSimilarity</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-362"><a id="__codelineno-0-362" name="__codelineno-0-362"></a>    <span class="n">text_structure_similarity</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">)</span>
+</span><span id="__span-0-363"><a id="__codelineno-0-363" name="__codelineno-0-363"></a>    <span class="n">sqs_score</span> <span class="o">=</span> <span class="n">SQSScore</span><span class="o">.</span><span class="n">from_components</span><span class="p">(</span>
+</span><span id="__span-0-364"><a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="p">[</span><span class="n">column_distribution</span><span class="p">,</span> <span class="n">correlation</span><span class="p">,</span> <span class="n">deep_structure</span><span class="p">,</span> <span class="n">text_semantic_similarity</span><span class="p">,</span> <span class="n">text_structure_similarity</span><span class="p">]</span>
+</span><span id="__span-0-365"><a id="__codelineno-0-365" name="__codelineno-0-365"></a>    <span class="p">)</span>
+</span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a>
+</span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a>    <span class="n">components</span> <span class="o">+=</span> <span class="p">[</span>
+</span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a>        <span class="n">dataset_statistics</span><span class="p">,</span>
+</span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">column_distribution</span><span class="p">,</span>
+</span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="n">correlation</span><span class="p">,</span>
+</span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a>        <span class="n">deep_structure</span><span class="p">,</span>
+</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a>        <span class="n">text_semantic_similarity</span><span class="p">,</span>
+</span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a>        <span class="n">text_structure_similarity</span><span class="p">,</span>
+</span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a>        <span class="n">sqs_score</span><span class="p">,</span>
+</span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a>    <span class="p">]</span>
+</span><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a>
+</span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">time_series_evaluation_enabled</span><span class="p">:</span>
+</span><span id="__span-0-378"><a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">time_series_datasets</span> <span class="o">=</span> <span class="n">EvaluationDatasets</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
+</span><span id="__span-0-379"><a id="__codelineno-0-379" name="__codelineno-0-379"></a>            <span class="n">training</span><span class="o">=</span><span class="n">training</span><span class="p">,</span>
+</span><span id="__span-0-380"><a id="__codelineno-0-380" name="__codelineno-0-380"></a>            <span class="n">synthetic</span><span class="o">=</span><span class="n">synthetic</span><span class="p">,</span>
+</span><span id="__span-0-381"><a id="__codelineno-0-381" name="__codelineno-0-381"></a>            <span class="n">test</span><span class="o">=</span><span class="n">test</span><span class="p">,</span>
+</span><span id="__span-0-382"><a id="__codelineno-0-382" name="__codelineno-0-382"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-383"><a id="__codelineno-0-383" name="__codelineno-0-383"></a>            <span class="n">enable_sampling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-384"><a id="__codelineno-0-384" name="__codelineno-0-384"></a>        <span class="p">)</span>
+</span><span id="__span-0-385"><a id="__codelineno-0-385" name="__codelineno-0-385"></a>        <span class="n">components</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+</span><span id="__span-0-386"><a id="__codelineno-0-386" name="__codelineno-0-386"></a>            <span class="n">component_cls</span><span class="o">.</span><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">time_series_datasets</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</span><span id="__span-0-387"><a id="__codelineno-0-387" name="__codelineno-0-387"></a>            <span class="k">for</span> <span class="n">component_cls</span> <span class="ow">in</span> <span class="n">TIME_SERIES_COMPONENTS</span>
+</span><span id="__span-0-388"><a id="__codelineno-0-388" name="__codelineno-0-388"></a>        <span class="p">)</span>
+</span><span id="__span-0-389"><a id="__codelineno-0-389" name="__codelineno-0-389"></a>
+</span><span id="__span-0-390"><a id="__codelineno-0-390" name="__codelineno-0-390"></a>    <span class="n">report</span> <span class="o">=</span> <span class="n">MultimodalReport</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">evaluation_datasets</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="n">components</span><span class="p">)</span>
+</span><span id="__span-0-391"><a id="__codelineno-0-391" name="__codelineno-0-391"></a>    <span class="n">report</span><span class="o">.</span><span class="n">evaluation_datasets</span> <span class="o">=</span> <span class="n">evaluation_datasets</span>
+</span><span id="__span-0-392"><a id="__codelineno-0-392" name="__codelineno-0-392"></a>    <span class="k">return</span> <span class="n">report</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

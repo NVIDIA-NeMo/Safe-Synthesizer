@@ -1636,6 +1636,8 @@
       
         
       
+        
+      
     
     
     
@@ -1701,6 +1703,34 @@
     
   
     Autocorrelation Similarity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-series-metrics/window-membership-inference-protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Window Membership Inference Protection
   
 
     
@@ -4534,6 +4564,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -5072,6 +5106,62 @@
     
   
     time_series_common
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/window_group_mia/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    window_group_mia
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/window_group_mia_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    window_group_mia_figures
   
 
     
@@ -10256,6 +10346,30 @@ for the full schema. For detailed descriptions and constraints, see the
 <td>Maximum shared groups evaluated in a reproducible sample</td>
 <td>Lower to reduce evaluation time for highly grouped data</td>
 </tr>
+<tr>
+<td><code>evaluation.time_series.window_group_mia.value_columns</code></td>
+<td><code>null</code></td>
+<td>Numeric columns combined into each window for Window Membership Inference Protection</td>
+<td>Leave <code>null</code> for inferred numeric columns, up to <code>max_columns</code>, or provide an explicit list</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.window_group_mia.window_size</code></td>
+<td><code>10</code></td>
+<td>Number of consecutive values compared as one window. Training and holdout windows use a stride of half the window, and synthetic windows a stride of 1</td>
+<td>Lower to detect partial copies in short sequences, or raise to detect copies blurred by noise</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.window_group_mia.max_windows</code></td>
+<td><code>1000</code></td>
+<td>Maximum training and holdout windows compared, each, in a reproducible sample across groups</td>
+<td>Lower to reduce evaluation time. Fewer windows make the score noisier</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.window_group_mia.max_columns</code></td>
+<td><code>12</code></td>
+<td>Maximum automatically selected numeric columns combined into each window</td>
+<td>Lower to reduce evaluation time for wide data</td>
+</tr>
 </tbody>
 </table>
 <p>See <a class="autorefs autorefs-internal" title="            EvaluationParameters
@@ -10266,7 +10380,9 @@ for the full schema. For detailed descriptions and constraints, see the
   " href="../../reference/nemo_safe_synthesizer/config/evaluate/#nemo_safe_synthesizer.config.evaluate.EvaluationParameters"><code>EvaluationParameters</code></a>
 for the full API reference. See
 <a href="../time-series-metrics/autocorrelation-similarity/">Autocorrelation Similarity</a>
-for calculation and interpretation guidance.</p>
+for calculation and interpretation guidance.
+See <a href="../time-series-metrics/window-membership-inference-protection/">Window Membership Inference Protection</a>
+for the time-series privacy metric.</p>
 <hr />
 <h2 id="validate-and-modify-configuration">Validate and Modify Configuration<a class="headerlink" href="#validate-and-modify-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="config-validate"><code>config validate</code><a class="headerlink" href="#config-validate" title="Permanent link">&para;</a></h3>
