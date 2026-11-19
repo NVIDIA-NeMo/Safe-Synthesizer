@@ -17,6 +17,8 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
     check_record_for_large_numbers,
     extract_and_validate_records,
     extract_and_validate_timeseries_records,
+    extract_groups_from_jsonl_string,
+    extract_records_from_jsonl_string,
     is_safe_for_float_conversion,
     normalize_dataframe,
 )
@@ -347,6 +349,19 @@ def test_normalize_dataframe_carriage_return_repro(
     # check for equality before and after. We just want to make sure the
     # DataFrame writes successfully.
     _run_csv_writer(normalized_df)
+
+
+def test_extract_records_from_jsonl_string_handles_crlf():
+    lf = '{"a": 1}\n{"a": 2}\n{"a": 3}'
+    crlf = lf.replace("\n", "\r\n")
+    assert extract_records_from_jsonl_string(lf) == ['{"a": 1}', '{"a": 2}', '{"a": 3}']
+    assert extract_records_from_jsonl_string(crlf) == extract_records_from_jsonl_string(lf)
+    assert extract_records_from_jsonl_string(crlf + "\r\n") == extract_records_from_jsonl_string(lf)
+
+
+def test_extract_groups_from_jsonl_string_handles_crlf():
+    text = '<bos>{"a": 1}\r\n{"a": 2}\r\n<eos>'
+    assert extract_groups_from_jsonl_string(text, "<bos>", "<eos>") == [text]
 
 
 def test_extract_timestamp_seconds():
