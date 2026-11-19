@@ -228,6 +228,20 @@ class TestSafeBinEdges:
         assert np.all(np.diff(edges) > 0)
         assert np.histogram(values, bins=edges)[0].sum() == values.size
 
+    @pytest.mark.parametrize(
+        ("training", "synthetic"),
+        [
+            (pd.Series([1.0, 2.5, pd.NA] * 10, dtype="Float64"), pd.Series([1.0, 2.5, pd.NA] * 10, dtype="Float64")),
+            (pd.Series([1, 2, pd.NA] * 10, dtype="Int64"), pd.Series([1, 2, pd.NA] * 10, dtype="Int64")),
+            (pd.Series([1.0, 2.0, 3.0] * 10), pd.Series(["a", None, "b"] * 10, dtype="string")),
+        ],
+        ids=["nullable_float", "nullable_int", "string_synthetic"],
+    )
+    def test_histogram_figure_handles_nullable_dtypes(self, training, synthetic):
+        fig = histogram_figure(training, synthetic)
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
+
     def test_large_constant_column_with_non_numeric_synthetic_values_still_charts(self):
         fig = histogram_figure(pd.Series([1e16] * 20), pd.Series(["x"] * 20))
 

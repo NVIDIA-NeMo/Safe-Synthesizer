@@ -167,7 +167,7 @@ def pie(
 
 def _finite_values(values: pd.Series | np.ndarray) -> np.ndarray:
     """Return the finite values of a series as floats."""
-    array = pd.to_numeric(pd.Series(values), errors="coerce").to_numpy(dtype=float)
+    array = pd.to_numeric(pd.Series(values), errors="coerce").to_numpy(dtype=float, na_value=np.nan)
     return array[np.isfinite(array)]
 
 
