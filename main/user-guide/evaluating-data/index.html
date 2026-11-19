@@ -1322,6 +1322,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#report-charts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Report Charts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#low-sqs-scores" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9176,6 +9187,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#report-charts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Report Charts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#low-sqs-scores" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9440,6 +9462,11 @@ during the evaluation stage.</p>
 <code>sqs_report_rows=5000</code> rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in <code>evaluation</code> config if needed.
 See <a href="../configuration/#evaluation">Configuration -- Evaluation</a> for the full list of <code>evaluation</code> fields.</p>
+<h3 id="report-charts">Report Charts<a class="headerlink" href="#report-charts" title="Permanent link">&para;</a></h3>
+<p>Column distribution charts in the report may not match a histogram you plot
+yourself from the training data since the report has some protections to reduce privacy risk when sharing the report. The histograms for numeric column use bins with rounded edges. The histograms for categorical columns will group rare categories with fewer than 5 training records into a single "Other (N categories)" bar. The Deep Structure Stability and Text Semantic
+Similarity charts plot one point per record on two principal components;
+these are projections, not column values.</p>
 <h3 id="low-sqs-scores">Low SQS Scores<a class="headerlink" href="#low-sqs-scores" title="Permanent link">&para;</a></h3>
 <p>If the SQS (Synthetic Quality Score) report shows low quality scores:</p>
 <ol>
