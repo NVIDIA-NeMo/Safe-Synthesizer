@@ -231,6 +231,15 @@
                             expandable=ctx.membership_inference_protection.figure) %}
                         {% include "jinja/components/membership_inference_protection.j2" %}
                     {% endcall %}
+                    {% for card in ctx.data_privacy_time_series_cards %}
+                    {% call metric_card(card.card_id, card.name,
+                            card.score,
+                            card.description,
+                            ctx.tooltips[card.tooltip_key],
+                            expandable=true) %}
+                        {% include card.template %}
+                    {% endcall %}
+                    {% endfor %}
                     {% call metric_card("aia", ctx.attribute_inference_protection.name,
                             ctx.attribute_inference_protection.score,
                             "Protection against attacks that infer sensitive attributes",

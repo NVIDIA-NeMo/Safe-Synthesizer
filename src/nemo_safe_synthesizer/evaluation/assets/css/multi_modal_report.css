@@ -962,6 +962,10 @@ h3 {
     cursor: pointer;
 }
 
+.legend-window-group-mia-holdout {
+    background: #9ca3af;
+}
+
 .distribution-charts {
     --distribution-chart-height: 120px;
 

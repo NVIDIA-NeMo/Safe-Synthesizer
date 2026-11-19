@@ -111,6 +111,14 @@ class SafeSynthesizerSummary(NSSBaseModel):
         description="How closely lagged self-correlation in synthetic time-series sequences matches the training sequences.",
     )
 
+    window_membership_inference_protection_score: float | None = Field(
+        default=None,
+        description=(
+            "Resistance to attacks that use short windows of consecutive values to determine whether a time-series "
+            "sequence was in the training set. Reported on its own; not part of the Data Privacy Score."
+        ),
+    )
+
     data_privacy_score: float | None = Field(default=None, description="Composite of MIA and AIA protection scores.")
 
     membership_inference_protection_score: float | None = Field(
@@ -209,6 +217,7 @@ class SafeSynthesizerSummary(NSSBaseModel):
             "eval/text_semantic_similarity_score": self.text_semantic_similarity_score,
             "eval/text_structure_similarity_score": self.text_structure_similarity_score,
             "eval/autocorrelation_similarity_score": self.autocorrelation_similarity_score,
+            "eval/window_membership_inference_protection_score": self.window_membership_inference_protection_score,
             "eval/success": 1
             if self.data_privacy_score is not None
             and self.synthetic_data_quality_score is not None

@@ -5,8 +5,8 @@
 
 Every time-series metric resolves the same grouping column, selects the same
 numeric value columns, walks the same shared groups in the same order, and
-renders as one card in the report's Time-Series Metrics panel. Keeping that
-logic here means a fix applies to every metric at once.
+renders as one card in the report section it names. Keeping that logic here
+means a fix applies to every metric at once.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import random
 from collections import defaultdict
 from collections.abc import Sequence
 from functools import cached_property
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -34,10 +34,11 @@ FigureSpec = tuple[str, go.Figure, bool, str]
 
 
 class TimeSeriesComponent(Component):
-    """Base for components shown in the report's Time-Series Metrics panel.
+    """Base for components run with time-series evaluation and shown as report cards.
 
     The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
-    each as a metric card from the class attributes below. Subclasses extend
+    each as a metric card from the class attributes below, in the section
+    named by ``report_section``. Subclasses extend
     ``jinja_context`` with their figures, built with ``figure_rows``.
 
     Attributes:
@@ -47,6 +48,9 @@ class TimeSeriesComponent(Component):
         template: Jinja template rendered inside the card.
         score_colored_traces: Whether chart traces are colored by score, so
             the report keeps their colors instead of applying dataset colors.
+        report_section: Report section the card is shown in: the Time-Series
+            Metrics panel (``"time_series"``) or the Protection Metrics panel
+            of the Data Privacy section (``"data_privacy"``).
     """
 
     card_id: ClassVar[str]
@@ -54,6 +58,7 @@ class TimeSeriesComponent(Component):
     tooltip_key: ClassVar[str]
     template: ClassVar[str]
     score_colored_traces: ClassVar[bool] = False
+    report_section: ClassVar[Literal["time_series", "data_privacy"]] = "time_series"
 
     details: dict[str, Any] = Field(default_factory=dict, description="Metric-specific diagnostic details.")
 

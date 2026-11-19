@@ -3,9 +3,21 @@
 
 from __future__ import annotations
 
+import numpy as np
+import pandas as pd
 import pytest
 from jinja2 import Environment, FunctionLoader, select_autoescape
 
+from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.evaluate import (
+    EvaluationParameters,
+    TimeSeriesEvaluationParameters,
+    WindowGroupMIAParameters,
+)
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
+from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.render import _get_template
 
 
@@ -288,3 +300,71 @@ def test_evaluation_report_uses_reference_icon_geometry() -> None:
     assert 'd="M13 5.293V14H3V2h6.707z' in icons  # Document
     assert 'd="m11.871 1.295.509 2.325' in icons  # CheckmarkBadge
     assert 'd="M5 5a3 3 0 0 1 6 0v2h1v7H4V7h1z' in icons  # LockClosed
+
+
+def _window_group_mia_card(*, with_holdout: bool, columns: int) -> tuple[WindowGroupMIA, str]:
+    rng = np.random.default_rng(31)
+    names = [f"column_{index}" for index in range(columns)]
+
+    def frame(prefix: str, groups: int) -> pd.DataFrame:
+        parts = [
+            pd.DataFrame(
+                {
+                    "entity": f"{prefix}{group}",
+                    "time": np.arange(100),
+                    **{n: rng.normal(size=100).cumsum() for n in names},
+                }
+            )
+            for group in range(groups)
+        ]
+        return pd.concat(parts, ignore_index=True)
+
+    training = frame("t", 10)
+    datasets = EvaluationDatasets.from_dataframes(
+        training, training.copy(), test=frame("h", 3) if with_holdout else None, enable_sampling=False
+    )
+    config = SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by="entity"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+        evaluation=EvaluationParameters(
+            time_series=TimeSeriesEvaluationParameters(window_group_mia=WindowGroupMIAParameters(max_windows=50))
+        ),
+    )
+    component = WindowGroupMIA.from_evaluation_datasets(datasets, config)
+    rendered = _render_template(
+        "jinja/components/window_group_mia.j2", ctx={"window_membership_inference_protection": component.jinja_context}
+    )
+    return component, rendered
+
+
+def test_window_group_mia_card_summarizes_the_attack_and_switches_columns() -> None:
+    component, rendered = _window_group_mia_card(with_holdout=True, columns=2)
+    text = " ".join(rendered.split())
+    counts = component.details["counts"]
+
+    assert component.details["evaluation_mode"] == "full"
+    assert (
+        f"and {counts['holdout_windows']} holdout windows from 3 holdout groups with "
+        f"{counts['synthetic_windows']:,} synthetic windows (10 steps across 2 numeric columns)."
+    ) in text
+    assert f"Windows were sampled reproducibly from {counts['training_windows_total']:,} training" in text
+    assert "of holdout windows are flagged as close to a synthetic window." in text
+    assert "100.0% of training windows have an exact copy in the synthetic data." in text
+    assert "Holdout Data" in rendered
+    assert rendered.count("data-tooltip-toggle") == len(component.jinja_context["figures"]) == 3
+    assert rendered.count("data-time-series-column-select") == 1
+    assert '<option value="1">column_1</option>' in rendered
+
+
+def test_window_group_mia_copy_diagnostics_card_leaves_out_the_holdout() -> None:
+    component, rendered = _window_group_mia_card(with_holdout=False, columns=1)
+    text = " ".join(rendered.split())
+    summary = text[text.index("Compared") : text.index('class="chart-legend"')]
+
+    assert component.details["evaluation_mode"] == "copy_diagnostics_only"
+    assert "holdout" not in summary.lower()
+    assert "flagged" not in summary
+    assert "Holdout Data" not in rendered
+    assert "(10 steps across 1 numeric column)." in text
+    assert "100.0% of training windows have an exact copy" in text
+    assert "data-time-series-column-select" not in rendered
