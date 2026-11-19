@@ -140,25 +140,33 @@ class TestPie:
         assert isinstance(fig, go.Figure)
 
 
-def _training_values(points: int = 300, seed: int = 0) -> np.ndarray:
-    return np.round(np.random.default_rng(seed).normal(5000, 1500, points), 6) + 0.123457
+@pytest.fixture
+def fixture_training_values() -> np.ndarray:
+    return np.round(np.random.default_rng(0).normal(5000, 1500, 300), 6) + 0.123457
+
+
+@pytest.fixture
+def fixture_synthetic_values() -> np.ndarray:
+    return np.round(np.random.default_rng(1).normal(5000, 1500, 300), 6) + 0.123457
 
 
 class TestSafeBinEdges:
     """Tests for safe_bin_edges."""
 
-    def test_edges_are_multiples_of_a_round_step_and_never_training_values(self):
-        training = _training_values()
-        edges = safe_bin_edges(training, _training_values(seed=1))
+    def test_edges_are_multiples_of_a_round_step_and_never_training_values(
+        self, fixture_training_values, fixture_synthetic_values
+    ):
+        training = fixture_training_values
+        edges = safe_bin_edges(training, fixture_synthetic_values)
 
         step = edges[1] - edges[0]
         assert np.allclose(np.diff(edges), step)
         assert np.allclose(edges / step, np.round(edges / step))
         assert not np.isin(np.round(edges, 6), np.round(training, 6)).any()
 
-    def test_range_covers_every_value_rounded_outward(self):
-        training = _training_values()
-        synthetic = _training_values(seed=1)
+    def test_range_covers_every_value_rounded_outward(self, fixture_training_values, fixture_synthetic_values):
+        training = fixture_training_values
+        synthetic = fixture_synthetic_values
         edges = safe_bin_edges(training, synthetic)
         values = np.concatenate([training, synthetic])
 
@@ -196,10 +204,15 @@ class TestSafeBinEdges:
 
         assert 2 <= len(edges) <= 202
 
-    def test_all_non_finite_training_values_give_one_default_bin(self):
-        values = pd.Series([np.nan, np.inf, -np.inf])
+    def test_no_values_give_one_default_bin(self):
+        assert list(safe_bin_edges(np.array([]), np.array([]))) == [0.0, 1.0]
 
-        assert list(safe_bin_edges(values, values)) == [0.0, 1.0]
+    def test_histogram_figure_ignores_non_finite_values(self):
+        training = pd.Series([np.nan, np.inf, -np.inf, *range(20)], dtype=float)
+
+        fig = histogram_figure(training, training)
+
+        assert sum(fig.data[0].y) == pytest.approx(100.0, abs=0.01)
 
     def test_constant_training_values_give_one_bin(self):
         edges = safe_bin_edges(np.full(20, 5.0), np.full(20, 5.0))
@@ -211,17 +224,19 @@ class TestSafeBinEdges:
 class TestBinnedPercentBars:
     """Tests for binned_percent_bars."""
 
-    def test_returns_training_and_synthetic_bars_summing_to_100(self):
-        training = _training_values()
-        synthetic = _training_values(seed=1)
+    def test_returns_training_and_synthetic_bars_summing_to_100(
+        self, fixture_training_values, fixture_synthetic_values
+    ):
+        training = fixture_training_values
+        synthetic = fixture_synthetic_values
         bars = binned_percent_bars(training, synthetic, safe_bin_edges(training, synthetic))
 
         assert [bar.name for bar in bars] == ["Training", "Synthetic"]
         assert all(isinstance(bar, go.Bar) and bar.meta == "binned" for bar in bars)
         assert sum(bars[1].y) == pytest.approx(100.0, abs=0.01)
 
-    def test_bars_leave_a_gap_inside_each_bin(self):
-        training = _training_values()
+    def test_bars_leave_a_gap_inside_each_bin(self, fixture_training_values):
+        training = fixture_training_values
         edges = safe_bin_edges(training, training)
         training_bar, _ = binned_percent_bars(training, training, edges)
 
@@ -236,8 +251,15 @@ class TestBinnedPercentBars:
         assert list(training_bar.customdata) == ["[0, 2)", "[2, 4)", "[4, 6)", "[6, 8)", "[8, 10)"]
         assert synthetic_bar.y[2] == pytest.approx(100.0)
 
-    def test_carries_no_training_values(self):
-        training = _training_values()
+    def test_range_labels_stay_distinct_for_large_offsets(self):
+        timestamps = np.random.default_rng(0).uniform(1.7e9, 1.7e9 + 86_400, 500)
+        edges = safe_bin_edges(timestamps, timestamps)
+        training_bar, _ = binned_percent_bars(timestamps, timestamps, edges)
+
+        assert len(set(training_bar.customdata)) == len(edges) - 1
+
+    def test_carries_no_training_values(self, fixture_training_values):
+        training = fixture_training_values
         bars = binned_percent_bars(training, training, safe_bin_edges(training, training))
 
         for bar in bars:
@@ -660,7 +682,7 @@ class TestHistogramFigure:
         ]
         assert sum(fig.data[0].y) > 90
         assert sum(fig.data[1].y) == 0
-        assert fig.data[2].text == ("Synthetic values aren't numeric",)
+        assert fig.data[2].text == ("No numeric synthetic values",)
 
     def test_tiny_value_ranges_keep_distinct_bins(self):
         values = np.linspace(1e-15, 9e-15, 100)

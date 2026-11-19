@@ -42,6 +42,11 @@ class ColumnDistributionPlotRow(BaseModel):
 
     @staticmethod
     def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
+        """Return the distribution chart for one column, or ``None`` if it has none.
+
+        Numeric training columns get binned bars; other columns get a category
+        bar chart when both distributions are available.
+        """
         if f is None:
             return None
         # A numeric training column always gets binned bars: a bar per distinct
