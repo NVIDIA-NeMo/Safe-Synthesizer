@@ -156,6 +156,27 @@ release_constraints="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesi
 release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --overrides - "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${release_expected[@]}")"
 
+# A system Python prefix, such as Colab's /usr, has bin/python3 but no bin/python.
+# The installer uses that interpreter and creates no venv.
+new_log system-prefix
+system_prefix="${test_dir}/system prefix"; mkdir -p "$system_prefix/bin"
+printf '#!/usr/bin/env bash\n' > "$system_prefix/bin/python3"; chmod +x "$system_prefix/bin/python3"
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$system_prefix" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
+assert_eq "$(uv_call_count)" 1
+read_call argv
+system_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$system_prefix/bin/python3" --overrides - "${cpu_find_links[@]}")
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${system_expected[@]}")"
+
+# A non-empty directory with no Python is never turned into a venv; an empty one is.
+new_log not-python
+mkdir -p "${test_dir}/not python"; touch "${test_dir}/not python/file"
+if PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="${test_dir}/not python" "$INSTALLER" >/dev/null 2>&1; then exit 1; fi
+assert_eq "$(uv_call_count)" 0
+new_log empty-dir
+mkdir -p "${test_dir}/empty dir"
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="${test_dir}/empty dir" "$INSTALLER" >/dev/null
+assert_eq "$(uv_call_count)" 2
+
 # Printing the find-links pages is a narrow internal policy boundary; it has no effects.
 new_log resolver
 find_links="$(PATH="${fake_bin}:$PATH" NSS_INSTALLER_RESOLVE_FIND_LINKS=1 CUDA=130 "$INSTALLER")"
