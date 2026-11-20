@@ -34,7 +34,6 @@ def test_nss_structured_generation(fixture_local_tinyllama_dir, fixture_gpu_smok
         num_records=5,
         lora_r=8,
         holdout=0,
-        max_holdout=0,
         structured_generation={
             "enabled": True,
             "backend": "outlines",

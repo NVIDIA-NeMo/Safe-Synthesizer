@@ -39,7 +39,6 @@ def test_full_pipeline_smollm2(fixture_gpu_smoke_df, fixture_smoke_save_path):
         num_input_records_to_sample=50,
         num_records=10,
         holdout=0,
-        max_holdout=0,
     )
     nss = SafeSynthesizer(config=config, save_path=fixture_smoke_save_path)
     nss.with_data_source(fixture_gpu_smoke_df).process_data().train()

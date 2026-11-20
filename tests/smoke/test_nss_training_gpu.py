@@ -37,7 +37,6 @@ def test_nss_train_one_batch_bnb_4bit_quantization_scheme(fixture_local_tinyllam
         num_records=5,
         lora_r=8,
         holdout=0,
-        max_holdout=0,
         quantize_model=True,
         quantization_scheme="bnb-4bit",
     )
@@ -60,7 +59,6 @@ def test_nss_train_dp_one_batch(fixture_local_tinyllama_dir, fixture_gpu_smoke_d
         num_records=5,
         lora_r=8,
         holdout=0,
-        max_holdout=0,
         dp_enabled=True,
         epsilon=100.0,
     )

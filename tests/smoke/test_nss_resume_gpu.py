@@ -37,7 +37,6 @@ def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_gp
         num_records=5,
         lora_r=8,
         holdout=0.05,
-        max_holdout=50,
     )
 
     # Step 1: Train
