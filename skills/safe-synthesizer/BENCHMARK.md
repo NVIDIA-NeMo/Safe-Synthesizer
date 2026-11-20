@@ -10,8 +10,8 @@ Recommended for publication based on the completed evaluation evidence in this r
 
 - Skill: `safe-synthesizer`
 - Validation status: `passed`
-- Evaluation date: 2026-11-12
-- Evaluator version: `1.6.9`
+- Evaluation date: 2026-11-20
+- Evaluator version: `1.6.10`
 - Agents: Claude Code (`aws/anthropic/bedrock-claude-opus-5-5`), Codex (`openai/openai/gpt-6.1-sol`)
 - Tasks: 6 evaluation tasks (4 positive, 2 negative)
 - Dataset digest: `sha256:df66b3ebf082deded7ee2c4e547d04fa9f1df1eb26006955db8a554ef2265c63` (skill-evaluator-dataset-snapshot/1)
@@ -28,11 +28,11 @@ SkillSpector provider, model, analyzer revision, and determinism evidence retain
 
 | Skill | Provider | Adapter | Analyzer | Model | Revision | Determinism |
 | --- | --- | --- | --- | --- | --- | --- |
-| safe-synthesizer | nv_inference | openai | mcp_tool_poisoning | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.4` | nondeterministic / provider_defaults |
-| safe-synthesizer | nv_inference | openai | semantic_developer_intent | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.4` | nondeterministic / provider_defaults |
-| safe-synthesizer | nv_inference | openai | semantic_quality_policy | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.4` | nondeterministic / provider_defaults |
-| safe-synthesizer | nv_inference | openai | semantic_security_discovery | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.4` | nondeterministic / provider_defaults |
-| safe-synthesizer | nv_inference | openai | meta_analyzer | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.4` | nondeterministic / provider_defaults |
+| safe-synthesizer | nv_inference | openai | mcp_tool_poisoning | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.5` | nondeterministic / provider_defaults |
+| safe-synthesizer | nv_inference | openai | semantic_developer_intent | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.5` | nondeterministic / provider_defaults |
+| safe-synthesizer | nv_inference | openai | semantic_quality_policy | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.5` | nondeterministic / provider_defaults |
+| safe-synthesizer | nv_inference | openai | semantic_security_discovery | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.5` | nondeterministic / provider_defaults |
+| safe-synthesizer | nv_inference | openai | meta_analyzer | `aws/anthropic/bedrock-claude-opus-5-5` | `2.13.5` | nondeterministic / provider_defaults |
 
 - Controls for `safe-synthesizer`: temperature=not set (source=provider_default, forwarded=no); seed=not set (source=unset, forwarded=no); reasoning_effort=not set (source=provider_default, forwarded=no)
 
@@ -50,12 +50,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 92.7% — baseline ran, but no comparable score was available; uplift unavailable | 92.9% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 91.8% — baseline ran, but no comparable score was available; uplift unavailable | 90.6% — baseline ran, but no comparable score was available; uplift unavailable |
 | Security | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Correctness | 56.7% → 96.7% (+40.0 points) | 80.0% → 100.0% (+20.0 points) |
+| Correctness | 56.7% → 90.0% (+33.3 points) | 80.0% → 96.7% (+16.7 points) |
 | Discoverability | 100.0% — baseline ran, but no comparable score was available; uplift unavailable | 95.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 39.7% → 85.7% (+46.0 points) | 70.4% → 98.6% (+28.2 points) |
-| Efficiency | 81.1% — baseline ran, but no comparable score was available; uplift unavailable | 71.1% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 38.3% → 85.7% (+47.4 points) | 60.9% → 89.1% (+28.2 points) |
+| Efficiency | 83.3% — baseline ran, but no comparable score was available; uplift unavailable | 72.3% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -70,7 +70,7 @@ Shared-source comparisons use the same signals and weights on both conditions. T
 | Agent | Dimension | Basis | Baseline → With skill (uplift) | Explanation |
 | --- | --- | --- | --- | --- |
 | claude-code | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
-| claude-code | Efficiency | Token-only comparison | 98.5% → 97.9% (-0.6 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
+| claude-code | Efficiency | Token-only comparison | 98.5% → 97.8% (-0.7 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 | codex | Discoverability | Dimension comparison | N/A | Discoverability is not applicable to the no-skill baseline; there is no installed skill to discover. |
 | codex | Efficiency | Token-only comparison | 91.0% → 89.6% (-1.4 points) | Only Token Efficiency is comparable; the full dimension scores use different evaluator sources. |
 
@@ -80,21 +80,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 805,586 | 573,426 | +232,160 | +40.49% | skill 6/6; base 6/6 |
-| claude-code | safe-synthesizer-artifact-locations | 220,185 | 143,103 | +77,082 | +53.86% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-config-num-records | 145,348 | 143,110 | +2,238 | +1.56% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-diagnose-generation-oom | 256,999 | 107,331 | +149,668 | +139.45% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-negative-general-dp | 37,094 | 36,756 | +338 | +0.92% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-negative-react-ui | 35,405 | 35,279 | +126 | +0.36% | skill 1/1; base 1/1 |
-| claude-code | safe-synthesizer-run-dp-cli | 110,555 | 107,847 | +2,708 | +2.51% | skill 1/1; base 1/1 |
-| codex | All cases | 277,730 | 131,899 | +145,831 | +110.56% | skill 6/6; base 6/6 |
-| codex | safe-synthesizer-artifact-locations | 73,087 | 21,824 | +51,263 | +234.89% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-config-num-records | 51,267 | 21,490 | +29,777 | +138.56% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-diagnose-generation-oom | 54,346 | 21,883 | +32,463 | +148.35% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-negative-general-dp | 13,754 | 13,636 | +118 | +0.87% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-negative-react-ui | 18,255 | 18,011 | +244 | +1.35% | skill 1/1; base 1/1 |
-| codex | safe-synthesizer-run-dp-cli | 67,021 | 35,055 | +31,966 | +91.19% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 1,083,316 | 705,325 | +377,991 | +53.59% | skill 12/12; base 12/12 |
+| claude-code | All cases | 846,728 | 643,841 | +202,887 | +31.51% | skill 6/6; base 6/6 |
+| claude-code | safe-synthesizer-artifact-locations | 332,384 | 142,820 | +189,564 | +132.73% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-config-num-records | 108,245 | 179,504 | -71,259 | -39.70% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-diagnose-generation-oom | 184,108 | 107,443 | +76,665 | +71.35% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-negative-general-dp | 36,800 | 36,680 | +120 | +0.33% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-negative-react-ui | 35,443 | 35,268 | +175 | +0.50% | skill 1/1; base 1/1 |
+| claude-code | safe-synthesizer-run-dp-cli | 149,748 | 142,126 | +7,622 | +5.36% | skill 1/1; base 1/1 |
+| codex | All cases | 291,880 | 145,609 | +146,271 | +100.45% | skill 6/6; base 6/6 |
+| codex | safe-synthesizer-artifact-locations | 72,925 | 17,455 | +55,470 | +317.79% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-config-num-records | 51,136 | 21,559 | +29,577 | +137.19% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-diagnose-generation-oom | 68,890 | 21,770 | +47,120 | +216.44% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-negative-general-dp | 13,774 | 13,593 | +181 | +1.33% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-negative-react-ui | 18,078 | 13,558 | +4,520 | +33.34% | skill 1/1; base 1/1 |
+| codex | safe-synthesizer-run-dp-cli | 67,077 | 57,674 | +9,403 | +16.30% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 1,138,608 | 789,450 | +349,158 | +44.23% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. Change is `100 * (with - without) / without`; negative means fewer tokens. N/A comparisons include their reason in the coverage column; coverage is never estimated.
 
