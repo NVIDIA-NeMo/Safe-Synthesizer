@@ -10,7 +10,7 @@ run = [
 
 ["test:github-cli"]
 description = "Run GitHub CLI helper tests with the helper's PEP 723 dependencies plus pytest."
-run = 'uv run --no-project --with-requirements .agents/skills/github-cli/scripts/gh_pr_helper.py --with pytest pytest -q .agents/skills/github-cli/tests'
+run = "uv run --no-project --with-requirements .agents/skills/github-cli/scripts/gh_pr_helper.py --with pytest pytest -q .agents/skills/github-cli/tests"
 
 ["test:unit-slow"]
 description = "Run all unit tests including slow tests, excluding e2e and smoke. Requires Python dependencies; may take longer than test."
@@ -89,10 +89,10 @@ alias = "test-smoke-gpu-smollm2"
 run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "requires_gpu and smollm2"'
 
 ["test:gpu-integration"]
-description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load. Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
+description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load. Syncs the $NSS_GPU_CUDA_EXTRA dependency profile (default cu129)."
 alias = "test-gpu-integration"
 run = [
-    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    'mise run deps:sync "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
     "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
 ]
@@ -107,10 +107,10 @@ description = "Run all GPU e2e tests without bootstrapping dependencies. Require
 run = [{ task = "test:e2e:default:run" }, { task = "test:e2e:dp:run" }, { task = "test:e2e:notebooks:run" }]
 
 ["test:e2e:default"]
-description = "Run default e2e tests (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
+description = "Run default e2e tests (requires CUDA). Syncs the $NSS_GPU_CUDA_EXTRA dependency profile (default cu129)."
 alias = "test-e2e-default"
 run = [
-    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    'mise run deps:sync "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     { task = "test:e2e:default:run" },
 ]
 
@@ -119,10 +119,10 @@ hide = true
 run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
 
 ["test:e2e:dp"]
-description = "Run dp e2e tests (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
+description = "Run dp e2e tests (requires CUDA). Syncs the $NSS_GPU_CUDA_EXTRA dependency profile (default cu129)."
 alias = "test-e2e-dp"
 run = [
-    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    'mise run deps:sync "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     { task = "test:e2e:dp:run" },
 ]
 
@@ -131,10 +131,10 @@ hide = true
 run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
 
 ["test:e2e:notebooks"]
-description = "Execute the Safe Synthesizer 101 tutorial notebook top to bottom (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
+description = "Execute the Safe Synthesizer 101 tutorial notebook top to bottom (requires CUDA). Syncs the $NSS_GPU_CUDA_EXTRA dependency profile (default cu129)."
 alias = "test-e2e-notebooks"
 run = [
-    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    'mise run deps:sync "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     { task = "test:e2e:notebooks:run" },
 ]
 
@@ -146,7 +146,7 @@ run = "uv run --frozen --no-sync pytest -vv -n 0 tests/e2e/test_tutorial_noteboo
 description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
 alias = "test-e2e-collect"
 run = [
-    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    'mise run deps:sync "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -176,7 +176,7 @@ arg "<dataset>" {
 }
 '''
 run = [
-    { task = "bootstrap-nss", args = ["cu129"] },
+    { task = "deps:sync", args = ["cu129"] },
     '''
 #!/usr/bin/env bash
 set -euo pipefail

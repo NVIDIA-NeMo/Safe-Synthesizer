@@ -9,8 +9,8 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 
 | File | Base | Purpose |
 |------|------|---------|
-| `Dockerfile.cuda` | `python:3.13-slim-bookworm` | GPU runtime and dev images; CUDA libraries come from the selected package extra |
-| `Dockerfile.test_ci` | `python:3.13-slim` | CPU-only test image (`mise run test:ci-container`) |
+| `Dockerfile.cuda` | `python:${PYTHON_VERSION}-slim-bookworm` | GPU runtime and dev images; CUDA libraries come from the selected package extra |
+| `Dockerfile.test_ci` | `python:${PYTHON_VERSION}-slim` | CPU-only test image (`mise run test:ci-container`) |
 | `entrypoint.sh` | -- | Wrapper entrypoint for the runtime image (mount/GPU checks) |
 
 ## GPU Image
@@ -66,14 +66,20 @@ Key flags:
 | `CONTAINER_EXTRA` | `cu129` | Python extra to install with `engine` |
 | `CONTAINER_VARIANT` | `cu129` | Image variant label/tag suffix |
 | `PACKAGE_VERSION` | unset | Optional PEP 440 version passed to `uv-dynamic-versioning` |
-| `PYTHON_VERSION` | `3.13` | Python slim image version |
+| `PYTHON_VERSION` | required | Python slim image version, from `.python-version` |
+| `UV_VERSION` | required | uv version, from `[tool.uv] required-version` in `pyproject.toml` |
 | `PYTHON_IMAGE` | `python:${PYTHON_VERSION}-slim-bookworm` | Runtime and dev base image |
-| `UV_IMAGE` | `ghcr.io/astral-sh/uv:0.13.4` | Source image for pinned `uv` binaries |
+| `UV_IMAGE` | `ghcr.io/astral-sh/uv:${UV_VERSION}` | Source image for pinned `uv` binaries |
 
-Override at build time:
+The `container:build:*` tasks pass `PYTHON_VERSION` and `UV_VERSION` from those
+files. To build directly, pass them yourself:
 
 ```bash
+PYTHON_VERSION="$(cat .python-version)"
+UV_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["uv"]["required-version"])')"
 docker build -f containers/Dockerfile.cuda \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
+  --build-arg UV_VERSION="${UV_VERSION}" \
   --build-arg CONTAINER_EXTRA=cu129 \
   --build-arg CONTAINER_VARIANT=cu129 \
   --target runtime -t nss-gpu:custom .
@@ -126,7 +132,7 @@ before enabling a platform in CI.
 `Dockerfile.test_ci` provides a CPU-only image for running unit tests locally
 or in CI without a GPU. Its `setup` stage installs system packages and
 mise-managed tools, while `install-deps` creates the Python environment with
-`mise run bootstrap-nss cpu`. The separate `wheel-install` stage installs the
+`mise run deps:sync ci`, the CI profile with CPU PyTorch. The separate `wheel-install` stage installs the
 built wheel without project sources, runs CPU package and CLI checks, and
 resolves the CUDA dependency set.
 

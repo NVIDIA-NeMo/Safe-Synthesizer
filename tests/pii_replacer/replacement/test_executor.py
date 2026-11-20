@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Sequence
+from typing import ClassVar
 
 import pandas as pd
 import pytest
@@ -38,7 +39,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.value_checks import keeps_or
 
 
 class _RecordingGenerator:
-    backend = PiiSamplerBackend.FAKER
+    backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
 
     def __init__(self) -> None:
         self.requests: list[ReplacementGenerationRequest] = []

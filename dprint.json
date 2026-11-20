@@ -1,11 +1,53 @@
 {
   "incremental": false,
-  "includes": ["**/*.toml"],
+  "includes": [
+    "**/*.toml"
+  ],
   "toml": {
     "indentWidth": 4,
     "lineWidth": 120
   },
   "plugins": [
-    "https://plugins.dprint.dev/toml-0.7.0.wasm@0126c8112691542d30b52a639076ecc83e07bace877638cee7c6915fd36b8629"
+    "https://plugins.dprint.dev/toml-0.9.0.wasm@776e088ed4255a51a80e3640e5fd20b15661147e86df3e99611aaa37e9c59852"
+  ],
+  "excludes": [
+    "vendor/**",
+    "third_party/**",
+    "uv.lock",
+    "mise.lock",
+    "LICENSE",
+    "**/skill.oms.sig",
+    "docs/**/*.markdown",
+    "docs/**/*.md",
+    "docs/**/*.mdx",
+    "skills/safe-synthesizer/BENCHMARK.md",
+    "skills/safe-synthesizer/skill-card.md",
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "**/*.ipynb"
   ]
 }

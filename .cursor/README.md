@@ -7,7 +7,7 @@ Cursor-specific agent configuration: hooks, rules, skills, and worktree setup.
 
 ## Directory layout
 
-```
+```text
 .cursor/
 ├── hooks.json          # Hook registrations for Cursor (mirrors .claude/settings.json for Claude Code)
 ├── worktrees.json      # Points to the agent-neutral worktree setup script

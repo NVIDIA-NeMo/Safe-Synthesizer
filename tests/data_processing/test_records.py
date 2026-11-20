@@ -23,7 +23,7 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
     normalize_dataframe,
 )
 from nemo_safe_synthesizer.data_processing.records.json_record import flatten
-from nemo_safe_synthesizer.data_processing.records.json_types import is_json_object, is_json_value
+from nemo_safe_synthesizer.data_processing.records.json_types import JsonSchema, is_json_object, is_json_value
 
 
 def _mock_encode(text: str) -> list[int]:
@@ -453,7 +453,7 @@ def test_validate_time_interval_cases():
 
 def test_extract_and_validate_timeseries_records_valid():
     """Test extracting valid series records."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
         "required": ["timestamp", "value"],
@@ -481,7 +481,7 @@ def test_extract_and_validate_timeseries_records_valid():
 
 def test_extract_and_validate_timeseries_records_no_interval_validation():
     """Test that records pass when interval_seconds is None."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
         "required": ["timestamp", "value"],
@@ -504,7 +504,7 @@ def test_extract_and_validate_timeseries_records_no_interval_validation():
 
 def test_extract_and_validate_timeseries_records_invalid_interval():
     """Test that invalid interval marks remaining records as invalid."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
         "required": ["timestamp", "value"],
@@ -536,7 +536,7 @@ def test_extract_and_validate_timeseries_records_invalid_interval():
 
 def test_extract_and_validate_timeseries_records_invalid_json():
     """Test that invalid JSON stops validation."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
     }
@@ -558,7 +558,7 @@ def test_extract_and_validate_timeseries_records_invalid_json():
 
 def test_extract_and_validate_timeseries_records_elapsed_time():
     """Test with elapsed_seconds time format."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"elapsed_seconds": {"type": "integer"}, "value": {"type": "integer"}},
         "required": ["elapsed_seconds", "value"],
@@ -580,7 +580,7 @@ def test_extract_and_validate_timeseries_records_elapsed_time():
 
 def test_extract_and_validate_timeseries_records_missing_timestamp():
     """Test that missing timestamp column stops validation."""
-    schema = {
+    schema: JsonSchema = {
         "type": "object",
         "properties": {"value": {"type": "integer"}},
         "required": ["value"],

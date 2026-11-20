@@ -14,10 +14,10 @@ Add a `.pyi` file here when:
 
 ## How it works
 
-`pyproject.toml` declares `typings/` as an extra path for `ty`:
+The root `ty.toml` declares `typings/` as an extra path for `ty`:
 
 ```toml
-[tool.ty.environment]
+[environment]
 extra-paths = ["typings"]
 ```
 

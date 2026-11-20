@@ -39,8 +39,7 @@ for development:
 
 ```bash
 unset UV_PROJECT_ENVIRONMENT UV_NO_SYNC PYTHONPATH VIRTUAL_ENV UV_PROJECT_DIR
-mise run setup
-mise run bootstrap-nss cpu  # or cu129
+mise run deps:sync all  # or cpu, cu129, cu130
 ```
 
 Bare `uv sync --frozen` installs only the base environment. It does not support

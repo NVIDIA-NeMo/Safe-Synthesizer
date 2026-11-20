@@ -7,7 +7,7 @@ Claude Code-specific agent configuration: hook registrations and slash commands.
 
 ## Directory layout
 
-```
+```text
 .claude/
 ├── settings.json   # Hook registrations for Claude Code (mirrors .cursor/hooks.json for Cursor)
 ├── hooks/

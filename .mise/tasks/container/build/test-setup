@@ -8,10 +8,12 @@ set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 container_cmd="$(resolve_container_cmd)"
+python_version="$(resolve_python_version)"
 
 "${container_cmd}" build \
   --platform "${CONTAINER_TEST_PLATFORM:-linux/amd64}" \
   --progress=plain \
+  --build-arg "PYTHON_VERSION=${python_version}" \
   -f "${CONTAINER_TEST_FILE:-containers/Dockerfile.test_ci}" \
   --tag "${CONTAINER_TEST_IMAGE_SETUP:-nss-test-setup:latest}" \
   --target setup \

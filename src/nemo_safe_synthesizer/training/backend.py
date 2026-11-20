@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -117,7 +118,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     load_params: dict
     """Raw parameters used when calling ``from_pretrained``."""
 
-    trainer_type: type[OpacusDPTrainer | Trainer]
+    trainer_type: type[Trainer] | partial[OpacusDPTrainer]
     """Trainer class to instantiate -- standard ``Trainer`` or ``OpacusDPTrainer`` for DP."""
 
     trainer: OpacusDPTrainer | Trainer
