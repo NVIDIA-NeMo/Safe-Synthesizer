@@ -37,6 +37,7 @@ def _stub_generate_results(*, with_token_stats: bool = True) -> GenerateJobResul
             num_valid_record_tokens=700,
             num_invalid_record_tokens=200,
             num_non_record_tokens=100,
+            num_discarded_sample_tokens=300,
             tokens_per_prompt=250.0,
             tokens_per_second=500.0,
             valid_tokens_per_second=350.0,
@@ -113,6 +114,7 @@ class TestMakeNssSummaryTokenStats:
         assert summary.num_valid_record_tokens == 700
         assert summary.num_invalid_record_tokens == 200
         assert summary.num_non_record_tokens == 100
+        assert summary.num_discarded_sample_tokens == 300
         assert summary.valid_record_token_fraction == 700 / 1000
         assert summary.tokens_per_prompt == 250.0
         assert summary.tokens_per_second == 500.0
@@ -163,6 +165,7 @@ class TestSafeSynthesizerSummaryLogWandb:
         assert logged["gen/num_valid_record_tokens"] == 700
         assert logged["gen/num_invalid_record_tokens"] == 200
         assert logged["gen/num_non_record_tokens"] == 100
+        assert logged["gen/num_discarded_sample_tokens"] == 300
         assert logged["gen/valid_record_token_fraction"] == 700 / 1000
         assert logged["gen/tokens_per_prompt"] == 250.0
         assert logged["gen/tokens_per_second"] == 500.0

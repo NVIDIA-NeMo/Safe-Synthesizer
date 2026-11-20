@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Single-batch container for generated records and error statistics."""
+"""Single-batch container for generated records, plus shared error-statistics and summary-table helpers."""
 
 from __future__ import annotations
 
+import itertools
 from collections import Counter, defaultdict
+from collections.abc import Collection, Iterable
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -17,10 +20,14 @@ from ..defaults import (
     LOG_NUM_ERRORS,
 )
 from ..generation.processors import (
+    ParsedRecord,
     ParsedResponse,
     Processor,
 )
 from ..observability import get_logger
+
+if TYPE_CHECKING:
+    from ..generation.results import GenerationBatches
 
 logger = get_logger(__name__)
 
@@ -78,6 +85,111 @@ def _group_error_messages(all_error_messages: list[str], common_error_string: st
     return updated_error_messages
 
 
+def summarize_errors(errors: Iterable[tuple[str, str]], detailed_errors: bool) -> pd.DataFrame:
+    """Return count statistics on record validation errors.
+
+    Args:
+        errors: ``(detailed_msg, validator)`` tuples, one per invalid record.
+        detailed_errors: If ``True``, include expected column names
+            and allowed field values.  If ``False``, report only
+            high-level error categories.
+
+    Returns:
+        DataFrame indexed by error message with a ``Percentage``
+        column, sorted by frequency descending.
+    """
+    idx = 0 if detailed_errors else 1
+    err_msgs = [e[idx] for e in errors]
+    # Map error messages to human-readable categories, as necessary
+    err_msgs = [HUMAN_READABLE_ERR_MSGS.get(msg, msg) for msg in err_msgs]
+    if detailed_errors:
+        # Group similar error messages to consolidate the error counts
+        common_error_strings = [
+            " is not one of ",
+            " is a required property",
+            " is greater than the maximum of ",
+            " is less than the minimum of ",
+        ]
+        for common_error_string in common_error_strings:
+            err_msgs = _group_error_messages(err_msgs, common_error_string)
+    err_stats = pd.DataFrame.from_dict(Counter(err_msgs), orient="index", columns=["cnt"])
+    err_stats["Percentage"] = err_stats["cnt"] / err_stats["cnt"].sum()
+    err_stats = err_stats.drop("cnt", axis=1)
+    # sort `index` (error messages) then `Percentage`, so it's deterministic
+    err_stats = err_stats.sort_index()
+    err_stats = err_stats.sort_values("Percentage", ascending=False, kind="mergesort")
+    if LOG_NUM_ERRORS is not None:
+        # separate out data_config errors to ensure they don't get truncated
+
+        data_config_errors = err_stats[err_stats.index.astype("str").str.contains("data_config", na=False)]
+        other_errors = err_stats[~err_stats.index.astype("str").str.contains("data_config", na=False)]
+        other_errors = other_errors.head(LOG_NUM_ERRORS)
+
+        err_stats = pd.concat([data_config_errors, other_errors])
+        err_stats = err_stats.sort_values("Percentage", ascending=False)
+    return err_stats
+
+
+def log_generation_summary(counts: Batch | GenerationBatches, *, detailed_errors: bool, title: str) -> None:
+    """Log a generation summary table and, when there are errors, an "Error Statistics" table.
+
+    Emits structured data via ``logger.user.info`` that is rendered
+    as Rich ASCII tables on the console and as key/value pairs in
+    JSON logs. Optional metrics are omitted from the summary when empty.
+
+    Args:
+        counts: The batch, or the job-wide accumulator, whose counts are summarized.
+        detailed_errors: If ``True``, include per-column error
+            statistics in the log output.
+        title: Title of the summary table.
+    """
+    summary_data: dict[str, object] = {
+        "num_prompts": counts.num_prompts,
+        "num_valid_records": counts.num_valid_records,
+        "num_invalid_records": counts.num_invalid_records,
+        "valid_record_fraction": round(counts.valid_record_fraction, 2),
+    }
+    if counts.finish_reasons:
+        summary_data["finish_reasons"] = dict(counts.finish_reasons)
+    if counts.num_data_config_rejected_records:
+        summary_data["num_data_config_rejected_records"] = counts.num_data_config_rejected_records
+    if counts.total_completion_tokens > 0:
+        summary_data["completion_tokens"] = counts.total_completion_tokens
+        summary_data["valid_record_tokens"] = counts.total_valid_record_tokens
+        summary_data["invalid_record_tokens"] = counts.total_invalid_record_tokens
+        summary_data["non_record_tokens"] = counts.total_non_record_tokens
+        if counts.total_discarded_sample_tokens > 0:
+            summary_data["discarded_sample_tokens"] = counts.total_discarded_sample_tokens
+
+    # Pass structured data - processor renders for console, JSON keeps as-is
+    logger.user.info(
+        "",
+        extra={
+            "ctx": {
+                "render_table": True,
+                "tabular_data": summary_data,
+                "title": title,
+            }
+        },
+    )
+
+    # Log error statistics if present
+    err_stats = counts.error_statistics(detailed_errors=detailed_errors)
+    if not err_stats.empty:
+        # Build structured error data - processor renders as table for console
+        error_data = {str(cat): round(row["Percentage"], 2) for cat, row in err_stats.iterrows()}
+        logger.user.info(
+            "",
+            extra={
+                "ctx": {
+                    "render_table": True,
+                    "tabular_data": error_data,
+                    "title": "Error Statistics",
+                }
+            },
+        )
+
+
 class Batch:
     """Container for the results of a single generation batch.
 
@@ -94,6 +206,8 @@ class Batch:
         self._responses: list[ParsedResponse] = []
         self._processor = processor
         self._total_completion_tokens: int = 0
+        self._discarded_response_indices: set[int] = set()
+        self._discarded_record_tokens: int = 0
         self.finish_reasons: Counter[str] = Counter()
 
     @property
@@ -110,6 +224,11 @@ class Batch:
     def num_valid_records(self) -> int:
         """Number of valid records generated in this batch."""
         return sum([len(resp.valid_records) for resp in self._responses])
+
+    @property
+    def errors(self) -> list[tuple[str, str]]:
+        """``(detailed_msg, validator)`` tuples for every invalid record in this batch."""
+        return list(itertools.chain.from_iterable(resp.errors for resp in self._responses))
 
     @property
     def data_config_rejected_records(self) -> list[tuple[str, str]]:
@@ -161,14 +280,32 @@ class Batch:
         return invalid
 
     @property
+    def total_discarded_sample_tokens(self) -> int:
+        """Tokens of the responses and records removed by ``discard_response`` and ``discard_records``."""
+        discarded_responses = sum(
+            self._responses[index].completion_tokens for index in self._discarded_response_indices
+        )
+        return discarded_responses + self._discarded_record_tokens
+
+    @property
+    def unclamped_non_record_tokens(self) -> int:
+        """Completion tokens minus valid, invalid, and discarded tokens, without clamping or warnings.
+
+        Can be slightly negative, because records are tokenized one at a time
+        and may include prompt-prefix bytes the model did not generate.
+        """
+        valid, invalid = self._record_token_totals()
+        return self._total_completion_tokens - valid - invalid - self.total_discarded_sample_tokens
+
+    @property
     def total_non_record_tokens(self) -> int:
-        """Tokens not part of any recognized record (completion - valid - invalid).
+        """Tokens not part of any recognized record (completion - valid - invalid - discarded).
 
         Clamped to zero if negative (possible due to tokenizer boundary effects).
         """
-        valid, invalid = self._record_token_totals()
-        value = self._total_completion_tokens - valid - invalid
+        value = self.unclamped_non_record_tokens
         if value < 0:
+            valid, invalid = self._record_token_totals()
             logger.warning(
                 "Non-record token count is negative; clamping to 0. "
                 "This can happen due to tokenizer boundary effects between individual records and full completions.",
@@ -201,36 +338,7 @@ class Batch:
             DataFrame indexed by error message with a ``Percentage``
             column, sorted by frequency descending.
         """
-        idx = 0 if detailed_errors else 1
-        err_msgs = [e[idx] for resp in self._responses for e in resp.errors]
-        # Map error messages to human-readable categories, as necessary
-        err_msgs = [HUMAN_READABLE_ERR_MSGS.get(msg, msg) for msg in err_msgs]
-        if detailed_errors:
-            # Group similar error messages to consolidate the error counts
-            common_error_strings = [
-                " is not one of ",
-                " is a required property",
-                " is greater than the maximum of ",
-                " is less than the minimum of ",
-            ]
-            for common_error_string in common_error_strings:
-                err_msgs = _group_error_messages(err_msgs, common_error_string)
-        err_stats = pd.DataFrame.from_dict(Counter(err_msgs), orient="index", columns=["cnt"])
-        err_stats["Percentage"] = err_stats["cnt"] / err_stats["cnt"].sum()
-        err_stats = err_stats.drop("cnt", axis=1)
-        # sort `index` (error messages) then `Percentage`, so it's deterministic
-        err_stats = err_stats.sort_index()
-        err_stats = err_stats.sort_values("Percentage", ascending=False, kind="mergesort")
-        if LOG_NUM_ERRORS is not None:
-            # separate out data_config errors to ensure they don't get truncated
-
-            data_config_errors = err_stats[err_stats.index.astype("str").str.contains("data_config", na=False)]
-            other_errors = err_stats[~err_stats.index.astype("str").str.contains("data_config", na=False)]
-            other_errors = other_errors.head(LOG_NUM_ERRORS)
-
-            err_stats = pd.concat([data_config_errors, other_errors])
-            err_stats = err_stats.sort_values("Percentage", ascending=False)
-        return err_stats
+        return summarize_errors(self.errors, detailed_errors)
 
     @property
     def stopping_metric(self) -> float:
@@ -262,51 +370,7 @@ class Batch:
             detailed_errors: If ``True``, include per-column error
                 statistics in the log output.
         """
-        err_stats: pd.DataFrame = self.error_statistics(detailed_errors=detailed_errors)
-
-        # Build structured summary data - processor renders as table for console
-        summary_data: dict[str, object] = {
-            "num_prompts": self.num_prompts,
-            "num_valid_records": self.num_valid_records,
-            "num_invalid_records": self.num_invalid_records,
-            "valid_record_fraction": round(self.valid_record_fraction, 2),
-        }
-        if self.finish_reasons:
-            summary_data["finish_reasons"] = dict(self.finish_reasons)
-        if self.num_data_config_rejected_records:
-            summary_data["num_data_config_rejected_records"] = self.num_data_config_rejected_records
-        if self._total_completion_tokens > 0:
-            summary_data["completion_tokens"] = self._total_completion_tokens
-            summary_data["valid_record_tokens"] = self.total_valid_record_tokens
-            summary_data["invalid_record_tokens"] = self.total_invalid_record_tokens
-            summary_data["non_record_tokens"] = self.total_non_record_tokens
-
-        # Pass structured data - processor renders for console, JSON keeps as-is
-        logger.user.info(
-            "",
-            extra={
-                "ctx": {
-                    "render_table": True,
-                    "tabular_data": summary_data,
-                    "title": "Batch Generation Summary",
-                }
-            },
-        )
-
-        # Log error statistics if present
-        if not err_stats.empty:
-            # Build structured error data - processor renders as table for console
-            error_data = {str(cat): round(row["Percentage"], 2) for cat, row in err_stats.iterrows()}
-            logger.user.info(
-                "",
-                extra={
-                    "ctx": {
-                        "render_table": True,
-                        "tabular_data": error_data,
-                        "title": "Error Statistics",
-                    }
-                },
-            )
+        log_generation_summary(self, detailed_errors=detailed_errors, title="Batch Generation Summary")
 
     def process(self, prompt_number: int, text: str, completion_tokens: int = 0) -> None:
         """Process text response from a single prompt in the current batch.
@@ -318,5 +382,49 @@ class Batch:
                 (from vLLM ``output.token_ids``).  Defaults to 0 when
                 the backend does not provide token counts.
         """
-        self._responses.append(self._processor(prompt_number, text))
+        response = self._processor(prompt_number, text)
+        response.completion_tokens = completion_tokens
+        self._responses.append(response)
         self._total_completion_tokens += completion_tokens
+
+    def discard_response(self, index: int, error: tuple[str, str]) -> None:
+        """Empty one response so its records leave the batch statistics.
+
+        The response stays in the batch, so ``num_prompts`` still counts it,
+        and its completion tokens are reported as
+        ``total_discarded_sample_tokens`` rather than non-record tokens.
+        Still-valid records are invalidated with ``error`` before removal, so
+        post-processing bookkeeping that still references them treats them as
+        rejected. Discarding the same response again has no further effect.
+
+        Args:
+            index: Position of the response in the batch.
+            error: ``(detailed_msg, validator)`` tuple for the discarded records.
+        """
+        response = self._responses[index]
+        for record in response.records:
+            if record.is_valid:
+                record.invalidate(error)
+        response.records = []
+        self._discarded_response_indices.add(index)
+
+    def discard_records(self, index: int, records: Collection[ParsedRecord], error: tuple[str, str]) -> None:
+        """Remove some records of one response so they leave the batch statistics.
+
+        Like ``discard_response`` for part of a response: the records are
+        invalidated with ``error`` before removal, and their tokens are reported
+        as ``total_discarded_sample_tokens``.
+
+        Args:
+            index: Position of the response in the batch.
+            records: Records of that response to discard.
+            error: ``(detailed_msg, validator)`` tuple for the discarded records.
+        """
+        response = self._responses[index]
+        discarded_ids = {id(record) for record in records}
+        for record in response.records:
+            if id(record) in discarded_ids:
+                if record.is_valid:
+                    record.invalidate(error)
+                self._discarded_record_tokens += record.token_count
+        response.records = [record for record in response.records if id(record) not in discarded_ids]
