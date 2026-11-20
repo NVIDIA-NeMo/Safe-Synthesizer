@@ -8881,6 +8881,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#replacing-identifiers-in-tabular-data-before-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replacing Identifiers in Tabular Data Before Training
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tuning-nemo-safe-synthesizer-for-agent-conversations-part-2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8986,6 +8997,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#replacing-identifiers-in-tabular-data-before-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replacing Identifiers in Tabular Data Before Training
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tuning-nemo-safe-synthesizer-for-agent-conversations-part-2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9054,6 +9076,56 @@
       <header class="md-typeset">
         <h1 id="2026">2026<a class="headerlink" href="#2026" title="Permanent link">&para;</a></h1>
       </header>
+      
+        <article class="md-post md-post--excerpt">
+  <header class="md-post__header">
+    
+      <nav class="md-post__authors md-typeset">
+        
+          <span class="md-author">
+            <img src="https://github.com/nina-xu.png" alt="Nina Xu">
+          </span>
+        
+      </nav>
+    
+    <div class="md-post__meta md-meta">
+      <ul class="md-meta__list">
+        <li class="md-meta__item">
+          <time datetime="2026-11-20 00:00:00+00:00">November 20, 2026</time></li>
+        
+        
+          
+          <li class="md-meta__item">
+            
+              5 min read
+            
+          </li>
+        
+        
+      </ul>
+      
+    </div>
+  </header>
+  <div class="md-post__content md-typeset">
+    <h2 id="replacing-identifiers-in-tabular-data-before-training"><a class="toclink" href="../../replacing-identifiers-in-tabular-data-before-training/">Replacing Identifiers in Tabular Data Before Training</a></h2>
+<p>By default, NeMo Safe Synthesizer replaces personally identifiable information (PII) in the training data before fine-tuning. We just released version 0.2.0, with a brand-new implementation of the PII replacement step that is designed for tabular data. It improves the user experience and quality of PII replacement in three major ways:</p>
+<ol>
+<li>Simpler configuration. An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.</li>
+<li>Consistent content across a row or group, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, for example a column of medical record numbers keeps its prefix and length.</li>
+<li>Better detection accuracy. Detection covers fewer entity types, which reduces the total number of false positives. We also made several improvements to accuracy on the types it still covers.</li>
+</ol>
+<p>Treat PII replacement as a pre-processing step, not a standalone anonymizer. Replacement targets direct identifiers, such as names, street addresses, and ID numbers, so the model does not replay those values. Attributes such as gender stay unchanged. The synthesis step protects them, because it generates new records, so they do not need to be transformed here. For a standalone anonymizer, see <a href="https://github.com/NVIDIA-NeMo/Anonymizer">NeMo Anonymizer</a>.</p>
+
+    
+      <nav class="md-post__action">
+        <a href="../../replacing-identifiers-in-tabular-data-before-training/">
+          Continue reading
+        </a>
+      </nav>
+    
+    
+  </div>
+</article>
       
         <article class="md-post md-post--excerpt">
   <header class="md-post__header">
