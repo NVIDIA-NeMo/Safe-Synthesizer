@@ -120,9 +120,7 @@ Environment:
                           environment is created. Takes precedence over
                           UV_PROJECT_ENVIRONMENT and VIRTUAL_ENV.
   UV_PROJECT_ENVIRONMENT=<path>
-                          Virtual environment to create or reuse, or an
-                          existing Python prefix such as a notebook kernel's
-                          sys.prefix.
+                          Virtual environment to create or reuse.
   VIRTUAL_ENV=<path>      Active virtual environment. Used when
                           UV_PROJECT_ENVIRONMENT is unset.
 EOF
@@ -218,8 +216,6 @@ resolve_venv_path() {
 }
 
 resolve_target_python() {
-    local name
-
     if [[ -n "$NSS_PYTHON" ]]; then
         [[ -f "$NSS_PYTHON" && -x "$NSS_PYTHON" ]] || die "NSS_PYTHON is not an executable file: '$NSS_PYTHON'"
         TARGET_PYTHON="$NSS_PYTHON"
@@ -227,22 +223,16 @@ resolve_target_python() {
     fi
 
     VENV_PATH="$(resolve_venv_path)"
-    # A system Python prefix, such as /usr for a Colab kernel, often has python3 but no python.
-    for name in python python3; do
-        if [[ -x "$VENV_PATH/bin/$name" ]]; then
-            TARGET_PYTHON="$VENV_PATH/bin/$name"
-            return
-        fi
-    done
     TARGET_PYTHON="$VENV_PATH/bin/python"
 }
 
 build_venv_command() {
     VENV_CMD=()
     if [[ ! -x "$TARGET_PYTHON" ]]; then
+        # A system Python prefix such as /usr has files but no bin/python on many distributions.
         # Creating a virtual environment over existing files fails, or with UV_VENV_CLEAR=1 deletes them.
         if [[ -e "$VENV_PATH" && ( ! -d "$VENV_PATH" || -n "$(ls -A "$VENV_PATH")" ) ]]; then
-            die "'$VENV_PATH' exists but has no bin/python or bin/python3, so it is not a Python environment to install into." \
+            die "'$VENV_PATH' exists but has no bin/python, so it is not a virtual environment to reuse." \
                 "To install into a specific interpreter, such as a notebook kernel, set NSS_PYTHON to it."
         fi
         VENV_CMD=("${UV_CMD[@]}" venv --seed)
