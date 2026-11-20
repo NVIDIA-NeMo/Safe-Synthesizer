@@ -12,7 +12,7 @@ authors:
 By default, NeMo Safe Synthesizer replaces personally identifiable information (PII) in the training data before fine-tuning. We just released version 0.2.0, with a brand-new implementation of the PII replacement step that is designed for tabular data. It improves the user experience and quality of PII replacement in three major ways:
 
 1. Simpler configuration. An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.
-2. Consistent content across a row or group, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, so medical record numbers keep their prefix and length.
+2. Consistent content across a row or group, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, for example a column of medical record numbers keeps its prefix and length.
 3. Better detection accuracy. Detection covers fewer entity types, which cuts false positives, and it is more accurate on the types it still covers.
 
 Treat PII replacement as a pre-processing step, not a standalone anonymizer. Replacement targets direct identifiers, such as names, street addresses, and ID numbers, so the model does not replay those values. Attributes such as gender stay unchanged. The synthesis step protects them, because it generates new records, so they do not need to be transformed here. For a standalone anonymizer, see [NeMo Anonymizer](https://github.com/NVIDIA-NeMo/Anonymizer).
@@ -64,7 +64,7 @@ Here's one admission record from the simulated hospital admissions table in the 
 | `discharge_summary` | Patient <span class="pii-mark pii-first-b">Quyen</span> <span class="pii-mark pii-mid-b">Roxas</span> <span class="pii-mark pii-last-b">Truong</span> (DOB <span class="pii-mark pii-dob-b">1978-02-16</span>, <span class="pii-mark pii-mrn-b">MRN-29FD1584F9</span>) arrived at the emergency department on 2024-03-06T15:00:00 and was admitted as an inpatient the same day. | Patient <span class="pii-mark pii-first-a">Phi</span> <span class="pii-mark pii-last-a">Tran</span> (DOB <span class="pii-mark pii-dob-a">1978-03-28</span>, <span class="pii-mark pii-mrn-a">MRN-2ET7CSBZD0</span>) arrived at the emergency department on 2024-03-06T15:00:00 and was admitted as an inpatient the same day. |
 
 ### 1. Consistent Replacement
-Each occurrence of the same entity within the record is replaced with the same new value, and each occurrence is highlighted with the same color above. For example, the new email is built from Phi Tran and keeps the original `gmail.com` domain. The patient name in `discharge_summary` also changes to Phi Tran. The rest of the discharge note is unchanged, which could include test results, prescriptions, and readmission plans. If grouping is set in the configuration, such as by account ID across multiple transactions, every row in that group shares the same replacements.
+Each occurrence of the same entity within the record is replaced with the same new value, and each occurrence is highlighted with the same color above. For example, the new email is built from Phi Tran and keeps the original `gmail.com` domain. The patient name in `discharge_summary` also changes to Phi Tran. The rest of the discharge note is unchanged, which could include test results, prescriptions, and readmission plans. If grouping is set in the configuration, such as by account ID across multiple transactions, consistent replacements occur at the group level.
 
 ### 2. The New Names Match Gender and Ethnicity
 
@@ -93,7 +93,7 @@ This row is female and southeast Asian, so the new name (Phi Tran) matches both 
 
 ### 3. Formats Stay Consistent Down a Column
 
-Across all 9,498 rows, every MRN keeps the `MRN-` prefix and the same length, every date of birth moves by 30 days on average, every email keeps the original domain and contains part of the new name, and phones keep the `###-###-####` layout and their area code when the source number uses that layout.
+Across all 9,498 rows, every MRN keeps the `MRN-` prefix and the same length, dates of birth move by shifts drawn with a 30-day standard deviation, every email keeps the original domain and contains part of the new name, and phones keep the `###-###-####` layout and their area code when the source number uses that layout.
 
 ## Improved Detection Accuracy
 
