@@ -9,20 +9,19 @@ authors:
 
 # Replacing Identifiers in Tabular Data Before Training
 
-NeMo Safe Synthesizer replaces personally identifiable information (PII) in the training data it fine-tunes on by default. We just released version 0.2.0, with a brand-new implementation of the PII replacement step that is designed for tabular data. It improves the user experience and quality of PII replacement in three major ways:
+By default, NeMo Safe Synthesizer replaces personally identifiable information (PII) in the training data before fine-tuning. We just released version 0.2.0, with a brand-new implementation of the PII replacement step that is designed for tabular data. It improves the user experience and quality of PII replacement in three major ways:
 
 1. Simpler configuration. An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.
-2. Consistent content across a row, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, so medical record numbers keep their prefix and length.
+2. Consistent content across a row or group, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, so medical record numbers keep their prefix and length.
 3. Better detection accuracy. Detection covers fewer entity types, which cuts false positives, and it is more accurate on the types it still covers.
 
 Treat PII replacement as a pre-processing step, not a standalone anonymizer. Replacement targets direct identifiers, such as names, street addresses, and ID numbers, so the model does not replay those values. Attributes such as gender stay unchanged. The synthesis step protects them, because it generates new records, so they do not need to be transformed here. For a standalone anonymizer, see [NeMo Anonymizer](https://github.com/NVIDIA-NeMo/Anonymizer).
 
-The row below comes from the simulated hospital admissions table in the [tutorial](../../tutorials/pii-replacement-review.ipynb).
-
 <!-- more -->
 
-## Example
-Here's an example of one admission record, before and after PII replacement. Each color is one entity. The lighter shade is the original value, and the darker shade is the replacement.
+## Context-Preserving Replacements
+
+Here's one admission record from the simulated hospital admissions table in the [tutorial](../../tutorials/pii-replacement-review.ipynb), before and after PII replacement. Each color is one entity. The lighter shade is the original value, and the darker shade is the replacement.
 
 <style>
 .pii-mark { border-radius: 0.2em; padding: 0 0.15em; color: #111; }
@@ -65,11 +64,11 @@ Here's an example of one admission record, before and after PII replacement. Eac
 | `discharge_summary` | Patient <span class="pii-mark pii-first-b">Quyen</span> <span class="pii-mark pii-mid-b">Roxas</span> <span class="pii-mark pii-last-b">Truong</span> (DOB <span class="pii-mark pii-dob-b">1978-02-16</span>, <span class="pii-mark pii-mrn-b">MRN-29FD1584F9</span>) arrived at the emergency department on 2024-03-06T15:00:00 and was admitted as an inpatient the same day. | Patient <span class="pii-mark pii-first-a">Phi</span> <span class="pii-mark pii-last-a">Tran</span> (DOB <span class="pii-mark pii-dob-a">1978-03-28</span>, <span class="pii-mark pii-mrn-a">MRN-2ET7CSBZD0</span>) arrived at the emergency department on 2024-03-06T15:00:00 and was admitted as an inpatient the same day. |
 
 ### 1. Consistent Replacement
-Each occurrence of the same entity within the record is replaced with the same new value, and each occurrence is highlighted with the same color above. For example, the new email is built from Phi Tran and keeps the original `gmail.com` domain. The patient name in `discharge_summary` also changes to Phi Tran. The rest of the discharge note is unchanged, which could include test results, prescriptions, and readmission plans.
+Each occurrence of the same entity within the record is replaced with the same new value, and each occurrence is highlighted with the same color above. For example, the new email is built from Phi Tran and keeps the original `gmail.com` domain. The patient name in `discharge_summary` also changes to Phi Tran. The rest of the discharge note is unchanged, which could include test results, prescriptions, and readmission plans. If grouping is set in the configuration, such as by account ID across multiple transactions, every row in that group shares the same replacements.
 
-### 2. The New Names Match Sex and Ethnicity
+### 2. The New Names Match Gender and Ethnicity
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 250" role="img" aria-label="Quyen Roxas Truong is replaced by Phi Tran. Sex Female and ethnicity Southeast Asian both point to Phi Tran." style="max-width: 640px; width: 100%; height: auto; display: block; margin: 1.25rem auto;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 250" role="img" aria-label="Quyen Roxas Truong is replaced by Phi Tran. Gender Female and ethnicity Southeast Asian both point to Phi Tran." style="max-width: 640px; width: 100%; height: auto; display: block; margin: 1.25rem auto;">
   <defs>
     <marker id="name-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 1 L 10 5 L 0 9 z" fill="#333"/>
@@ -90,15 +89,15 @@ Each occurrence of the same entity within the record is replaced with the same n
   <line x1="200" y1="198" x2="242" y2="176" stroke="#333" stroke-width="1.5" marker-end="url(#name-arrow)"/>
 </svg>
 
-This row is female and southeast Asian, so the new name (Phi Tran) matches both its sex and its ethnicity. When a dataset clearly indicates the gender or ethnicity of a name column, we can sample replacement names that match those demographics.
+This row is female and southeast Asian, so the new name (Phi Tran) matches both its gender and its ethnicity. When a dataset clearly indicates the gender or ethnicity of a name column, we can sample replacement names that match those demographics.
 
-### 3. The Same Layouts Hold Down the Column
+### 3. Formats Stay Consistent Down a Column
 
-Across all 9,498 rows, every MRN keeps the `MRN-` prefix and the same length, every date of birth moves by 146 days or less, every email keeps the original domain and contains part of the new name, and phones keep the `###-###-####` layout and their area code when the source number uses that layout.
+Across all 9,498 rows, every MRN keeps the `MRN-` prefix and the same length, every date of birth moves by 30 days on average, every email keeps the original domain and contains part of the new name, and phones keep the `###-###-####` layout and their area code when the source number uses that layout.
 
 ## Improved Detection Accuracy
 
-Detection is limited to direct identifiers and to free text that repeats them. Columns that describe a person without identifying them, along with clinical fields and ordinary dates, are left out. Detecting fewer entity types removes a large class of false positives, so that narrower scope is part of the accuracy gain. The table below shows this run after the plan was reviewed. `attending_physician` was removed from the plan on purpose, so those names stay available for analysis. Discovery can still list that column. The next note shows the edit.
+Detection is limited to direct identifiers and to free text that repeats them. Columns that describe a person without identifying them, along with clinical fields and ordinary dates, are left out. Detecting fewer entity types removes a large class of false positives, so that narrower scope is part of the accuracy gain. The table below shows this run after the plan was reviewed. `attending_physician` was removed from the plan on purpose, so those names stay available for analysis.
 
 | Replaced | Left unchanged |
 |---|---|
@@ -106,7 +105,7 @@ Detection is limited to direct identifiers and to free text that repeats them. C
 
 Leaving those columns unchanged keeps correlations the synthetic data can learn from. Replacing a city, a diagnosis, or a lab value would make those correlations unreliable. The synthetic records are generated later, after this pre-processing step and LLM fine-tuning.
 
-For the entities that detection still covers, we tuned the GLiNER2 confidence threshold for each type to favor precision over recall. We especially want to minimize false positives, because replacing a word that is not an identifier removes information the model should learn, and the new word often makes the sentence nonsensical. A missed identifier, a false negative, still gets further protection, as the later fine-tuning and generation steps produce fresh records. Regex checks on values with a fixed format, such as emails, payment card numbers, and IP addresses, remove more false positives. Compared with the previous version, the new version achieves a 37% increase in precision and a 9% increase in recall.
+For the entities that detection still covers, we tuned the GLiNER2 confidence threshold for each type to favor precision over recall. We especially want to minimize false positives, because replacing a word that is not an identifier removes information the model should learn, and the new word often makes the sentence nonsensical. A missed identifier, a false negative, still gets further protection, as the later fine-tuning and generation steps produce fresh records. Regex checks on values with a fixed format, such as emails, payment card numbers, and IP addresses, remove more false positives. Compared with the previous version, the new version achieves a 37 percentage point increase in precision and a 9 percentage point increase in recall.
 
 ## Where Replacement Sits
 
@@ -126,7 +125,7 @@ flowchart LR
     generate --> evaluate["<b>Evaluate</b>"]
 ```
 
-Planning runs in a local vLLM server on the machine's GPU. vLLM is a library for serving language models, so the column samples used for planning stay there. The local model needs a GPU with about 80 GB of memory and downloads about 66 GB the first time. A hosted endpoint is optional, and it does send those column samples to the service.
+Planning runs in a local vLLM server on the machine's GPU. Because the server runs locally, the column samples used for planning never leave the machine. The local model needs a GPU with about 80 GB of memory and downloads about 66 GB the first time. A hosted endpoint is optional, and it does send those column samples to the service.
 
 Structured columns follow the plan. In free-text columns, such as notes, GLiNER2 finds PII spans, and regex checks catch email addresses, payment card numbers, and IP addresses. Names and street addresses come from Nemotron-Personas. Faker fills in the rest and is also the fallback when the Nemotron-Personas data for the locale is not installed.
 
