@@ -6,7 +6,7 @@
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -23,7 +23,27 @@ from nemo_safe_synthesizer.config.replace_pii import (
 from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer, TransformResult
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event
+from nemo_safe_synthesizer.telemetry import NSSTrainingAndGenerationEvent, RunStageEnum, TaskStatusEnum
+
+
+@pytest.fixture(autouse=True)
+def fixture_no_telemetry_network(monkeypatch: pytest.MonkeyPatch) -> list[NSSTrainingAndGenerationEvent]:
+    """Capture telemetry events instead of sending them; tests read the returned list."""
+    events: list[NSSTrainingAndGenerationEvent] = []
+
+    class _CapturingTelemetryHandler:
+        def __init__(self, source_client_version: str) -> None:
+            pass
+
+        def enqueue(self, event: NSSTrainingAndGenerationEvent) -> None:
+            events.append(event)
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", _CapturingTelemetryHandler)
+    return events
 
 
 def test_importing_safe_synthesizer_does_not_load_model_stack() -> None:
@@ -301,3 +321,194 @@ def test_replace_pii_writes_parquet_output_with_its_column_types(tmp_path: Path)
     assert written["zip"].tolist() == ["02054", "10001"]
     assert str(written["visits"].dtype) == "Int64"
     assert not set(written["email"]) & {"ada@example.com", "grace@example.com"}
+
+
+def test_replace_pii_emits_completed_telemetry_with_sampler_backend(
+    tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
+) -> None:
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    replace_pii = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=replace_pii, emit_telemetry=True),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(dataframe)
+
+    nss.replace_pii()
+
+    assert len(fixture_no_telemetry_network) == 1
+    event = fixture_no_telemetry_network[0]
+    assert event.task == "replace_pii"
+    assert event.task_status == TaskStatusEnum.COMPLETED
+    assert event.replace_pii_enabled is True
+    assert event.pii_sampler_backend == "faker"
+    assert event.pii_plan_source == "provided"
+    assert event.pii_replaced_columns_bucket == "1-5"
+    assert event.pii_locale == "en_US"
+    assert event.failed_stage == "none"
+    assert event.job_duration_sec >= 0.0
+
+
+def test_replace_pii_emits_error_telemetry_when_pii_is_disabled(
+    tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
+) -> None:
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=None, emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["a@example.com"]}))
+
+    with pytest.raises(ParameterError, match="PII replacement is disabled"):
+        nss.replace_pii()
+
+    assert [(e.task, e.task_status, e.pii_sampler_backend, e.failed_stage) for e in fixture_no_telemetry_network] == [
+        ("replace_pii", TaskStatusEnum.ERROR, "undefined", "pii_planning")
+    ]
+
+
+def test_replace_pii_reports_the_replacement_stage_when_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent],
+) -> None:
+    replace_pii = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=replace_pii, emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+
+    def failing_replace(self, dataframe, **kwargs):
+        raise RuntimeError("replacement failed")
+
+    monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer.replace", failing_replace)
+
+    with pytest.raises(RuntimeError, match="replacement failed"):
+        nss.replace_pii()
+
+    assert [(e.task_status, e.failed_stage) for e in fixture_no_telemetry_network] == [
+        (TaskStatusEnum.ERROR, "pii_replacement")
+    ]
+
+
+def test_plan_pii_replacement_does_not_emit_telemetry(
+    tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
+) -> None:
+    inline_plan = PiiReplacementPlan(
+        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(
+            replace_pii=ReplacePiiConfig(replacement_plan=inline_plan),
+            emit_telemetry=True,
+        ),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["a@example.com", "b@example.com"]}))
+
+    nss.plan_pii_replacement()
+
+    assert fixture_no_telemetry_network == []
+
+
+def test_plan_pii_replacement_keeps_auto_discovery_plan_source_after_resolution(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    discovered = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(), emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(dataframe)
+
+    with patch(
+        "nemo_safe_synthesizer.pii_replacer.planning.resolve_replacement_config",
+        return_value=discovered,
+    ):
+        nss.plan_pii_replacement()
+
+    assert nss._nss_config is not None
+    assert nss._nss_config.replace_pii is not None
+    assert not nss._nss_config.replace_pii.is_auto_discovery
+    event = _build_telemetry_event(nss, TaskStatusEnum.COMPLETED)
+    assert event.pii_plan_source == "auto_discovery"
+    assert event.pii_replaced_columns_bucket == "1-5"
+
+
+def test_process_data_keeps_the_plan_source_when_data_is_already_processed(tmp_path: Path) -> None:
+    # run() calls process_data() again after a caller already did; the planning that ran the first time still counts.
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(), emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+    nss._pii_plan_source = "auto_discovery"
+    nss._data_processed = True
+
+    nss.process_data()
+
+    assert nss._pii_plan_source == "auto_discovery"
+
+
+def test_replace_pii_does_not_report_results_from_an_earlier_run(
+    tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
+) -> None:
+    replace_pii = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=replace_pii, emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]}))
+    nss.results = MagicMock()
+    nss.results.summary.num_valid_records = 100
+    nss.results.summary.synthetic_data_quality_score = 8.5
+    nss.results.summary.data_privacy_score = 9.0
+
+    nss.replace_pii()
+
+    assert [
+        (e.num_records_generated, e.synthetic_quality_score, e.data_privacy_score) for e in fixture_no_telemetry_network
+    ] == [(-1, -1.0, -1.0)]
+
+
+def test_plan_pii_replacement_reports_planning_when_the_frame_is_already_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # process_data() calls plan_pii_replacement() after loading the frame, so a failure there is a planning failure.
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()),
+        save_path=tmp_path,
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com"]}))
+
+    def failing_resolve(self):
+        raise ParameterError("bad planning settings")
+
+    monkeypatch.setattr(SafeSynthesizer, "resolve", failing_resolve)
+
+    with pytest.raises(ParameterError, match="bad planning settings"):
+        nss.plan_pii_replacement()
+
+    assert nss._stage == RunStageEnum.PII_PLANNING
+
+
+def test_plan_pii_replacement_reports_data_loading_when_the_source_is_not_loaded(tmp_path: Path) -> None:
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()),
+        save_path=tmp_path,
+    ).with_data_source(str(tmp_path / "missing.csv"))
+
+    with pytest.raises(FileNotFoundError):
+        nss.plan_pii_replacement()
+
+    assert nss._stage == RunStageEnum.DATA_LOADING

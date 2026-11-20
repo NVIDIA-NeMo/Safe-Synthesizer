@@ -28,12 +28,14 @@ from ..package_info import __version__
 from ..telemetry import (
     DeploymentTypeEnum,
     NSSTrainingAndGenerationEvent,
+    RunStageEnum,
     TaskStatusEnum,
     TelemetryHandler,
     _deployment_type,
     _telemetry_enabled,
     bucket_columns,
     bucket_records,
+    sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
 )
 from .config_builder import ConfigBuilder
@@ -82,7 +84,44 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
         )
 
 
-def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+def _pii_plan_source(config: ReplacePiiConfig) -> str:
+    """Return whether the PII replacement plan is auto-discovered or user-supplied.
+
+    Call this before planning: resolution replaces ``"auto_discovery"`` with the
+    discovered plan. A plan file is loaded into an inline plan when the config is
+    validated, so files and inline plans are both ``"provided"``.
+    """
+    return "auto_discovery" if config.is_auto_discovery else "provided"
+
+
+def _pii_planning_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
+    """Return the telemetry ``(mode, model)`` labels for LLM-assisted PII planning.
+
+    Resolves where planning runs the same way plan discovery does, without
+    launching a server. The model goes through the same
+    ``sanitize_model_for_telemetry`` check as ``training.pretrained_model``, so
+    local model paths are reported as ``"local_path"``, and a repo ID the
+    telemetry schema does not accept is reported as ``"other"``. A local server reports
+    its profile's ``model_id`` rather than its served name, which can be any label.
+    """
+    if plan_source != "auto_discovery":
+        return "none", "undefined"
+
+    from ..pii_replacer.local_inference import LocalServerRequest, resolve_planning_inference
+
+    try:
+        inference = resolve_planning_inference(config.llm)
+    except ValueError:
+        # ParameterError is a ValueError; a malformed endpoint URL raises a plain ValueError from urlparse.
+        return "invalid", "undefined"
+    if isinstance(inference, LocalServerRequest):
+        return "local", sanitize_model_for_telemetry(inference.profile.model_id)
+    return "endpoint", sanitize_model_for_telemetry(inference.model_id)
+
+
+def _build_telemetry_event(
+    ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
+) -> NSSTrainingAndGenerationEvent:
     """Build a telemetry event from the current pipeline state."""
     cfg = ss._nss_config
 
@@ -91,7 +130,8 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     num_records = -1
     sqs = -1.0
     dps = -1.0
-    if hasattr(ss, "results") and ss.results is not None:
+    # Only run() sets results, so a replace_pii() event must not report results left by an earlier run().
+    if task != "replace_pii" and hasattr(ss, "results") and ss.results is not None:
         summary = ss.results.summary
         if summary.num_valid_records is not None:
             num_records = summary.num_valid_records
@@ -100,7 +140,24 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
         if summary.data_privacy_score is not None:
             dps = summary.data_privacy_score
 
-    replace_pii = cfg is not None and cfg.replace_pii is not None
+    replace_pii_config = cfg.replace_pii if cfg is not None else None
+    replace_pii = replace_pii_config is not None
+    pii_sampler_backend = "undefined"
+    pii_plan_source = "undefined"
+    pii_columns_bucket = "undefined"
+    pii_locale = "undefined"
+    pii_planning_llm_mode = "undefined"
+    pii_planning_llm_model = "undefined"
+    if replace_pii_config is not None:
+        pii_sampler_backend = replace_pii_config.sampler.backend.value
+        if replace_pii_config.inline_plan is not None:
+            pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
+        pii_locale = sanitize_locale_for_telemetry(replace_pii_config.locale)
+        # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
+        # A config loaded from a save path was already resolved by an earlier run, so its source is unknown.
+        if ss._pii_plan_source is not None or not ss._loaded_from_save_path:
+            pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
+            pii_planning_llm_mode, pii_planning_llm_model = _pii_planning_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -112,15 +169,27 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
         records_bucket = bucket_records(len(ss._data_source))
         columns_bucket = bucket_columns(len(ss._data_source.columns))
 
+    if status == TaskStatusEnum.COMPLETED:
+        failed_stage = "none"
+    else:
+        failed_stage = ss._stage.value if ss._stage is not None else "undefined"
+
     gpu = get_device_name()
 
     return NSSTrainingAndGenerationEvent(
-        task="run",
+        task=task,
         task_status=status,
+        failed_stage=failed_stage,
         deployment_type=ss._deployment_type,
         job_duration_sec=duration,
         num_records_generated=num_records,
         replace_pii_enabled=replace_pii,
+        pii_sampler_backend=pii_sampler_backend,
+        pii_plan_source=pii_plan_source,
+        pii_replaced_columns_bucket=pii_columns_bucket,
+        pii_locale=pii_locale,
+        pii_planning_llm_mode=pii_planning_llm_mode,
+        pii_planning_llm_model=pii_planning_llm_model,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,
@@ -133,12 +202,12 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     )
 
 
-def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
+def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run") -> None:
     """Enqueue and immediately flush a single telemetry event. Never raises."""
     try:
         if not ss._emit_telemetry:
             return
-        event = _build_telemetry_event(ss, status)
+        event = _build_telemetry_event(ss, status, task)
         handler = TelemetryHandler(source_client_version=__version__)
         handler.enqueue(event)
         handler.stop()  # Flushes the queue and sends
@@ -269,6 +338,9 @@ class SafeSynthesizer(ConfigBuilder):
         self._pii_replacer_time: float | None = None
         # Why PII replay could not run, shown in the evaluation report; None when it ran or was turned off.
         self._pii_replay_skipped_reason: str | None = None
+        self._pii_plan_source: str | None = None
+        # The stage in progress, reported as failedStage when a run errors or is canceled.
+        self._stage: RunStageEnum | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
@@ -327,6 +399,7 @@ class SafeSynthesizer(ConfigBuilder):
         """
         from ..llm.metadata import ModelMetadata
 
+        self._stage = RunStageEnum.DATA_LOADING
         self._ensure_observability()
         assert self._workdir is not None
         # Use source paths which point to parent workdir when resuming for generation
@@ -425,8 +498,14 @@ class SafeSynthesizer(ConfigBuilder):
                 f"output_path cannot be named {PII_REPLACEMENT_PLAN_FILENAME}; NSS writes the replacement plan to that "
                 "file next to the configuration"
             )
+        # process_data() calls this after the frame is loaded; only a standalone call still has data to load.
+        if isinstance(self._data_source, pd.DataFrame):
+            self._stage = RunStageEnum.PII_PLANNING
+        else:
+            self._stage = RunStageEnum.DATA_LOADING
         self._ensure_observability()
         self.resolve()
+        self._stage = RunStageEnum.PII_PLANNING
 
         config = self._nss_config
         dataframe = self._data_source
@@ -435,6 +514,7 @@ class SafeSynthesizer(ConfigBuilder):
         replace_pii = config.replace_pii
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
+        self._pii_plan_source = _pii_plan_source(replace_pii)
 
         from ..pii_replacer.planning import resolve_replacement_config
 
@@ -468,6 +548,9 @@ class SafeSynthesizer(ConfigBuilder):
         the full input and replaces that same dataframe. The end-to-end
         pipeline instead resolves against the full input and replaces only its
         training split after holdout creation.
+
+        When telemetry is enabled, emits one anonymous event with task
+        ``replace_pii`` and the final status, including on failure.
 
         Args:
             output_path: Optional destination for the replaced data, written as
@@ -516,6 +599,26 @@ class SafeSynthesizer(ConfigBuilder):
             result.resolved_config  # The plan and sampler mappings written to the YAML file.
         """
         self._ensure_observability()
+        self._total_start = time.monotonic()
+        self._pii_plan_source = None
+        self._stage = None
+        try:
+            result = self._replace_full_input_pii(output_path, config_output_path, source_text)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED, task="replace_pii")
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(self, TaskStatusEnum.CANCELED, task="replace_pii")
+            raise
+        except Exception:
+            _emit_nss_telemetry(self, TaskStatusEnum.ERROR, task="replace_pii")
+            raise
+        return result
+
+    def _replace_full_input_pii(
+        self,
+        output_path: Path | str | None,
+        config_output_path: Path | str | None,
+        source_text: pd.DataFrame | None,
+    ) -> TransformResult:
         resolved = self.plan_pii_replacement(output_path=config_output_path)
 
         config = self._nss_config
@@ -526,6 +629,7 @@ class SafeSynthesizer(ConfigBuilder):
             raise ParameterError("source_text must have the same columns and row count as the data source")
         from ..pii_replacer import TabularPiiReplacer
 
+        self._stage = RunStageEnum.PII_REPLACEMENT
         result = TabularPiiReplacer(
             resolved,
             data_config=config.data,
@@ -536,6 +640,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._column_statistics = result.column_statistics
         self._pii_replacer_time = result.replacement_time_seconds
 
+        self._stage = RunStageEnum.SAVING
         if output_path is not None and Path(output_path).suffix.lower() == ".parquet":
             # Parquet stores column types, so the replaced frame is written as is.
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -622,6 +727,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..preflight import PreflightStage, run_preflight
 
         self._total_start = time.monotonic()
+        self._stage = RunStageEnum.DATA_LOADING
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
 
@@ -629,7 +735,10 @@ class SafeSynthesizer(ConfigBuilder):
 
         if self._loaded_from_save_path or getattr(self, "_data_processed", False):
             # Resume path or already-processed data in this builder instance; nothing to do.
+            # The plan source recorded when the data was processed still describes this config.
             return self
+
+        self._pii_plan_source = None
 
         self._resolve_nss_config()
         self._resolve_datasource()
@@ -645,6 +754,7 @@ class SafeSynthesizer(ConfigBuilder):
         # settings produce structured preflight issues instead of downstream
         # pandas/sklearn errors. The later full preflight run still uses the
         # final training split and real metadata for split-dependent checks.
+        self._stage = RunStageEnum.PREFLIGHT
         preflight = run_preflight(
             self._data_source,
             self._nss_config,
@@ -662,6 +772,7 @@ class SafeSynthesizer(ConfigBuilder):
             workdir.ensure_directories()
             self.plan_pii_replacement(output_path=workdir.run_dir / RESOLVED_CONFIG_FILENAME)
 
+        self._stage = RunStageEnum.DATA_PROCESSING
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
@@ -679,6 +790,7 @@ class SafeSynthesizer(ConfigBuilder):
         if not check_only and self._nss_config.replace_pii is not None:
             from ..pii_replacer import TabularPiiReplacer
 
+            self._stage = RunStageEnum.PII_REPLACEMENT
             # Pattern coverage was checked against the full input during planning; the training split is a
             # subset and can fall just below the 99% threshold.
             replacement_result = TabularPiiReplacer(
@@ -699,7 +811,11 @@ class SafeSynthesizer(ConfigBuilder):
                 workdir.run_dir / RESOLVED_CONFIG_FILENAME,
                 plan_path=workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
             )
+            self._stage = RunStageEnum.DATA_PROCESSING
 
+        # The training model's metadata is loaded for preflight's token budget checks, so a missing or
+        # unloadable model is reported as a preflight failure.
+        self._stage = RunStageEnum.PREFLIGHT
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
         if metadata_for_preflight is None:
@@ -749,6 +865,7 @@ class SafeSynthesizer(ConfigBuilder):
             return self
 
         self._data_processed = True
+        self._stage = RunStageEnum.DATA_PROCESSING
 
         # Always persist the original training split -- this is the version
         # reloaded by load_from_save_path and used for evaluation metrics.
@@ -796,6 +913,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert self._llm_metadata is not None
 
+        self._stage = RunStageEnum.TRAINING
         if self._total_start is None:
             self._total_start = time.monotonic()
         if not os.environ.get("NSS_PHASE"):
@@ -833,6 +951,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..generation.timeseries_backend import TimeseriesBackend
         from ..generation.vllm_backend import VllmBackend
 
+        self._stage = RunStageEnum.GENERATION
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "generate"
         if TYPE_CHECKING:
@@ -875,6 +994,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..evaluation.evaluator import Evaluator
         from ..results import make_nss_results
 
+        self._stage = RunStageEnum.EVALUATION
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "evaluate"
         if TYPE_CHECKING:
@@ -984,6 +1104,7 @@ class SafeSynthesizer(ConfigBuilder):
             output_file: Explicit output path for the CSV.  Falls back
                 to ``workdir.output_file`` when ``None``.
         """
+        self._stage = RunStageEnum.SAVING
         if TYPE_CHECKING:
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
