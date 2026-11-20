@@ -86,7 +86,7 @@ readlink -f .venv/bin/python
 ```
 
 The Python path must resolve beneath the canonical path reported by
-`readlink -f "${LUSTRE_DIR}"`. `cu129` and `cuda` select the same CUDA 12.9
+`readlink -f "${LUSTRE_DIR}"`. `cuda` is an alias for `cu129`, the CUDA 12.9
 dependency profile.
 
 Repo mode, the default when `--nss-version` is omitted, does not require a

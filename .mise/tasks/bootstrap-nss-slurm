@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #MISE description="Install project dependencies with Python, caches, and the virtualenv on Lustre for Slurm containers."
 #USAGE arg "<extra>" help="Python dependency profile" {
-#USAGE   choices "dev" "engine" "cpu" "cu129"
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129"
 #USAGE }
 
 set -euo pipefail
@@ -80,8 +80,13 @@ fi
 
 "${uv_bin}" venv --seed --allow-existing --python "${python_bin}" "${venv_path}"
 
-echo "[slurm-bootstrap] syncing NSS dependencies with profile ${usage_extra?}"
-UV_PYTHON="${python_bin}" mise run deps:sync "${usage_extra?}"
+# `cuda` is the older name of the CUDA 12.9 profile.
+profile="${usage_extra?}"
+[[ "${profile}" == "cuda" ]] && profile="cu129"
+readonly profile
+
+echo "[slurm-bootstrap] syncing NSS dependencies with profile ${profile}"
+UV_PYTHON="${python_bin}" mise run deps:sync "${profile}"
 
 venv_python="$(readlink -f "${venv_path}/bin/python")"
 readonly venv_python
