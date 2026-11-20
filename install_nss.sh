@@ -13,6 +13,7 @@ readonly DRY_RUN="${DRY_RUN:-0}"
 readonly NSS_INSTALLER_RESOLVE_FIND_LINKS="${NSS_INSTALLER_RESOLVE_FIND_LINKS:-0}"
 readonly NSS_INSTALLER_RESOLVE_ONLY="${NSS_INSTALLER_RESOLVE_ONLY:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
+readonly NSS_PYTHON="${NSS_PYTHON:-}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly PYPI_INDEX_URL="https://pypi.org/simple"
 # The PRIVATE_ prefix indicates an env var that users should not set and may
@@ -114,6 +115,10 @@ Environment:
   NSS_INSTALLER_ISOLATED=1
                           Disable discovery of persistent uv configuration and
                           tool.uv.sources, and use PyPI as the default index.
+  NSS_PYTHON=<path>       Existing Python interpreter to install into, such as a
+                          notebook kernel's sys.executable. No virtual
+                          environment is created. Takes precedence over
+                          UV_PROJECT_ENVIRONMENT and VIRTUAL_ENV.
   UV_PROJECT_ENVIRONMENT=<path>
                           Virtual environment to create or reuse, or an
                           existing Python prefix such as a notebook kernel's
@@ -215,6 +220,13 @@ resolve_venv_path() {
 resolve_target_python() {
     local name
 
+    if [[ -n "$NSS_PYTHON" ]]; then
+        [[ -f "$NSS_PYTHON" && -x "$NSS_PYTHON" ]] || die "NSS_PYTHON is not an executable file: '$NSS_PYTHON'"
+        TARGET_PYTHON="$NSS_PYTHON"
+        return
+    fi
+
+    VENV_PATH="$(resolve_venv_path)"
     # A system Python prefix, such as /usr for a Colab kernel, often has python3 but no python.
     for name in python python3; do
         if [[ -x "$VENV_PATH/bin/$name" ]]; then
@@ -230,7 +242,8 @@ build_venv_command() {
     if [[ ! -x "$TARGET_PYTHON" ]]; then
         # Creating a virtual environment over existing files fails, or with UV_VENV_CLEAR=1 deletes them.
         if [[ -e "$VENV_PATH" && ( ! -d "$VENV_PATH" || -n "$(ls -A "$VENV_PATH")" ) ]]; then
-            die "'$VENV_PATH' exists but has no bin/python or bin/python3, so it is not a Python environment to install into."
+            die "'$VENV_PATH' exists but has no bin/python or bin/python3, so it is not a Python environment to install into." \
+                "To install into a specific interpreter, such as a notebook kernel, set NSS_PYTHON to it."
         fi
         VENV_CMD=("${UV_CMD[@]}" venv --seed)
         if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then
@@ -327,7 +340,6 @@ main() {
         # https://docs.astral.sh/uv/concepts/configuration-files/
         UV_CMD+=(--no-config)
     fi
-    VENV_PATH="$(resolve_venv_path)"
     resolve_target_python
     build_venv_command
     if [[ "$extra" == "cu130" && "$DRY_RUN" != "1" ]]; then

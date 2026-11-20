@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
+# Installer settings inherited from the caller's shell would change which environment the tests target.
+unset NSS_PYTHON UV_PROJECT_ENVIRONMENT VIRTUAL_ENV
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT INSTALLER="${REPO_ROOT}/install_nss.sh"
@@ -166,6 +168,25 @@ assert_eq "$(uv_call_count)" 1
 read_call argv
 system_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$system_prefix/bin/python3" --overrides - "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${system_expected[@]}")"
+
+# NSS_PYTHON names the interpreter to install into, such as a notebook kernel's sys.executable.
+# It creates no venv and wins over UV_PROJECT_ENVIRONMENT.
+new_log nss-python
+kernel_python="${test_dir}/kernel prefix/bin/python3.12"; mkdir -p "${kernel_python%/*}"
+printf '#!/usr/bin/env bash\n' > "$kernel_python"; chmod +x "$kernel_python"
+PATH="${fake_bin}:$PATH" CUDA=cpu NSS_PYTHON="$kernel_python" UV_PROJECT_ENVIRONMENT="${test_dir}/unused env" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
+assert_eq "$(uv_call_count)" 1
+read_call argv
+nss_python_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$kernel_python" --overrides - "${cpu_find_links[@]}")
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${nss_python_expected[@]}")"
+assert_file_absent "${test_dir}/unused env"
+
+# NSS_PYTHON must name an executable file; anything else stops before uv runs.
+for bad in "${test_dir}/no such python" "${test_dir}/kernel prefix/bin"; do
+    new_log nss-python-bad
+    if PATH="${fake_bin}:$PATH" CUDA=cpu NSS_PYTHON="$bad" "$INSTALLER" >/dev/null 2>&1; then exit 1; fi
+    assert_eq "$(uv_call_count)" 0
+done
 
 # A non-empty directory with no Python is never turned into a venv; an empty one is.
 new_log not-python
