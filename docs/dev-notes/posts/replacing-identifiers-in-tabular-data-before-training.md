@@ -13,7 +13,7 @@ By default, NeMo Safe Synthesizer replaces personally identifiable information (
 
 1. Simpler configuration. An auto-discovered replacement plan is the default. The next note shows how to read and edit that plan.
 2. Consistent content across a row or group, and consistent formatting down a column. A new email follows the replacement name it is built from, and a name repeated in that row's notes matches the name column. Down a column, values that share a format keep it, for example a column of medical record numbers keeps its prefix and length.
-3. Better detection accuracy. Detection covers fewer entity types, which cuts false positives, and it is more accurate on the types it still covers.
+3. Better detection accuracy. Detection covers fewer entity types, which reduces the total number of false positives. We also made several improvements to accuracy on the types it still covers.
 
 Treat PII replacement as a pre-processing step, not a standalone anonymizer. Replacement targets direct identifiers, such as names, street addresses, and ID numbers, so the model does not replay those values. Attributes such as gender stay unchanged. The synthesis step protects them, because it generates new records, so they do not need to be transformed here. For a standalone anonymizer, see [NeMo Anonymizer](https://github.com/NVIDIA-NeMo/Anonymizer).
 
