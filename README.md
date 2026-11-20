@@ -52,17 +52,6 @@ CUDA=cpu ./install_nss.sh    # CPU-only development and validation
 
 CUDA 13.0 requires an NVIDIA driver version 580.65.06 or newer.
 
-To install into an existing Python interpreter instead of a new virtual
-environment, such as a Jupyter or Colab kernel, set `NSS_PYTHON` to that
-interpreter. The installer then creates no virtual environment. In a notebook
-cell, pass the kernel's own interpreter:
-
-```python
-import sys
-
-!NSS_PYTHON="{sys.executable}" bash install_nss.sh
-```
-
 To customize the package source or installation command, use `DRY_RUN=1` with the desired
 `CUDA` setting. The installer prints the complete `uv pip` command without
 running it. Copy that command, edit it, and run it manually. For example,
