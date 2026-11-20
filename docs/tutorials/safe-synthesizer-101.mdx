@@ -1,0 +1,140 @@
+---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "\ud83d\udd10 NeMo Safe Synthesizer Tutorial: The Basics"
+---
+
+{/* Generated from the adjacent notebook; regenerate with mise run docs:fern:notebooks. */}
+
+[Open the runnable notebook on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/tutorials/safe-synthesizer-101.ipynb). Download the tutorial datasets from the same directory.
+
+
+#### What you'll learn
+
+In this notebook, we'll explore the fundamentals of NeMo Safe Synthesizer: PII replacement, training on a sample dataset, generating synthetic data, and evaluating quality and privacy.
+
+This library supports numeric, categorical, and text fields within the training data and generates realistic synthetic data that mirrors the structure of your data. A full run takes about 25 minutes on an A100.
+
+### 🖥️ Prerequisites
+
+This notebook requires a Linux machine with an NVIDIA GPU (H100 recommended, A100 minimum) and CUDA 12.9+. It will not run on macOS, Windows, or Apple Silicon.
+
+### ⚡ Install Safe Synthesizer
+
+Run the cell below to install NeMo Safe Synthesizer (engine and CUDA 12.9). The cell requires [uv](https://docs.astral.sh/uv/).
+
+```python
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+import sys
+
+# The override resolves a flashinfer-python pin conflict between vLLM and NeMo Safe Synthesizer.
+!echo "flashinfer-python==0.7.0.post1" | uv pip install --python "{sys.executable}" \
+    "nemo-safe-synthesizer[engine,cu129]==0.2.0" \
+    -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v0.2.0/constraints.txt \
+    --overrides - \
+    --find-links https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/ \
+    --find-links https://flashinfer.ai/whl/flashinfer-cubin/ \
+    --find-links https://wheels.vllm.ai/0.32.0/cu129/vllm/ \
+    --find-links https://download.pytorch.org/whl/cu129/torch/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchaudio/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchvision/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchcodec/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchao/ \
+    --find-links https://download.pytorch.org/whl/cu129/triton/
+```
+
+### 🔑 Choose where PII planning runs
+
+Before training, NeMo Safe Synthesizer replaces personally identifiable information (PII), and an LLM decides which columns contain it. By default, NeMo Safe Synthesizer runs that LLM in a temporary vLLM server on this machine's GPU, so no API key is needed and the data stays on this machine. The local model needs an 80 GB GPU and downloads about 66 GB the first time it runs.
+
+To use a hosted service instead, such as the NVIDIA API at `https://integrate.api.nvidia.com/v1`, set `NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY` in the next cell. You can obtain an API key from [build.nvidia.com](https://build.nvidia.com/settings/api-keys). Column samples are then sent to that service. See [Where planning requests go](/user-guide/environment#where-planning-requests-go) for details.
+
+```python
+import os
+
+# Optional: plan with a hosted service instead of a local vLLM server.
+# import getpass
+# os.environ["NSS_INFERENCE_ENDPOINT"] = "https://integrate.api.nvidia.com/v1"
+# os.environ["NSS_INFERENCE_MODEL"] = "nvidia/nemotron-3-ultra-550b-a55b"
+# os.environ["NSS_INFERENCE_KEY"] = getpass.getpass("Paste inference API key: ")
+if os.environ.get("NSS_INFERENCE_ENDPOINT"):
+    print(f"PII planning sends requests to {os.environ['NSS_INFERENCE_ENDPOINT']}")
+else:
+    print("PII planning runs a local vLLM server on this machine's GPU")
+```
+
+### 📥 Load and preview sample dataset
+
+Load a tabular dataset—in this example, the [clinc_oos](https://huggingface.co/datasets/clinc/clinc_oos) dataset from Hugging Face—and preview the first few rows. NeMo Safe Synthesizer will use this DataFrame as its training data.
+
+This dataset includes a text column and a categorical intent label supported by Nemo Safe Synthesizer.
+
+Each user is responsible for checking the content of datasets and the applicable licenses and determining if suitable for the intended use.
+
+```python
+from datasets import load_dataset
+
+dataset = load_dataset("clinc/clinc_oos", "small")
+df = dataset["train"].to_pandas()
+df.head()
+```
+
+### ⚙️ Create and run Safe Synthesizer job
+
+Create the Safe Synthesizer builder and attach your DataFrame. Run the pipeline with `run()`, which performs data processing, PII replacement, training, generation, and evaluation in a single call. Results are available on `builder.results`.
+
+Refer to the [configuration docs](/user-guide/configuration) for the full list of options.
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+ARTIFACT_ROOT = "safe-synthesizer-artifacts/safe-synthesizer-101"
+builder = SafeSynthesizer(save_path=ARTIFACT_ROOT).with_data_source(df)  # .with_replace_pii(enable=False) to disable PII replacement
+builder.run()
+results = builder.results
+```
+
+### 📤 Retrieve synthetic data
+
+Inspect the generated synthetic data including row count and preview of the first rows.
+
+```python
+synth = results.synthetic_data
+print(f"Number of synthetic rows: {len(synth)}")
+synth.head()
+```
+
+```python
+# Synthetic data and evaluation report are automatically saved to the artifacts directory
+print(f"Artifacts automatically saved to: {builder._workdir.generate.path}")
+```
+
+### 🛡️ Review evaluation report
+
+The pipeline computes both quality and privacy metrics. The summary includes timing information and overall scores, while the full evaluation report is rendered as an HTML document.
+
+```python
+import json
+
+print("Summary (timing and scores):")
+print(json.dumps(results.summary.model_dump(), indent=2))
+```
+
+```python
+# View the evaluation report in a sandboxed iframe
+import html
+from IPython.display import display
+
+report_html = results.evaluation_report_html
+if report_html:
+    # srcdoc, not a data: URL: Chrome blanks data: URLs over 2 MB, and the base keeps the report's #section links in the frame.
+    report_doc = report_html.replace("<head>", '<head><base href="about:srcdoc">', 1)
+    frame = (
+        f'<iframe srcdoc="{html.escape(report_doc)}" sandbox="allow-scripts allow-popups" '
+        'width="100%" height="800"></iframe>'
+    )
+    # Raw display: HTML() warns about a bare <iframe>, and IFrame() cannot take srcdoc.
+    display({"text/html": frame}, raw=True)
+```

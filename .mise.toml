@@ -27,6 +27,14 @@ ty = "0.0.44"
 
 "aqua:j178/prek" = "latest"
 
+# Fern documentation tooling. Keep the CLI version aligned with
+# docs/fern/fern.config.json (verified by docs:fern:check task).
+# NOTE: fern-api is a wrapper for the fern cli and agressively auto updates,
+# so builds will use the version in fern.config.json even though fern --version
+# may report something different.
+node = "22"
+"npm:fern-api" = "5.201.0"
+
 [env]
 # Activate the project virtualenv (equivalent to the old .envrc "layout python3").
 VIRTUAL_ENV = "{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}"
