@@ -5,15 +5,25 @@
 
 set -euo pipefail
 
-# This file will be executed by submit_slurm_jobs.sh to queue the slurm job,
-# but intentionally has no logic and is just a pass through to
-# slurm_nss_matrix.sh.
+# This file will be executed by submit_slurm_jobs.sh to queue the slurm job.
+# It is mostly a pass through to slurm_nss_matrix.sh; the only logic here is the
+# first-wave start stagger below.
 
 ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 GPUS_PER_TASK="${GPUS_PER_TASK:-1}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-16}"
 SRUN_EXTRA="${SRUN_EXTRA:-}"
 export NEMO_DEPLOYMENT_TYPE="${NEMO_DEPLOYMENT_TYPE:-slurm-nvidia-internal}"
+
+# First-wave start stagger. Array tasks with index < STAGGER_WAVE_SIZE sleep
+# index * STAGGER_STEP_SECONDS so their local vLLM startups (PII planning) do not
+# all hit shared nodes at once. Set STAGGER_WAVE_SIZE=0 to disable.
+TASK_INDEX="${SLURM_ARRAY_TASK_ID:-0}"
+if (( STAGGER_WAVE_SIZE > 0 && TASK_INDEX < STAGGER_WAVE_SIZE )); then
+  stagger_delay=$(( TASK_INDEX * STAGGER_STEP_SECONDS ))
+  echo "[stagger] array task ${TASK_INDEX}: sleeping ${stagger_delay}s before start"
+  sleep "${stagger_delay}"
+fi
 
 # Pyxis gives variables baked into the container image precedence over the
 # Slurm step environment. Preserve the submitted job configuration explicitly

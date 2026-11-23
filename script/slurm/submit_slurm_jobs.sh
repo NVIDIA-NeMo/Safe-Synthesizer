@@ -305,6 +305,17 @@ fi
 
 echo "array_spec: ${array_spec}"
 
+# Start-time stagger for the first wave of array tasks. Every task with
+# SLURM_ARRAY_TASK_ID < STAGGER_WAVE_SIZE sleeps SLURM_ARRAY_TASK_ID *
+# STAGGER_STEP_SECONDS before launching its local vLLM server, so the first
+# wave does not start 30B model loads on shared nodes at the same moment. Later
+# tasks start as slots free up and are already spread out. The wave size tracks
+# the concurrency cap, and the max sleep stays under the 15-minute idle-GPU
+# exemption in IDLE_EXEMPT_COMMENT. See slurm_srun.sh.
+export STAGGER_STEP_SECONDS="${STAGGER_STEP_SECONDS:-15}"
+export STAGGER_WAVE_SIZE="${MAX_CONCURRENT_SLURM_JOBS:-0}"
+echo "stagger: step=${STAGGER_STEP_SECONDS}s wave_size=${STAGGER_WAVE_SIZE} (0 = disabled)"
+
 
 common_args=(
   --parsable
