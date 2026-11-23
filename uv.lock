@@ -3705,11 +3705,14 @@ wheels = [
 name = "nemo-safe-synthesizer"
 source = { editable = "." }
 dependencies = [
+    { name = "click", version = "8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "click", version = "8.5.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
     { name = "colorama" },
     { name = "httpx" },
     { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'linux'" },
     { name = "jsonschema" },
+    { name = "numpy" },
     { name = "pandas" },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
@@ -3902,6 +3905,7 @@ requires-dist = [
     { name = "bitsandbytes", marker = "extra == 'cu129'", specifier = ">=0.46.1" },
     { name = "bitsandbytes", marker = "extra == 'cu130'", specifier = ">=0.46.1" },
     { name = "category-encoders", marker = "extra == 'engine'" },
+    { name = "click", specifier = ">=8.1.0" },
     { name = "colorama", specifier = ">=0.4.6" },
     { name = "datasets", marker = "extra == 'engine'", specifier = ">=5.0.1" },
     { name = "dateparser", marker = "extra == 'engine'" },
@@ -3940,6 +3944,7 @@ requires-dist = [
     { name = "kernels", marker = "extra == 'cu129'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu130'", specifier = ">=0.12.1,<0.15" },
     { name = "nameparser", extras = ["ja"], marker = "extra == 'engine'", specifier = ">=2.8.0,<3" },
+    { name = "numpy", specifier = ">=1.26.0" },
     { name = "nvidia-cublas", marker = "sys_platform == 'linux' and extra == 'cu130'", index = "https://pypi.nvidia.com/" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux' and extra == 'cu129'", index = "https://download.pytorch.org/whl/cu129" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux' and extra == 'cu129'" },
