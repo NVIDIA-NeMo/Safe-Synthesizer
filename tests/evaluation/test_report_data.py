@@ -8,6 +8,7 @@ import itertools
 import json
 import subprocess
 import sys
+from decimal import Decimal
 from enum import Enum
 from typing import TypeVar
 
@@ -31,6 +32,8 @@ from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
 from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.correlation import Correlation
+from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, figure_to_json, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -142,6 +145,26 @@ def test_report_figures_are_cached_figure_objects() -> None:
     assert all(isinstance(figure, go.Figure) for figure in figures.values())
 
 
+@pytest.mark.parametrize(
+    "component",
+    [
+        pytest.param(
+            Correlation(
+                score=EvaluationScore(),
+                training_correlation=pd.DataFrame(),
+                synthetic_correlation=pd.DataFrame(),
+                correlation_difference=pd.DataFrame(),
+            ),
+            id="empty-correlation",
+        ),
+        pytest.param(MembershipInferenceProtection(score=EvaluationScore()), id="no-attack-summary"),
+        pytest.param(ColumnDistribution(score=EvaluationScore()), id="distribution-without-datasets"),
+    ],
+)
+def test_report_figures_are_empty_without_data(component: Component) -> None:
+    assert component.report_figures == {}
+
+
 def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
     training = _frame(1)
     training.loc[0, "contact"] = PLANTED_PII
@@ -249,6 +272,8 @@ class _Color(Enum):
         (np.datetime64("NaT"), None),
         (np.timedelta64("NaT"), None),
         (None, None),
+        (Decimal("1.5"), 1.5),
+        (EvaluationScore(), EvaluationScore().model_dump(mode="json")),
     ],
 )
 def test_to_json_safe_converts_to_strict_json(value: object, expected: object) -> None:
