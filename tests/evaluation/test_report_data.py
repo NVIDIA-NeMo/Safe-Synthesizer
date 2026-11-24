@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import datetime
+import itertools
 import json
 import subprocess
 import sys
@@ -167,7 +170,7 @@ def test_export_is_strict_json_without_templates_or_gauges() -> None:
     assert payload["schema_version"] == REPORT_DATA_SCHEMA_VERSION
     assert payload["library_version"]
     assert "figures" not in payload["scores"]["synthetic_quality"]
-    figures = [figure for metric in payload["metrics"].values() if metric for figure in metric["figures"]]
+    figures = list(itertools.chain.from_iterable(m["figures"] for m in payload["metrics"].values() if m))
     assert figures
     assert all("template" not in figure["figure"]["layout"] for figure in figures)
     assert all("indicator" not in json.dumps(figure["figure"]["data"]) for figure in figures)
