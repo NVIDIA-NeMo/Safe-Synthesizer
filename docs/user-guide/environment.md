@@ -193,9 +193,9 @@ to the sampler's values. Where they go depends only on
   server yourself and reuse it across runs, see
   [Reuse one server across runs](customize-pii-replacement.md#reuse-one-server-across-runs).
 - Any other URL: Safe Synthesizer sends the data to that service, for example
-  `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA service. The data
-  is encrypted only when the URL uses `https://`. Only use a service that is approved to receive the input data,
-  including rows that may later be held out for evaluation.
+  `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA service. Only use
+  a service that is approved to receive the input data, including rows that may
+  later be held out for evaluation.
 
 The run log states which case applies when planning starts. Planning also runs
 during evaluation when PII replacement is off and `evaluation.pii_replay_enabled`
