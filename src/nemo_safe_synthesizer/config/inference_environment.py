@@ -22,7 +22,6 @@ from typing import Self
 from ..errors import ParameterError
 
 __all__ = [
-    "ALLOW_HTTP_ENV",
     "ENDPOINT_ENV",
     "INFERENCE_ENV_VARS",
     "KEY_ENV",
@@ -48,18 +47,8 @@ REQUEST_OPTIONS_ENV = "NSS_INFERENCE_REQUEST_OPTIONS"
 """Extra chat-completions fields, as a JSON object."""
 LOCAL_PROFILE_ENV = "NSS_INFERENCE_LOCAL_PROFILE"
 """Bundled profile name or profile YAML path for the managed local vLLM server."""
-ALLOW_HTTP_ENV = "NSS_INFERENCE_ALLOW_HTTP"
-"""Whether a non-loopback endpoint may use plaintext HTTP, for a trusted private network."""
 
-INFERENCE_ENV_VARS = (
-    ENDPOINT_ENV,
-    KEY_ENV,
-    MODEL_ENV,
-    TIMEOUT_ENV,
-    REQUEST_OPTIONS_ENV,
-    LOCAL_PROFILE_ENV,
-    ALLOW_HTTP_ENV,
-)
+INFERENCE_ENV_VARS = (ENDPOINT_ENV, KEY_ENV, MODEL_ENV, TIMEOUT_ENV, REQUEST_OPTIONS_ENV, LOCAL_PROFILE_ENV)
 """Every environment variable ``InferenceEnvironment`` reads."""
 
 RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "stream"})
@@ -67,7 +56,7 @@ RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "st
 
 
 class InvalidRequestSettingsError(ParameterError):
-    """``NSS_INFERENCE_TIMEOUT``, ``NSS_INFERENCE_REQUEST_OPTIONS``, or ``NSS_INFERENCE_ALLOW_HTTP`` is invalid."""
+    """``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS`` is invalid."""
 
 
 def nonblank(value: str | None) -> str | None:
@@ -82,8 +71,7 @@ def nonblank(value: str | None) -> str | None:
 class InferenceEnvironment:
     """The ``NSS_INFERENCE_*`` settings, with blank values read as unset.
 
-    The endpoint is checked where it is used: an explicit endpoint must use HTTPS
-    unless it is a loopback address, while with a local profile it must be the
+    The endpoint is checked where it is used: with a local profile it must be the
     loopback address the managed server listens on.
 
     Example:
@@ -97,8 +85,6 @@ class InferenceEnvironment:
     request_options: Mapping[str, object] = field(default_factory=dict)
     """Chat-completions fields; a ``None`` value drops the field from a lower layer, such as a profile."""
     local_profile: str | None = None
-    allow_http: bool = False
-    """Whether a non-loopback endpoint may use plaintext HTTP."""
 
     @classmethod
     def from_environ(cls, environ: Mapping[str, str] | None = None) -> Self:
@@ -106,8 +92,7 @@ class InferenceEnvironment:
 
         Raises:
             InvalidRequestSettingsError: If the timeout is not a positive, finite number of
-                seconds, the request options are not a JSON object or set a field NSS manages,
-                or ``NSS_INFERENCE_ALLOW_HTTP`` is not a boolean.
+                seconds, or the request options are not a JSON object or set a field NSS manages.
         """
         values = os.environ if environ is None else environ
         return cls(
@@ -117,19 +102,7 @@ class InferenceEnvironment:
             timeout_seconds=_timeout_seconds(nonblank(values.get(TIMEOUT_ENV))),
             request_options=_request_options(nonblank(values.get(REQUEST_OPTIONS_ENV))),
             local_profile=nonblank(values.get(LOCAL_PROFILE_ENV)),
-            allow_http=_allow_http(nonblank(values.get(ALLOW_HTTP_ENV))),
         )
-
-
-def _allow_http(raw: str | None) -> bool:
-    if raw is None:
-        return False
-    match raw.lower():
-        case "1" | "true" | "yes" | "on":
-            return True
-        case "0" | "false" | "no" | "off":
-            return False
-    raise InvalidRequestSettingsError(f"{ALLOW_HTTP_ENV} must be true or false, got {raw!r}")
 
 
 def _timeout_seconds(raw: str | None) -> float | None:

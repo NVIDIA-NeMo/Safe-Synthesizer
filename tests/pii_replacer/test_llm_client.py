@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer import llm_client
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceSettings,
     InvalidInferenceResponse,
@@ -140,9 +139,11 @@ class TestInferenceSettings:
             "http://127.1.2.3/v1",
             "http://[::1]:8000/v1",
             "https://inference.example.com/v1",
+            "http://inference.example.com/v1",
+            "http://10.0.0.5:8000/v1",
         ],
     )
-    def test_accepts_https_or_loopback_http(self, endpoint: str) -> None:
+    def test_accepts_http_and_https_endpoints(self, endpoint: str) -> None:
         settings = resolve_inference_settings(LLMConfig(model_id="model"), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
         assert settings.endpoint_url == endpoint
@@ -159,12 +160,9 @@ class TestInferenceSettings:
             ),
             pytest.param("https://inference.example.com/v1?key=abc", "query string or fragment", id="query-string"),
             pytest.param("https://inference.example.com/v1#chat", "query string or fragment", id="fragment"),
-            pytest.param("http://inference.example.com/v1", "must use HTTPS", id="remote-http"),
-            pytest.param("http://10.0.0.5:8000/v1", "must use HTTPS", id="private-network-http"),
-            pytest.param("http://localhost.example.com/v1", "must use HTTPS", id="localhost-lookalike"),
         ],
     )
-    def test_rejects_invalid_or_plaintext_remote_endpoints(self, endpoint: str, message: str) -> None:
+    def test_rejects_invalid_endpoints(self, endpoint: str, message: str) -> None:
         with pytest.raises(ParameterError, match=message):
             resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
@@ -270,7 +268,7 @@ class TestOpenAICompatibleTransport:
 
         assert timeouts == [900.0]
 
-    def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
+    def test_accepts_plaintext_remote_endpoint_from_direct_settings(self) -> None:
         settings = InferenceSettings(
             endpoint_url="http://inference.example.com/v1",
             model_id="remote-model",
@@ -278,8 +276,7 @@ class TestOpenAICompatibleTransport:
             api_key="private-key",  # pragma: allowlist secret
         )
 
-        with pytest.raises(ParameterError, match="must use HTTPS"):
-            OpenAICompatibleTransport(settings)
+        OpenAICompatibleTransport(settings)
 
     def test_sends_chat_completions_with_strict_json_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured = _capture_request(monkeypatch, _StructuredResponse)
@@ -346,67 +343,3 @@ class TestOpenAICompatibleTransport:
             )
 
         assert exc_info.value.retry_after == expected_retry_after
-
-
-class TestAllowHttp:
-    @pytest.mark.parametrize("raw", ["true", "1", "YES", "on"])
-    def test_allows_plaintext_remote_endpoint_when_opted_in(self, raw: str) -> None:
-        settings = resolve_inference_settings(
-            LLMConfig(model_id="model"),
-            environ={"NSS_INFERENCE_ENDPOINT": "http://models.internal:8080/v1", "NSS_INFERENCE_ALLOW_HTTP": raw},
-        )
-
-        assert settings.endpoint_url == "http://models.internal:8080/v1"
-        assert settings.allow_http is True
-        OpenAICompatibleTransport(settings)
-
-    @pytest.mark.parametrize("raw", ["false", "0", "no", "off", ""])
-    def test_keeps_rejecting_plaintext_remote_endpoint_otherwise(self, raw: str) -> None:
-        with pytest.raises(ParameterError, match="NSS_INFERENCE_ALLOW_HTTP=true"):
-            resolve_inference_settings(
-                LLMConfig(model_id="model"),
-                environ={"NSS_INFERENCE_ENDPOINT": "http://models.internal:8080/v1", "NSS_INFERENCE_ALLOW_HTTP": raw},
-            )
-
-    def test_rejects_a_non_boolean_value(self) -> None:
-        with pytest.raises(ParameterError, match="NSS_INFERENCE_ALLOW_HTTP must be true or false"):
-            resolve_inference_settings(
-                LLMConfig(model_id="model"),
-                environ={"NSS_INFERENCE_ENDPOINT": "https://example.com/v1", "NSS_INFERENCE_ALLOW_HTTP": "maybe"},
-            )
-
-    def test_still_rejects_credentials_in_the_url(self) -> None:
-        with pytest.raises(ParameterError, match="must not contain credentials"):
-            resolve_inference_settings(
-                LLMConfig(model_id="model"),
-                environ={
-                    "NSS_INFERENCE_ENDPOINT": "http://user:pw@models.internal/v1",  # pragma: allowlist secret
-                    "NSS_INFERENCE_ALLOW_HTTP": "true",
-                },
-            )
-
-    def test_direct_settings_honor_the_opt_in(self) -> None:
-        settings = InferenceSettings(
-            endpoint_url="http://models.internal:8080/v1", model_id="model", max_workers=1, allow_http=True
-        )
-
-        OpenAICompatibleTransport(settings)
-
-    @pytest.mark.parametrize(
-        ("endpoint", "expected_warnings"),
-        [("http://models.internal:8080/v1", 1), ("https://models.internal/v1", 0), (LOCAL_ENDPOINT, 0)],
-    )
-    def test_warns_once_per_transport_about_plaintext_remote_endpoint(
-        self, monkeypatch: pytest.MonkeyPatch, endpoint: str, expected_warnings: int
-    ) -> None:
-        warnings: list[str] = []
-        monkeypatch.setattr(llm_client.logger.user, "warning", warnings.append)
-        settings = resolve_inference_settings(
-            LLMConfig(model_id="model"),
-            environ={"NSS_INFERENCE_ENDPOINT": endpoint, "NSS_INFERENCE_ALLOW_HTTP": "true"},
-        )
-
-        OpenAICompatibleTransport(settings)
-
-        assert len(warnings) == expected_warnings
-        assert all("models.internal:8080" in warning for warning in warnings)

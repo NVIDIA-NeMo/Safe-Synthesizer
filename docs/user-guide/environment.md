@@ -51,7 +51,6 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else none (server defaults) | JSON object of chat-completions fields sent with every request; overrides a profile's options field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Profile YAML path, or bundled profile name, for the local vLLM server Safe Synthesizer runs during plan discovery | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_ALLOW_HTTP` | nss | -- | PII planning | `false` | Accept a plaintext `http://` endpoint that is not a loopback address, for a service on a trusted private network | [PII appendix](#pii-replacement) |
 | `NSS_NEMOTRON_PERSONAS_PATH` | nss | -- | PII replacement | `~/.data-designer/managed-assets` | Directory containing downloaded Nemotron-Personas `datasets/<locale>.parquet` files; `replace_pii.sampler.nemotron_personas_path` takes precedence | [Nemotron-Personas](customize-pii-replacement.md#nemotron-personas) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
@@ -208,13 +207,10 @@ export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 export NSS_INFERENCE_KEY=<your key>
 ```
 
-- The endpoint must use HTTPS unless it is a loopback address. It is the base
-  URL that `/chat/completions` is added to, so it must not contain
-  credentials, a query string, or a fragment.
-- To call a service over plain HTTP on a private network you trust, such as an
-  in-cluster gateway, set `NSS_INFERENCE_ALLOW_HTTP=true`. The samples and any
-  API key are then sent unencrypted, through `HTTP_PROXY` when it is set and the
-  host is not in `NO_PROXY`, and the run log warns about it.
+- The endpoint is the base URL that `/chat/completions` is added to, so it
+  must not contain credentials, a query string, or a fragment. Plain `http://`
+  is accepted; the samples and any API key are then sent unencrypted, so use
+  it only on a network you trust.
 - With an endpoint, a model ID is required. It resolves from
   `--inference-model-id`, then `replace_pii.llm.model_id`, then
   `NSS_INFERENCE_MODEL`.
