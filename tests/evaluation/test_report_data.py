@@ -16,15 +16,17 @@ import pytest
 from nemo_safe_synthesizer import results as results_module
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
-from nemo_safe_synthesizer.config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
+from nemo_safe_synthesizer.config.evaluation_report_data import (
+    REPORT_DATA_SCHEMA_VERSION,
+    EvaluationReportData,
+    Metrics,
+)
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
-from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.correlation import Correlation
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, figure_to_json, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -119,8 +121,8 @@ def test_report_figures_are_built_once_for_html_and_export(monkeypatch: pytest.M
     distribution = _component(report, ColumnDistribution)
     assert calls.count("generate_combined_correlation_figure") == 1
     assert calls.count("histogram_figure") + calls.count("bar_chart") == len(distribution.report_figures)
-    assert data.column_distribution_stability is not None
-    assert [f.title for f in data.column_distribution_stability.figures] == list(distribution.report_figures)
+    assert data.metrics.column_distribution_stability is not None
+    assert [f.title for f in data.metrics.column_distribution_stability.figures] == list(distribution.report_figures)
     for title in distribution.report_figures:
         assert f'id="{title}"' in html
 
@@ -140,12 +142,6 @@ def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
     training = _frame(1)
     training.loc[0, "contact"] = SECRET
     report = _tabular_report(training, pii_replay_enabled=True)
-    report.components.append(
-        AutocorrelationSimilarity(
-            score=EvaluationScore(),
-            details={"groups_only_in_training": [SECRET, "other"], "groups_only_in_synthetic": ["fresh"]},
-        )
-    )
     distribution = _component(report, ColumnDistribution)
     contact = next(f for f in distribution.evaluation_fields if f.name == "contact")
     assert SECRET in contact.training_field_features.unique_values_list
@@ -159,9 +155,7 @@ def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
     assert "unique_values_list" not in serialized
     assert "detected_entity_values" not in serialized
     assert "training_distribution" not in serialized
-    assert data.autocorrelation_similarity is not None
-    assert data.autocorrelation_similarity.groups_only_in_training == 2
-    assert data.autocorrelation_similarity.groups_only_in_synthetic == 1
+    assert [c.name for c in data.columns] == list(training.columns)
 
 
 def test_export_is_strict_json_without_templates_or_gauges() -> None:
@@ -171,8 +165,8 @@ def test_export_is_strict_json_without_templates_or_gauges() -> None:
 
     assert payload["schema_version"] == REPORT_DATA_SCHEMA_VERSION
     assert payload["library_version"]
-    assert "figures" not in payload["synthetic_quality_score"]
-    figures = [figure for card in payload.values() if isinstance(card, dict) for figure in card.get("figures", [])]
+    assert "figures" not in payload["scores"]["synthetic_quality"]
+    figures = [figure for metric in payload["metrics"].values() if metric for figure in metric["figures"]]
     assert figures
     assert all("template" not in figure["figure"]["layout"] for figure in figures)
     assert all("indicator" not in json.dumps(figure["figure"]["data"]) for figure in figures)
@@ -182,36 +176,26 @@ def test_export_includes_every_field_with_explicit_nulls() -> None:
     payload = json.loads(build_report_data(_tabular_report()).model_dump_json())
 
     assert payload["job_id"] is None
-    assert payload["pii_replacement"] is not None
+    assert payload["metrics"]["text_semantic_similarity"]["score"]["grade"] == "Unavailable"
     assert set(payload) == set(EvaluationReportData.model_fields)
+    assert set(payload["metrics"]) == set(Metrics.model_fields)
     schema = EvaluationReportData.model_json_schema()
     assert set(schema["required"]) == set(EvaluationReportData.model_fields)
+    assert set(schema["$defs"]["Metrics"]["required"]) == set(Metrics.model_fields)
 
 
-def test_export_of_time_series_cards() -> None:
-    data = build_report_data(_time_series_report())
+def test_export_of_a_time_series_report() -> None:
+    payload = json.loads(build_report_data(_time_series_report()).model_dump_json(), parse_constant=_reject_constant)
 
-    autocorrelation = data.autocorrelation_similarity
-    window_mia = data.window_membership_inference_protection
-    assert autocorrelation is not None
-    assert window_mia is not None
-    assert [f.title for f in autocorrelation.figures] == ["Typical autocorrelation", "Difference by lag", "Pair scores"]
-    assert [f.column_select for f in autocorrelation.figures] == [True, False, False]
-    assert all(f.tooltip for f in autocorrelation.figures)
-    assert autocorrelation.section == "time_series"
-    assert window_mia.section == "data_privacy"
-    assert window_mia.evaluation_mode == "full"
-    assert window_mia.counts is not None
-    assert window_mia.training_group_count > 0
-    assert window_mia.attack is not None
-    assert data.sections.time_series is True
+    assert payload["scores"]["synthetic_quality"] is not None
+    assert set(payload["metrics"]) == set(Metrics.model_fields)
 
 
 def test_reader_accepts_newer_schema_version_and_unknown_fields() -> None:
     payload = json.loads(build_report_data(_tabular_report()).model_dump_json())
     payload["schema_version"] = REPORT_DATA_SCHEMA_VERSION + 1
     payload["added_later"] = {"anything": [1, 2]}
-    payload["dataset_statistics"]["added_later"] = True
+    payload["dataset"]["added_later"] = True
 
     data = EvaluationReportData.model_validate(payload)
 

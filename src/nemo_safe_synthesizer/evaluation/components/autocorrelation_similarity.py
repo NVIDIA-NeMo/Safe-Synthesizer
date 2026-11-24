@@ -81,38 +81,35 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
     )
 
     @cached_property
-    def figure_specs(self) -> list[FigureSpec]:
-        """Typical autocorrelation, difference by lag, and pair score charts, or none without profiles."""
-        profiles = self.details.get("profiles", [])
-        if not profiles:
-            return []
-        return [
-            (
-                "Typical autocorrelation",
-                generate_autocorrelation_summary_figure(profiles),
-                True,
-                "autocorrelation_typical_info",
-            ),
-            (
-                "Difference by lag",
-                generate_autocorrelation_lag_error_figure(profiles),
-                False,
-                "autocorrelation_difference_info",
-            ),
-            (
-                "Pair scores",
-                generate_autocorrelation_pair_score_figure(profiles, self.score.score),
-                False,
-                "autocorrelation_pair_scores_info",
-            ),
-        ]
-
-    @cached_property
     def jinja_context(self) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().jinja_context
         profiles = self.details.get("profiles", [])
-        summary_columns = order_autocorrelation_columns(profiles) if profiles else []
+        figures: list[FigureSpec] = []
+        summary_columns: list[str] = []
+        if profiles:
+            figures = [
+                (
+                    "Typical autocorrelation",
+                    generate_autocorrelation_summary_figure(profiles),
+                    True,
+                    "autocorrelation_typical_info",
+                ),
+                (
+                    "Difference by lag",
+                    generate_autocorrelation_lag_error_figure(profiles),
+                    False,
+                    "autocorrelation_difference_info",
+                ),
+                (
+                    "Pair scores",
+                    generate_autocorrelation_pair_score_figure(profiles, self.score.score),
+                    False,
+                    "autocorrelation_pair_scores_info",
+                ),
+            ]
+            summary_columns = order_autocorrelation_columns(profiles)
+        context["figures"] = self.figure_rows(figures)
         context["summary_columns"] = summary_columns
         context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
         context["pair_score_column_count"] = min(len(summary_columns), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)

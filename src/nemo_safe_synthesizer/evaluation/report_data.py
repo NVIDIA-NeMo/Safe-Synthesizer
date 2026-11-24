@@ -1,11 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0
-
 """Build ``EvaluationReportData`` from a completed evaluation report.
 
-Each card copies only the fields the HTML report displays, listed explicitly, so values a
-component keeps for computation never reach the export. Charts are the components'
-``report_figures``, the same objects the HTML report embeds.
+Each value is copied from an explicit list of fields, so values a component keeps for computation
+never reach the export. Charts are the components' ``report_figures``, the same objects the HTML
+report embeds.
 """
 
 from __future__ import annotations
@@ -25,12 +22,9 @@ from pydantic import BaseModel
 
 from ..artifacts.base.fields import FieldFeatures
 from ..config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
-from ..observability import get_logger
 from ..package_info import __version__
 from ..pii_replacer.transform_result import ColumnStatistics
-from .assets.text.multi_modal_tooltips import tooltips
 from .components.attribute_inference_protection import AttributeInferenceProtection
-from .components.autocorrelation_similarity import AutocorrelationSimilarity
 from .components.column_distribution import ColumnDistribution
 from .components.component import Component
 from .components.correlation import Correlation
@@ -42,58 +36,47 @@ from .components.pii_replay import PIIReplay
 from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
-from .components.time_series_common import TimeSeriesComponent
-from .components.window_group_mia import WindowGroupMIA
 from .data_model.evaluation_report import EvaluationReport
 from .data_model.evaluation_score import EvaluationScore
 
-logger = get_logger(__name__)
-
 _ComponentT = TypeVar("_ComponentT", bound=Component)
-
-_SKIPPED_COMPARISONS_SHOWN = 12
 
 
 def build_report_data(report: EvaluationReport) -> EvaluationReportData:
-    """Return the data the HTML report for ``report`` displays.
+    """Return the evaluation results of ``report`` as structured data.
 
     Raises:
-        TypeError: If a displayed value cannot be represented as JSON.
+        TypeError: If a value cannot be represented as JSON.
     """
     context = report.jinja_context
-    pii_replacement = context.get("pii_replacement")
+    distribution = _find(report, ColumnDistribution)
     payload = {
         "schema_version": REPORT_DATA_SCHEMA_VERSION,
         "library_version": __version__,
         "job_id": context.get("job_id"),
-        "sections": {
-            "synthetic_quality": bool(context.get("with_synthesizer")),
-            "data_privacy": bool(context.get("with_data_privacy")),
-            "transformed_columns": bool(context.get("with_transform")),
-            "time_series": bool(context.get("with_time_series")),
+        "scores": {
+            "synthetic_quality": _maybe(_component_score, _find(report, SQSScore)),
+            "data_privacy": _maybe(_component_score, _find(report, DataPrivacyScore)),
         },
+        "metrics": {
+            "column_correlation_stability": _maybe(_metric, _find(report, Correlation)),
+            "deep_structure_stability": _maybe(_metric, _find(report, DeepStructure)),
+            "column_distribution_stability": _maybe(_metric, distribution),
+            "text_semantic_similarity": _maybe(_metric, _find(report, TextSemanticSimilarity)),
+            "text_structure_similarity": _maybe(_metric, _find(report, TextStructureSimilarity)),
+            "membership_inference_protection": _maybe(
+                _membership_inference_metric, _find(report, MembershipInferenceProtection)
+            ),
+            "attribute_inference_protection": _maybe(_metric, _find(report, AttributeInferenceProtection)),
+            "pii_replay": _maybe(_pii_replay_metric, _find(report, PIIReplay)),
+        },
+        "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
+        "columns": _columns(distribution) if distribution is not None else [],
         "differential_privacy": {
             "enabled": bool(context.get("dp_enabled")),
             "epsilon": context.get("epsilon"),
             "delta": context.get("delta"),
         },
-        "tooltips": {str(key): str(value).strip() for key, value in tooltips.items()},
-        "synthetic_quality_score": _maybe(_card, _find(report, SQSScore)),
-        "data_privacy_score": _maybe(_card, _find(report, DataPrivacyScore)),
-        "dataset_statistics": _maybe(_dataset_statistics_card, _find(report, DatasetStatistics)),
-        "column_correlation_stability": _maybe(_figure_card, _find(report, Correlation)),
-        "deep_structure_stability": _maybe(_figure_card, _find(report, DeepStructure)),
-        "column_distribution_stability": _maybe(_column_distribution_card, _find(report, ColumnDistribution)),
-        "text_semantic_similarity": _maybe(_figure_card, _find(report, TextSemanticSimilarity)),
-        "text_structure_similarity": _maybe(_figure_card, _find(report, TextStructureSimilarity)),
-        "membership_inference_protection": _maybe(
-            _membership_inference_card, _find(report, MembershipInferenceProtection)
-        ),
-        "attribute_inference_protection": _maybe(_figure_card, _find(report, AttributeInferenceProtection)),
-        "autocorrelation_similarity": _maybe(_autocorrelation_card, _find(report, AutocorrelationSimilarity)),
-        "window_membership_inference_protection": _maybe(_window_mia_card, _find(report, WindowGroupMIA)),
-        "pii_replay": _maybe(_pii_replay_card, _find(report, PIIReplay)),
-        "pii_replacement": _pii_replacement(pii_replacement) if pii_replacement else None,
     }
     return EvaluationReportData.model_validate(to_json_safe(payload))
 
@@ -148,7 +131,7 @@ def to_json_safe(value: Any) -> Any:
     raise TypeError(f"Cannot represent {type(value).__name__} as JSON in evaluation report data")
 
 
-def _maybe(build: Callable[[_ComponentT], dict[str, Any]], component: _ComponentT | None) -> dict[str, Any] | None:
+def _maybe(build: Callable[[_ComponentT], Any], component: _ComponentT | None) -> Any:
     return None if component is None else build(component)
 
 
@@ -160,17 +143,31 @@ def _score(score: EvaluationScore) -> dict[str, Any]:
     return {"raw_score": score.raw_score, "score": score.score, "grade": score.grade, "notes": score.notes}
 
 
-def _card(component: Component) -> dict[str, Any]:
-    return {"name": component.name, "score": _score(component.score)}
+def _component_score(component: Component) -> dict[str, Any]:
+    return _score(component.score)
 
 
-def _figure_card(component: Component) -> dict[str, Any]:
+def _metric(component: Component) -> dict[str, Any]:
     figures = [{"title": title, "figure": figure_to_json(figure)} for title, figure in component.report_figures.items()]
-    return {**_card(component), "figures": figures}
+    return {"score": _score(component.score), "figures": figures}
 
 
-def _dataset_statistics_card(component: DatasetStatistics) -> dict[str, Any]:
-    counts = component.model_dump(
+def _membership_inference_metric(component: MembershipInferenceProtection) -> dict[str, Any]:
+    return {**_metric(component), "excluded_columns": list(component.excluded_columns)}
+
+
+def _pii_replay_metric(component: PIIReplay) -> dict[str, Any]:
+    return {
+        **_metric(component),
+        "training_total_records": component.training_total_records,
+        "synthetic_total_records": component.synthetic_total_records,
+        "entries": [datum.model_dump() for datum in component.pii_replay_data],
+        "skipped_reason": component.skipped_reason,
+    }
+
+
+def _dataset_counts(component: DatasetStatistics) -> dict[str, Any]:
+    return component.model_dump(
         include={
             "training_rows",
             "training_cols",
@@ -181,11 +178,6 @@ def _dataset_statistics_card(component: DatasetStatistics) -> dict[str, Any]:
             "memorized_lines",
         }
     )
-    return {**_card(component), **counts}
-
-
-def _membership_inference_card(component: MembershipInferenceProtection) -> dict[str, Any]:
-    return {**_figure_card(component), "excluded_columns": list(component.excluded_columns)}
 
 
 def _column_profile(features: FieldFeatures) -> dict[str, Any]:
@@ -212,8 +204,8 @@ def _column_pii(statistics: ColumnStatistics | None) -> dict[str, Any] | None:
     }
 
 
-def _column_distribution_card(component: ColumnDistribution) -> dict[str, Any]:
-    columns = [
+def _columns(component: ColumnDistribution) -> list[dict[str, Any]]:
+    return [
         {
             "name": field.name,
             "training": _column_profile(field.training_field_features),
@@ -226,121 +218,3 @@ def _column_distribution_card(component: ColumnDistribution) -> dict[str, Any]:
         }
         for field in component.evaluation_fields
     ]
-    return {**_figure_card(component), "columns": columns}
-
-
-def _pii_replay_card(component: PIIReplay) -> dict[str, Any]:
-    return {
-        **_card(component),
-        "training_total_records": component.training_total_records,
-        "synthetic_total_records": component.synthetic_total_records,
-        "entries": [datum.model_dump() for datum in component.pii_replay_data],
-        "skipped_reason": component.skipped_reason,
-    }
-
-
-def _pii_replacement(pii: Mapping[str, Any]) -> dict[str, Any]:
-    columns = [
-        {
-            "column_name": group["column_name"],
-            "replaced_with": group.get("replaced_with"),
-            "pattern": group.get("pattern"),
-            "pattern_symbols": [
-                {"symbol": symbol, "meaning": meaning} for symbol, meaning in group.get("pattern_symbols", ())
-            ],
-            "depends_on": [
-                {"column_name": dependency["column_name"], "entity_type": dependency["entity_type"]}
-                for dependency in group.get("depends_on", [])
-            ],
-            "found_by": list(group.get("found_by", [])),
-            "entities": [
-                {
-                    key: entity[key]
-                    for key in ("pii_type", "found", "unique", "synthetic", "replayed", "replay_percentage")
-                }
-                for entity in group["entities"]
-            ],
-        }
-        for group in pii.get("groups", [])
-    ]
-    return {
-        "replacement_off": bool(pii.get("replacement_off")),
-        "headline": pii["headline"],
-        "sampler": pii.get("sampler"),
-        "locale": pii.get("locale"),
-        "seed": pii.get("seed"),
-        "replay_note": pii.get("replay_note"),
-        "columns": columns,
-        "kept_columns": list(pii.get("kept_columns", [])),
-        "value_mappings": pii.get("mappings", {}),
-    }
-
-
-def _time_series_card(component: TimeSeriesComponent) -> dict[str, Any]:
-    context = component.jinja_context
-    details = component.details
-    figures = [
-        {
-            "title": title,
-            "figure": figure_to_json(figure),
-            "column_select": column_select,
-            "tooltip": str(tooltips[tooltip_key]).strip(),
-        }
-        for title, figure, column_select, tooltip_key in component.figure_specs
-    ]
-    skipped = [
-        {
-            "column": item["column"],
-            "group": None if item.get("group") is None else str(item["group"]),
-            "reason": item["reason"],
-        }
-        for item in details.get("skipped", [])[:_SKIPPED_COMPARISONS_SHOWN]
-    ]
-    return {
-        **_card(component),
-        "section": component.report_section,
-        "description": component.description,
-        "score_colored_traces": component.score_colored_traces,
-        "figures": figures,
-        "summary_columns": list(context.get("summary_columns", [])),
-        "summary_traces_per_column": context.get("summary_traces_per_column", 1),
-        "skipped": skipped,
-        "groups_only_in_training": len(details.get("groups_only_in_training", [])),
-        "groups_only_in_synthetic": len(details.get("groups_only_in_synthetic", [])),
-    }
-
-
-def _autocorrelation_card(component: AutocorrelationSimilarity) -> dict[str, Any]:
-    context = component.jinja_context
-    counts = {
-        key: context[key]
-        for key in (
-            "evaluated_profile_count",
-            "evaluated_group_count",
-            "evaluated_column_count",
-            "pair_score_column_count",
-            "constant_synthetic_profile_count",
-        )
-    }
-    return {**_time_series_card(component), **counts}
-
-
-def _window_mia_card(component: WindowGroupMIA) -> dict[str, Any]:
-    details = component.details
-    attack = details.get("attack")
-    closest_match = details.get("closest_match")
-    return {
-        **_time_series_card(component),
-        "evaluation_mode": details.get("evaluation_mode"),
-        "window_size": details.get("window_size"),
-        "training_group_count": len(details.get("per_group", [])),
-        "counts": details.get("counts"),
-        "exact_copy_rate": details.get("exact_copy_rate"),
-        "attack": (
-            {"training_flag_rate": attack["training_flag_rate"], "holdout_flag_rate": attack["holdout_flag_rate"]}
-            if attack
-            else None
-        ),
-        "closest_match_exact_copy": closest_match["exact_copy"] if closest_match else None,
-        "closest_match_distance_per_value": component.jinja_context.get("closest_match_distance_per_value"),
-    }

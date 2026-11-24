@@ -398,7 +398,7 @@ class Workdir:
           - info.json                    (generate-only workflow)
           - synthetic_data.csv
           - evaluation_report.html
-          - evaluation_report_data.json  (data the HTML report displays)
+          - evaluation_report_data.json  (evaluation results as JSON)
           - evaluation_metrics.json      (machine-readable metrics)
         - dataset/
           - training.csv

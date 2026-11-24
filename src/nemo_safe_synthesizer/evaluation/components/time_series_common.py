@@ -38,8 +38,8 @@ class TimeSeriesComponent(Component):
 
     The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
     each as a metric card from the class attributes below, in the section
-    named by ``report_section``. Subclasses list their charts in
-    ``figure_specs`` and extend ``jinja_context`` with card-specific values.
+    named by ``report_section``. Subclasses extend
+    ``jinja_context`` with their figures, built with ``figure_rows``.
 
     Attributes:
         card_id: HTML id of the metric card.
@@ -63,20 +63,9 @@ class TimeSeriesComponent(Component):
     details: dict[str, Any] = Field(default_factory=dict, description="Metric-specific diagnostic details.")
 
     @cached_property
-    def figure_specs(self) -> list[FigureSpec]:
-        """The card's charts in display order, with their column select flag and tooltip key."""
-        return []
-
-    @cached_property
-    def report_figures(self) -> dict[str, go.Figure]:
-        """The card's charts keyed by title, from ``figure_specs``."""
-        return {title: figure for title, figure, _, _ in self.figure_specs}
-
-    @cached_property
     def jinja_context(self) -> dict[str, Any]:
-        """Return score, details, card attributes, and chart rows for report rendering."""
+        """Return score, details, and card attributes for report rendering."""
         context = super().jinja_context
-        context["figures"] = self.figure_rows(self.figure_specs)
         context["details"] = self.details
         context["card_id"] = self.card_id
         context["description"] = self.description
@@ -91,7 +80,7 @@ class TimeSeriesComponent(Component):
         return [
             {
                 "title": title,
-                "html": Component.figure_html(figure),
+                "html": figure.to_html(full_html=False, include_plotlyjs=False),
                 "column_select": column_select,
                 "tooltip_id": tooltip_key.replace("_", "-"),
                 "tooltip": tooltips[tooltip_key],
