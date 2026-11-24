@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime
 import json
 import math
+import os
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from enum import Enum
@@ -41,22 +42,25 @@ from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
 from .data_model.evaluation_report import EvaluationReport
 from .data_model.evaluation_score import EvaluationScore
+from .reports.multimodal.multimodal_report import MultimodalReport
 
 _ComponentT = TypeVar("_ComponentT", bound=Component)
 
 
-def build_report_data(report: EvaluationReport) -> EvaluationReportData:
+def build_report_data(report: MultimodalReport) -> EvaluationReportData:
     """Return the evaluation results of ``report`` as structured data.
 
     Raises:
         TypeError: If a value cannot be represented as JSON.
+        pydantic.ValidationError: If a value does not fit the schema, such as a required number that is NaN.
     """
-    context = report.jinja_context
+    config = report.config
+    dp_enabled = bool(config is not None and config.get("dp_enabled"))
     distribution = _find(report, ColumnDistribution)
     payload = {
         "schema_version": REPORT_DATA_SCHEMA_VERSION,
         "library_version": __version__,
-        "job_id": context.get("job_id"),
+        "job_id": (os.environ.get("NEMO_JOB_ID") or "").strip() or None,
         "scores": {
             "synthetic_quality": _maybe(_component_score, _find(report, SQSScore)),
             "data_privacy": _maybe(_component_score, _find(report, DataPrivacyScore)),
@@ -76,9 +80,9 @@ def build_report_data(report: EvaluationReport) -> EvaluationReportData:
         "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
         "columns": _columns(distribution) if distribution is not None else [],
         "differential_privacy": {
-            "enabled": bool(context.get("dp_enabled")),
-            "epsilon": context.get("epsilon"),
-            "delta": context.get("delta"),
+            "enabled": dp_enabled,
+            "epsilon": config.get("epsilon") if dp_enabled and config is not None else None,
+            "delta": config.get("delta") if dp_enabled and config is not None else None,
         },
     }
     return EvaluationReportData.model_validate(to_json_safe(payload))

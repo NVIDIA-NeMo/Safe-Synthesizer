@@ -1194,8 +1194,8 @@ Key outputs:
 ### SDK Results Access
 
 `run()` automatically saves `synthetic_data.csv`, `evaluation_report.html`,
-`evaluation_report_data.json`, and `evaluation_metrics.json` to the artifacts directory unless an
-`output_file` override is provided. For stepwise execution, call
+`evaluation_report_data.json`, and `evaluation_metrics.json` to the artifacts directory; an
+`output_file` override changes only where the CSV goes. For stepwise execution, call
 `save_results()` explicitly after `evaluate()`.
 
 ```python

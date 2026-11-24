@@ -157,7 +157,7 @@ class DifferentialPrivacySettings(ReportDataModel):
 
 
 class EvaluationReportData(ReportDataModel):
-    """Evaluation results for presenting outside the HTML report. Metric keys match ``SafeSynthesizerSummary``."""
+    """Evaluation results for presenting outside the HTML report. Metric keys match the tabular and text scores in ``SafeSynthesizerSummary``; time-series metrics are not exported yet."""
 
     schema_version: int = Field(description="Schema version; readers accept higher versions.")
     library_version: str = Field(description="nemo-safe-synthesizer version that built the data.")
@@ -165,5 +165,7 @@ class EvaluationReportData(ReportDataModel):
     scores: Scores = Field(description="Overall scores.")
     metrics: Metrics = Field(description="Per-metric results.")
     dataset: DatasetCounts | None = Field(description="Dataset counts, or null when they were not computed.")
-    columns: list[ColumnResult] = Field(description="Every training column, in training order.")
+    columns: list[ColumnResult] = Field(
+        description="Evaluated training columns, in training order: those also in the synthetic data, sampled down to `evaluation.sqs_report_columns`."
+    )
     differential_privacy: DifferentialPrivacySettings = Field(description="Differential privacy settings.")

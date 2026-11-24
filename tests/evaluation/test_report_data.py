@@ -15,6 +15,7 @@ import pytest
 
 from nemo_safe_synthesizer import results as results_module
 from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.differential_privacy import DifferentialPrivacyHyperparams
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.evaluation_report_data import (
     REPORT_DATA_SCHEMA_VERSION,
@@ -172,7 +173,8 @@ def test_export_is_strict_json_without_templates_or_gauges() -> None:
     assert all("indicator" not in json.dumps(figure["figure"]["data"]) for figure in figures)
 
 
-def test_export_includes_every_field_with_explicit_nulls() -> None:
+def test_export_includes_every_field_with_explicit_nulls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NEMO_JOB_ID", raising=False)
     payload = json.loads(build_report_data(_tabular_report()).model_dump_json())
 
     assert payload["job_id"] is None
@@ -189,6 +191,19 @@ def test_export_of_a_time_series_report() -> None:
 
     assert payload["scores"]["synthetic_quality"] is not None
     assert set(payload["metrics"]) == set(Metrics.model_fields)
+
+
+def test_export_reads_job_id_and_differential_privacy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NEMO_JOB_ID", " job-1 ")
+    report = _tabular_report()
+    report.config = SafeSynthesizerParameters(
+        privacy=DifferentialPrivacyHyperparams(dp_enabled=True, epsilon=4.0, delta=1e-5)
+    )
+
+    data = build_report_data(report)
+
+    assert data.job_id == "job-1"
+    assert data.differential_privacy.model_dump() == {"enabled": True, "epsilon": 4.0, "delta": 1e-5}
 
 
 def test_reader_accepts_newer_schema_version_and_unknown_fields() -> None:
