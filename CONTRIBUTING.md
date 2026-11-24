@@ -698,10 +698,13 @@ Before contributing, run `mise run format`, review its changes, then run `mise r
 ## Releasing
 
 Pushing a `v*` tag starts two workflows. [`release.yml`](.github/workflows/release.yml)
-publishes the wheel to Test PyPI and PyPI, creates a GitHub release, and
+publishes the verified wheel to PyPI through its trusted publisher, creates a GitHub release, and
 publishes versioned documentation for final releases, including post-releases.
 [`container-build.yml`](.github/workflows/container-build.yml) publishes the
 CUDA image to GitHub Container Registry (GHCR).
+
+The PyPI upload runs in a separate job with the protected `pypi` environment
+and OIDC credentials. No PyPI API token or TestPyPI upload is required.
 
 Release versions follow [PEP 440](https://peps.python.org/pep-0440/) with major,
 minor, and patch release numbers. This project uses stable releases, release
@@ -780,7 +783,7 @@ Never move a published tag. If code changes, create and validate the next
 
 - Verify the candidate tag still resolves to the recorded SHA and both
   workflows succeeded for that tag.
-- Confirm the candidate exists on Test PyPI, production PyPI, and GitHub
+- Confirm the candidate exists on production PyPI and GitHub
   Releases, then pull its immutable GHCR SHA tag with the intended visibility.
 - Install the production-PyPI wheel outside the repository with the candidate
   release installer and uv project configuration disabled. Check the dependency
@@ -844,7 +847,7 @@ post-release wheel and immutable container tag before announcing the release.
 After publishing:
 
 - Verify both tag-triggered workflows passed at the tested SHA.
-- Confirm Test PyPI and production PyPI contain the published version.
+- Confirm production PyPI contains the published version.
 - Confirm the GitHub release is not marked as a prerelease.
 - Confirm versioned documentation is available at
   `https://nvidia-nemo.github.io/Safe-Synthesizer/<version>/`.

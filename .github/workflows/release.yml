@@ -34,8 +34,8 @@ permissions:
   contents: read
 
 jobs:
-  publish-wheel:
-    name: Publish wheel Test PyPI and PyPI
+  build-wheel:
+    name: Build and verify wheel
     runs-on: linux-amd64-cpu4
     outputs:
       version: ${{ steps.build.outputs.version }}
@@ -60,12 +60,12 @@ jobs:
           mise run build-wheel
           WHEEL=$(ls dist/*.whl)
           VERSION=$(echo "$WHEEL" | sed -n 's/.*-\([0-9][^-]*\)-.*/\1/p')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" | tee -a "$GITHUB_OUTPUT"
           IS_PRERELEASE=false
           if echo "$VERSION" | grep -qE '(rc|alpha|beta|\.dev)'; then
             IS_PRERELEASE=true
           fi
-          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" | tee -a "$GITHUB_OUTPUT"
           echo "Built: $WHEEL (version $VERSION)"
 
       - name: Verify clean end-user wheel install
@@ -77,31 +77,29 @@ jobs:
           path: dist/*.whl
           retention-days: 90
 
-      - name: Publish to Test PyPI (always, as pre-flight)
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PERSONAL_TOKEN }}
-        run: |
-          uvx twine upload \
-            --repository-url https://test.pypi.org/legacy/ \
-            --skip-existing \
-            --non-interactive \
-            --verbose \
-            dist/*.whl
-
-      - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_PERSONAL_TOKEN }}
-        run: |
-          uvx twine upload \
-            --non-interactive \
-            --verbose \
-            dist/*.whl
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-wheel
+    if: ${{ github.repository == 'NVIDIA-NeMo/Safe-Synthesizer' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/nemo-safe-synthesizer/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download verified wheel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nemo-safe-synthesizer-${{ needs.build-wheel.outputs.version }}
+          path: dist/
+      - name: Publish with trusted publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   create-gh-release:
     name: Create GitHub release
-    needs: publish-wheel
+    needs: [build-wheel, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,19 +113,19 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: nemo-safe-synthesizer-${{ needs.publish-wheel.outputs.version }}
+          name: nemo-safe-synthesizer-${{ needs.build-wheel.outputs.version }}
           path: dist/
 
       - name: Build release installer
         env:
-          VERSION: ${{ needs.publish-wheel.outputs.version }}
+          VERSION: ${{ needs.build-wheel.outputs.version }}
         run: bash tools/build_release_installer.sh "$VERSION" dist
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.publish-wheel.outputs.version }}
-          IS_PRERELEASE: ${{ needs.publish-wheel.outputs.is_prerelease }}
+          VERSION: ${{ needs.build-wheel.outputs.version }}
+          IS_PRERELEASE: ${{ needs.build-wheel.outputs.is_prerelease }}
         run: |
           PRERELEASE_FLAG=""
           if [ "$IS_PRERELEASE" = "true" ]; then
@@ -135,6 +133,7 @@ jobs:
           fi
 
           gh release create "v${VERSION}" \
+            --repo "$GITHUB_REPOSITORY" \
             dist/*.whl \
             dist/install_nss.sh \
             --title "v${VERSION}" \
@@ -143,8 +142,8 @@ jobs:
 
   publish-release-docs:
     name: Publish release docs
-    needs: publish-wheel
-    if: ${{ needs.publish-wheel.outputs.is_prerelease != 'true' }}
+    needs: [build-wheel, publish-pypi]
+    if: ${{ needs.build-wheel.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,6 +170,6 @@ jobs:
 
       - name: Publish versioned docs to GitHub Pages
         env:
-          VERSION: ${{ needs.publish-wheel.outputs.version }}
+          VERSION: ${{ needs.build-wheel.outputs.version }}
         run: |
           uv run --frozen --group docs mike deploy --push "${VERSION}"
