@@ -208,9 +208,7 @@ export NSS_INFERENCE_KEY=<your key>
 ```
 
 - The endpoint is the base URL that `/chat/completions` is added to, so it
-  must not contain credentials, a query string, or a fragment. Plain `http://`
-  is accepted; the samples and any API key are then sent unencrypted, so use
-  it only on a network you trust.
+  must not contain credentials, a query string, or a fragment.
 - With an endpoint, a model ID is required. It resolves from
   `--inference-model-id`, then `replace_pii.llm.model_id`, then
   `NSS_INFERENCE_MODEL`.
