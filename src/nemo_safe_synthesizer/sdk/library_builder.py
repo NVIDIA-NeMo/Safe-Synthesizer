@@ -978,9 +978,9 @@ class SafeSynthesizer(ConfigBuilder):
         Writes ``synthetic_data.csv``, ``evaluation_report.html`` and
         ``evaluation_report_data.json`` (when available), and
         ``evaluation_metrics.json`` into the generate directory. A failure
-        to write the report data is logged and does not fail the run.  Called automatically by ``run()``.  Call explicitly
-        after stepwise execution
-        (``process_data().train().generate().evaluate()``).
+        to write the report data is logged and does not fail the run.
+        Called automatically by ``run()``.  Call explicitly after stepwise
+        execution (``process_data().train().generate().evaluate()``).
 
         Args:
             output_file: Explicit output path for the CSV.  Falls back

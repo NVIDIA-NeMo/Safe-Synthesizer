@@ -7,8 +7,9 @@
 values its cards and tables show, and each chart as Plotly figure JSON. Training values the
 report does not show, such as detected PII values, per-column distinct values, and group IDs,
 are left out. Every field is always present in the JSON; a field typed ``X | None`` is
-``null`` when the report has no value for it, and a card is ``null`` when its component did
-not run.
+``null`` when the report has no value for it. A time-series card is ``null`` without
+time-series evaluation; other cards are always present, with an 'Unavailable' grade when
+their metric was turned off or could not run.
 
 Readers should accept any ``schema_version`` at or above the one they were written for and
 ignore fields they do not know. The version is raised only when a field is removed or its
@@ -294,7 +295,8 @@ class DifferentialPrivacyReport(ReportDataModel):
 class EvaluationReportData(ReportDataModel):
     """Everything the evaluation report displays, for rendering it natively.
 
-    Cards are named like ``SafeSynthesizerSummary`` scores and are null when their component did not run.
+    Cards are named like ``SafeSynthesizerSummary`` scores. Time-series cards are null without time-series
+    evaluation, and ``pii_replacement`` is null when neither PII replacement nor replay ran.
     """
 
     schema_version: int = Field(description="Schema version; readers accept higher versions.")
