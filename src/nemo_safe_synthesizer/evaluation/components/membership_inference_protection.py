@@ -10,6 +10,7 @@ import category_encoders as ce
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import plotly.graph_objects as go
 import torch
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
@@ -58,17 +59,20 @@ class MembershipInferenceProtection(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
+    def report_figures(self) -> dict[str, go.Figure]:
+        """The attack outcome pie chart, keyed by the component name."""
+        if self.attack_sum_df is None or self.attack_sum_df.empty:
+            return {}
+        return {self.name: figures.generate_mia_figure(df=self.attack_sum_df)}
+
+    @cached_property
     def jinja_context(self) -> dict:
         """Template context with the membership-inference pie chart figure."""
         d = super().jinja_context
         d["anchor_link"] = "#mia"
         d["excluded_columns"] = list(self.excluded_columns)
-        if self.attack_sum_df is not None and not self.attack_sum_df.empty:
-            d["figure"] = figures.generate_mia_figure(df=self.attack_sum_df).to_html(
-                full_html=False, include_plotlyjs=False
-            )
-        else:
-            d["figure"] = None
+        figure = self.report_figures.get(self.name)
+        d["figure"] = self.figure_html(figure) if figure is not None else None
         return d
 
     @staticmethod

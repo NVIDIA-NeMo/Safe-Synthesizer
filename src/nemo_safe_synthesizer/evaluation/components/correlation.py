@@ -7,6 +7,7 @@ from functools import cached_property
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 from pydantic import ConfigDict, Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -44,22 +45,29 @@ class Correlation(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
+    def report_figures(self) -> dict[str, go.Figure]:
+        """The training, synthetic, and difference correlation heatmaps as one figure, keyed by the component name."""
+        training_corr = self.training_correlation
+        synthetic_corr = self.synthetic_correlation
+        diff_corr = self.correlation_difference
+        if training_corr is None or synthetic_corr is None or diff_corr is None:
+            return {}
+        if not Component.is_nonempty([training_corr, synthetic_corr, diff_corr]):
+            return {}
+        figure = figures.generate_combined_correlation_figure(
+            training_correlation_df=training_corr,
+            synthetic_correlation_df=synthetic_corr,
+            correlation_difference=diff_corr,
+        )
+        return {self.name: figure}
+
+    @cached_property
     def jinja_context(self) -> dict:
         """Template context with combined correlation heatmap figure."""
         d = super().jinja_context
         d["anchor_link"] = "#correlation-stability"
-        d["figure"] = None
-
-        if Component.is_nonempty([self.training_correlation, self.synthetic_correlation, self.correlation_difference]):
-            training_corr = self.training_correlation
-            synthetic_corr = self.synthetic_correlation
-            diff_corr = self.correlation_difference
-            if training_corr is not None and synthetic_corr is not None and diff_corr is not None:
-                d["figure"] = figures.generate_combined_correlation_figure(
-                    training_correlation_df=training_corr,
-                    synthetic_correlation_df=synthetic_corr,
-                    correlation_difference=diff_corr,
-                ).to_html(full_html=False, include_plotlyjs=False)
+        figure = self.report_figures.get(self.name)
+        d["figure"] = self.figure_html(figure) if figure is not None else None
         return d
 
     @staticmethod

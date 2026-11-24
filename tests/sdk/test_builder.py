@@ -9,6 +9,10 @@ import pytest
 
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from nemo_safe_synthesizer.evaluation.data_model.report_data import EvaluationReportData
+from nemo_safe_synthesizer.evaluation.report_data import build_report_data
+from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
@@ -362,8 +366,14 @@ def _builder_with_mock_results(tmp_path: Path) -> SafeSynthesizer:
     nss.results = MagicMock()
     nss.results.synthetic_data = _SMALL_DF
     nss.results.evaluation_report_html = _REPORT_HTML
+    nss.results.evaluation_report_data = _report_data()
     nss.results.summary.model_dump_json.return_value = _METRICS_JSON
     return nss
+
+
+def _report_data() -> EvaluationReportData:
+    datasets = EvaluationDatasets(training=_SMALL_DF, synthetic=_SMALL_DF)
+    return build_report_data(MultimodalReport(evaluation_datasets=datasets, components=[]))
 
 
 class TestSaveResults:
@@ -408,3 +418,36 @@ class TestSaveResults:
         assert nss._workdir.output_file.exists()
         assert not nss._workdir.evaluation_report.exists()
         assert not nss._workdir.evaluation_metrics.exists()
+
+    def test_saves_report_data_next_to_report(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+
+        nss.save_results()
+
+        assert nss._workdir is not None
+        data_path = nss._workdir.evaluation_report_data
+        assert data_path.parent == nss._workdir.evaluation_report.parent
+        assert EvaluationReportData.model_validate_json(data_path.read_text()) == nss.results.evaluation_report_data
+
+    def test_removes_stale_report_data_when_evaluation_is_skipped(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        assert nss._workdir is not None
+        data_path = nss._workdir.evaluation_report_data
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        data_path.write_text("{}")
+        nss.results.evaluation_report_data = None
+
+        nss.save_results()
+
+        assert not data_path.exists()
+
+    def test_failed_report_data_write_does_not_fail_save(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_data = MagicMock()
+        nss.results.evaluation_report_data.model_dump_json.side_effect = TypeError("boom")
+
+        nss.save_results()
+
+        assert nss._workdir is not None
+        assert nss._workdir.evaluation_report.exists()
+        assert not nss._workdir.evaluation_report_data.exists()

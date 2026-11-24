@@ -1165,6 +1165,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 │   ├── info.json                    # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
+│   ├── evaluation_report_data.json  # data the report displays
 │   └── evaluation_metrics.json      # machine-readable metrics
 ├── dataset/
 │   ├── training.csv
@@ -1179,6 +1180,7 @@ Key outputs:
 
 - `generate/synthetic_data.csv`: the synthetic dataset
 - `generate/evaluation_report.html`: quality and privacy report
+- `generate/evaluation_report_data.json`: the report's scores, tables, and charts as JSON, for rendering it elsewhere
 - `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
 - `train/safe-synthesizer-config.json`: resolved config snapshot
@@ -1192,7 +1194,7 @@ Key outputs:
 ### SDK Results Access
 
 `run()` automatically saves `synthetic_data.csv`, `evaluation_report.html`,
-and `evaluation_metrics.json` to the artifacts directory unless an
+`evaluation_report_data.json`, and `evaluation_metrics.json` to the artifacts directory unless an
 `output_file` override is provided. For stepwise execution, call
 `save_results()` explicitly after `evaluate()`.
 
@@ -1200,6 +1202,7 @@ and `evaluation_metrics.json` to the artifacts directory unless an
 results = synthesizer.results
 df = results.synthetic_data
 summary = results.summary
+report_data = results.evaluation_report_data  # None when evaluation was skipped
 # synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically
 ```
 

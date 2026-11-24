@@ -7,6 +7,7 @@ from functools import cached_property
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 from category_encoders.count import CountEncoder
 from pydantic import ConfigDict, Field
 
@@ -40,19 +41,21 @@ class DeepStructure(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
+    def report_figures(self) -> dict[str, go.Figure]:
+        """The PCA scatter plot of training and synthetic data, keyed by the component name."""
+        training_pca = self.training_pca
+        synthetic_pca = self.synthetic_pca
+        if training_pca is None or synthetic_pca is None or not Component.is_nonempty([training_pca, synthetic_pca]):
+            return {}
+        return {self.name: figures.structure_stability_figure(training_df=training_pca, synthetic_df=synthetic_pca)}
+
+    @cached_property
     def jinja_context(self) -> dict:
         """Template context with PCA scatter plot figure."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-stability"
-        d["figure"] = None
-        if Component.is_nonempty([self.training_pca, self.synthetic_pca]):
-            training_pca = self.training_pca
-            synthetic_pca = self.synthetic_pca
-            if training_pca is not None and synthetic_pca is not None:
-                d["figure"] = figures.structure_stability_figure(
-                    training_df=training_pca,
-                    synthetic_df=synthetic_pca,
-                ).to_html(full_html=False, include_plotlyjs=False)
+        figure = self.report_figures.get(self.name)
+        d["figure"] = self.figure_html(figure) if figure is not None else None
         return d
 
     @staticmethod

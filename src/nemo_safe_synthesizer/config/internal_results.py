@@ -8,6 +8,7 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import Field
 
+from ..evaluation.data_model.report_data import EvaluationReportData
 from .base import NSSBaseModel
 from .external_results import SafeSynthesizerSummary
 
@@ -25,4 +26,12 @@ class SafeSynthesizerResults(NSSBaseModel):
 
     evaluation_report_html: str | None = Field(
         default=None, description="HTML evaluation report string, or ``None`` if evaluation was not run."
+    )
+
+    evaluation_report_data: EvaluationReportData | None = Field(
+        default=None,
+        description=(
+            "The data the HTML evaluation report displays, for rendering it elsewhere, or ``None`` if evaluation "
+            "was not run or the data could not be built."
+        ),
     )

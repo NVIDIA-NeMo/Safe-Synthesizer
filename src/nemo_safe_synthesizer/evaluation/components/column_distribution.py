@@ -7,7 +7,7 @@ from functools import cached_property
 
 import pandas as pd
 from plotly.graph_objects import Figure
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
@@ -58,50 +58,44 @@ class ColumnDistributionPlotRow(BaseModel):
         return None
 
     @staticmethod
-    def _from_fields(
-        field1: EvaluationField, figure1: Figure, field2: EvaluationField | None, figure2: Figure | None
-    ) -> ColumnDistributionPlotRow:
-        figs = [figure1]
-        titles = [field1.name]
-        if figure2 is not None and field2 is not None:
-            figs.append(figure2)
-            titles.append(field2.name)
+    def _from_figures(names: list[str], figs: list[Figure]) -> ColumnDistributionPlotRow:
         fig = figures.combine_subplots(
             figures=figs,
-            titles=titles,
+            titles=names,
             shared_xaxes=False,
             shared_yaxes=False,
             height=500,
             margin={"t": 36, "b": 0, "l": 0, "r": 0},
         )
-        fig.update_xaxes(showticklabels=False, visible=False).to_html(full_html=False, include_plotlyjs=False)
-        fig = fig.to_html(full_html=False, include_plotlyjs=False)
-
-        return ColumnDistributionPlotRow(name1=field1.name, name2=field2.name if field2 else None, figure=fig)
+        fig.update_xaxes(showticklabels=False, visible=False)
+        return ColumnDistributionPlotRow(
+            name1=names[0], name2=names[1] if len(names) > 1 else None, figure=Component.figure_html(fig)
+        )
 
     @staticmethod
-    def from_evaluation_datasets(evaluation_datasets: EvaluationDatasets) -> list[dict[str, str]]:
-        tups = []
-        result_rows = []
+    def from_figures(column_figures: dict[str, Figure]) -> list[dict[str, str]]:
+        """Pair per-column figures into side-by-side rows for the HTML report, in column order."""
+        items = list(column_figures.items())
+        rows = []
+        for i in range(0, len(items), 2):
+            pair = items[i : i + 2]
+            rows.append(ColumnDistributionPlotRow._from_figures([name for name, _ in pair], [fig for _, fig in pair]))
+        return [r.model_dump() for r in rows]
 
+    @staticmethod
+    def figures_for_datasets(evaluation_datasets: EvaluationDatasets) -> dict[str, Figure]:
+        """Return each tabular column's distribution chart, keyed by column name, skipping columns without one."""
         tabular_columns = set(evaluation_datasets.get_tabular_columns())
-        tabular_fields = [f for f in evaluation_datasets.evaluation_fields if f.name in tabular_columns]
-
-        for f in tabular_fields:
+        column_figures = {}
+        for f in evaluation_datasets.evaluation_fields:
+            if f.name not in tabular_columns:
+                continue
             figure = ColumnDistributionPlotRow._get_figure_for_field(
                 f, evaluation_datasets.training[f.name], evaluation_datasets.synthetic[f.name]
             )
             if figure is not None:
-                tups.append((f, figure))
-
-        for i in range(0, len(tups), 2):
-            field1, figure1 = tups[i]
-            if i + 1 < len(tups):
-                field2, figure2 = tups[i + 1]
-            else:
-                field2, figure2 = None, None
-            result_rows.append(ColumnDistributionPlotRow._from_fields(field1, figure1, field2, figure2))
-        return [r.model_dump() for r in result_rows]
+                column_figures[f.name] = figure
+        return column_figures
 
 
 class ColumnDistribution(Component):
@@ -122,11 +116,24 @@ class ColumnDistribution(Component):
         default=list(), description="Per-column evaluation metadata and distribution scores."
     )
 
+    _evaluation_datasets: EvaluationDatasets | None = PrivateAttr(default=None)
+
+    @cached_property
+    def report_figures(self) -> dict[str, Figure]:
+        """Per-column training vs. synthetic distribution charts, keyed by column name.
+
+        Empty unless the component was built with ``from_evaluation_datasets``, since the charts need the column values.
+        """
+        if self._evaluation_datasets is None:
+            return {}
+        return ColumnDistributionPlotRow.figures_for_datasets(self._evaluation_datasets)
+
     @cached_property
     def jinja_context(self) -> dict:
-        """Template context with evaluation fields and column statistics for the report."""
+        """Template context with evaluation fields, column statistics, and paired distribution figures."""
         d = super().jinja_context
         d["anchor_link"] = "#distribution-stability"
+        d["figures"] = ColumnDistributionPlotRow.from_figures(self.report_figures)
         if self.evaluation_fields:
             d["evaluation_fields"] = [
                 f.model_dump(mode="json", exclude=_EVALUATION_FIELD_REPORT_EXCLUDE) for f in self.evaluation_fields
@@ -135,8 +142,6 @@ class ColumnDistribution(Component):
             d["column_statistics"] = {
                 k: v.model_dump(exclude=_COLUMN_STATISTICS_REPORT_EXCLUDE) for k, v in self.column_statistics.items()
             }
-        # Figures are set up with ColumnDistributionPlotRow. It requires an EvaluateDataset so needs
-        # to be done out of band as separate call from enclosing report class.
         return d
 
     @staticmethod
@@ -149,14 +154,12 @@ class ColumnDistribution(Component):
         if tabular_fields:
             average_divergence = EvaluationField.get_average_divergence(tabular_fields)
             score = EvaluationField.get_field_distribution_stability(average_divergence)
-            return ColumnDistribution(
-                score=score,
-                column_statistics=evaluation_datasets.column_statistics,
-                evaluation_fields=evaluation_datasets.evaluation_fields,
-            )
         else:
-            return ColumnDistribution(
-                score=EvaluationScore(notes="No tabular columns detected."),
-                column_statistics=evaluation_datasets.column_statistics,
-                evaluation_fields=evaluation_datasets.evaluation_fields,
-            )
+            score = EvaluationScore(notes="No tabular columns detected.")
+        component = ColumnDistribution(
+            score=score,
+            column_statistics=evaluation_datasets.column_statistics,
+            evaluation_fields=evaluation_datasets.evaluation_fields,
+        )
+        component._evaluation_datasets = evaluation_datasets
+        return component

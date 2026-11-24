@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -974,9 +975,10 @@ class SafeSynthesizer(ConfigBuilder):
     def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:
         """Save synthetic data, evaluation report, and metrics to the workdir.
 
-        Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when
-        available), and ``evaluation_metrics.json`` into the generate
-        directory.  Called automatically by ``run()``.  Call explicitly
+        Writes ``synthetic_data.csv``, ``evaluation_report.html`` and
+        ``evaluation_report_data.json`` (when available), and
+        ``evaluation_metrics.json`` into the generate directory. A failure
+        to write the report data is logged and does not fail the run.  Called automatically by ``run()``.  Call explicitly
         after stepwise execution
         (``process_data().train().generate().evaluate()``).
 
@@ -1013,4 +1015,23 @@ class SafeSynthesizer(ConfigBuilder):
             metrics_path.write_text(self.results.summary.model_dump_json(indent=2))
             logger.info(f"Saved evaluation metrics and runtimes to {metrics_path}")
 
+        self._save_report_data()
         return self
+
+    def _save_report_data(self) -> None:
+        """Write the evaluation report data, or remove a previous run's file when there is none."""
+        assert self._workdir is not None
+        assert self.results is not None
+        data_path = self._workdir.evaluation_report_data
+        report_data = self.results.evaluation_report_data
+        try:
+            if report_data is None:
+                data_path.unlink(missing_ok=True)
+                return
+            data_path.parent.mkdir(parents=True, exist_ok=True)
+            data_path.write_text(report_data.model_dump_json())
+            logger.info(f"Saved evaluation report data to {data_path}")
+        except Exception:
+            logger.exception(f"Failed to save evaluation report data to {data_path}; continuing without it.")
+            with contextlib.suppress(OSError):
+                data_path.unlink(missing_ok=True)

@@ -15,9 +15,14 @@ from typing import Any
 import pandas as pd
 
 from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
+from .evaluation.data_model.report_data import EvaluationReportData
 from .evaluation.render import render_report
+from .evaluation.report_data import build_report_data
 from .evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from .generation.results import GenerateJobResults
+from .observability import get_logger
+
+logger = get_logger(__name__)
 
 # Fields passed through unchanged from ``GenerateJobResults`` to
 # ``SafeSynthesizerSummary``.  Both models use identical names for these,
@@ -91,6 +96,17 @@ def make_nss_summary(
     return SafeSynthesizerSummary(timing=timing, **gen_fields, **report_scores)
 
 
+def maybe_build_report_data(report: MultimodalReport | None) -> EvaluationReportData | None:
+    """Build the evaluation report data, or return ``None`` without a report or if building it fails."""
+    if report is None:
+        return None
+    try:
+        return build_report_data(report)
+    except Exception:
+        logger.exception("Failed to build evaluation report data; continuing without it.")
+        return None
+
+
 def make_nss_results(
     generate_results: GenerateJobResults | pd.DataFrame,
     total_time: float | None = None,
@@ -113,11 +129,11 @@ def make_nss_results(
         training_time: Training phase time in seconds.
         generation_time: Generation phase time in seconds.
         evaluation_time: Evaluation phase time in seconds.
-        report: Evaluation report to render as HTML.
+        report: Evaluation report to render as HTML and export as data.
 
     Returns:
         A ``SafeSynthesizerResults`` with synthetic data, summary, and
-        optional HTML evaluation report.
+        optional HTML evaluation report and report data.
 
     Raises:
         ValueError: If ``generate_results`` is ``None`` or an empty
@@ -139,4 +155,5 @@ def make_nss_results(
         synthetic_data=generate_results.df if isinstance(generate_results, GenerateJobResults) else generate_results,
         summary=summary,
         evaluation_report_html=render_report(report) if report else None,
+        evaluation_report_data=maybe_build_report_data(report),
     )

@@ -114,7 +114,7 @@ Window Membership Inference Protection (wMIP) measures whether the synthetic dat
 
 ## Evaluation Reports
 
-Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. The report contains:
+Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. A second one, `generate/evaluation_report_data.json`, holds everything the report displays, with each chart as Plotly figure JSON, so you can render the report in your own interface; it is also available as `results.evaluation_report_data` in the SDK. It contains no training values the HTML report does not show. Readers should accept a `schema_version` higher than the one they were written for. The report contains:
 
 - Overall SQS and DPS scores
 - Statistics describing the training and synthetic data
