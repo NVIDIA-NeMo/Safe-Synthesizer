@@ -33,7 +33,7 @@ from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report impor
 from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
 from nemo_safe_synthesizer.results import make_nss_results
 
-SECRET = "secret-ssn-123-45-6789@example.com"
+PLANTED_PII = "planted-ssn-123-45-6789@example.com"
 
 ComponentT = TypeVar("ComponentT", bound=Component)
 
@@ -140,18 +140,18 @@ def test_report_figures_are_cached_figure_objects() -> None:
 
 def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
     training = _frame(1)
-    training.loc[0, "contact"] = SECRET
+    training.loc[0, "contact"] = PLANTED_PII
     report = _tabular_report(training, pii_replay_enabled=True)
     distribution = _component(report, ColumnDistribution)
     contact = next(f for f in distribution.evaluation_fields if f.name == "contact")
-    assert SECRET in contact.training_field_features.unique_values_list
+    assert PLANTED_PII in contact.training_field_features.unique_values_list
     assert contact.column_statistics is not None
-    assert SECRET in contact.column_statistics.detected_entity_values["email"]
+    assert PLANTED_PII in contact.column_statistics.detected_entity_values["email"]
 
     data = build_report_data(report)
     serialized = data.model_dump_json()
 
-    assert SECRET not in serialized
+    assert PLANTED_PII not in serialized
     assert "unique_values_list" not in serialized
     assert "detected_entity_values" not in serialized
     assert "training_distribution" not in serialized

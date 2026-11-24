@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Build ``EvaluationReportData`` from a completed evaluation report.
 
 Each value is copied from an explicit list of fields, so values a component keeps for computation
