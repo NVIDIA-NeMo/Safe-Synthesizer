@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.pii_replacer import llm_client
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceSettings,
     InvalidInferenceResponse,
@@ -390,3 +391,22 @@ class TestAllowHttp:
         )
 
         OpenAICompatibleTransport(settings)
+
+    @pytest.mark.parametrize(
+        ("endpoint", "expected_warnings"),
+        [("http://models.internal:8080/v1", 1), ("https://models.internal/v1", 0), (LOCAL_ENDPOINT, 0)],
+    )
+    def test_warns_once_per_transport_about_plaintext_remote_endpoint(
+        self, monkeypatch: pytest.MonkeyPatch, endpoint: str, expected_warnings: int
+    ) -> None:
+        warnings: list[str] = []
+        monkeypatch.setattr(llm_client.logger.user, "warning", warnings.append)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": endpoint, "NSS_INFERENCE_ALLOW_HTTP": "true"},
+        )
+
+        OpenAICompatibleTransport(settings)
+
+        assert len(warnings) == expected_warnings
+        assert all("models.internal:8080" in warning for warning in warnings)

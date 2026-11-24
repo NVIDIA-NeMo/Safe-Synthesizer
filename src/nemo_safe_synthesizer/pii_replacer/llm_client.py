@@ -155,14 +155,10 @@ def _validate_endpoint(endpoint_url: str, *, allow_http: bool = False) -> None:
             "The PII inference endpoint URL must not contain a query string or fragment; "
             "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
         )
-    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
-        if not allow_http:
-            raise ParameterError(
-                "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, "
-                "or ::1); set NSS_INFERENCE_ALLOW_HTTP=true only for an endpoint on a trusted private network"
-            )
-        logger.warning(
-            "NSS_INFERENCE_ALLOW_HTTP is set, so PII planning samples are sent unencrypted to %s", parsed.netloc
+    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname) and not allow_http:
+        raise ParameterError(
+            "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, "
+            "or ::1); set NSS_INFERENCE_ALLOW_HTTP=true only for an endpoint on a trusted private network"
         )
 
 
@@ -321,7 +317,14 @@ class OpenAICompatibleTransport:
         # Loopback servers never need a proxy, and an environment proxy would
         # receive the bearer key and raw cell samples. Remote endpoints keep
         # the environment's proxy settings.
-        self._trust_env = not is_loopback_host(urlparse(settings.endpoint_url).hostname)
+        parsed = urlparse(settings.endpoint_url)
+        is_remote = not is_loopback_host(parsed.hostname)
+        self._trust_env = is_remote
+        if parsed.scheme == "http" and is_remote:
+            logger.user.warning(
+                f"NSS_INFERENCE_ALLOW_HTTP is set, so PII planning samples and any API key are sent unencrypted "
+                f"to {parsed.netloc}"
+            )
 
     def complete(
         self,

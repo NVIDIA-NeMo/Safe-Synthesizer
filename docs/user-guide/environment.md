@@ -212,8 +212,9 @@ export NSS_INFERENCE_KEY=<your key>
   URL that `/chat/completions` is added to, so it must not contain
   credentials, a query string, or a fragment.
 - To call a service over plain HTTP on a private network you trust, such as an
-  in-cluster gateway, set `NSS_INFERENCE_ALLOW_HTTP=true`. The samples are then
-  sent unencrypted, and the run log warns about it.
+  in-cluster gateway, set `NSS_INFERENCE_ALLOW_HTTP=true`. The samples and any
+  API key are then sent unencrypted, through `HTTP_PROXY` when it is set and the
+  host is not in `NO_PROXY`, and the run log warns about it.
 - With an endpoint, a model ID is required. It resolves from
   `--inference-model-id`, then `replace_pii.llm.model_id`, then
   `NSS_INFERENCE_MODEL`.
