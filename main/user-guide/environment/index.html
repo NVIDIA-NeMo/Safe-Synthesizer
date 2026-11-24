@@ -9991,10 +9991,10 @@ to the sampler's values. Where they go depends only on
   <code>NSS_INFERENCE_LOCAL_PROFILE</code>, starts its own server there. To start that
   server yourself and reuse it across runs, see
   <a href="../customize-pii-replacement/#reuse-one-server-across-runs">Reuse one server across runs</a>.</li>
-<li>Any other URL: Safe Synthesizer sends the data to that service over HTTPS,
-  for example <code>https://integrate.api.nvidia.com/v1</code> for the hosted NVIDIA
-  service. Only use a service that is approved to receive the input data,
-  including rows that may later be held out for evaluation.</li>
+<li>Any other URL: Safe Synthesizer sends the data to that service, for example
+  <code>https://integrate.api.nvidia.com/v1</code> for the hosted NVIDIA service. Only use
+  a service that is approved to receive the input data, including rows that may
+  later be held out for evaluation.</li>
 </ul>
 <p>The run log states which case applies when planning starts. Planning also runs
 during evaluation when PII replacement is off and <code>evaluation.pii_replay_enabled</code>
@@ -10004,9 +10004,8 @@ is true, to find the PII the replay check looks for.</p>
 </span></span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="hll"><span class="nb">export</span><span class="w"> </span><span class="nv">NSS_INFERENCE_KEY</span><span class="o">=</span>&lt;your<span class="w"> </span>key&gt;
 </span></span></code></pre></div>
 <ul>
-<li>The endpoint must use HTTPS unless it is a loopback address. It is the base
-  URL that <code>/chat/completions</code> is added to, so it must not contain
-  credentials, a query string, or a fragment.</li>
+<li>The endpoint is the base URL that <code>/chat/completions</code> is added to, so it
+  must not contain credentials, a query string, or a fragment.</li>
 <li>With an endpoint, a model ID is required. It resolves from
   <code>--inference-model-id</code>, then <code>replace_pii.llm.model_id</code>, then
   <code>NSS_INFERENCE_MODEL</code>.</li>
