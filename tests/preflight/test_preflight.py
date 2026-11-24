@@ -415,7 +415,7 @@ class TestInferenceModelCheck:
             ),
             pytest.param(
                 {"NSS_INFERENCE_ENDPOINT": "http://inference.example.com/v1"},
-                ["inference_endpoint_invalid"],
+                [],
                 id="remote-plaintext-http",
             ),
         ],

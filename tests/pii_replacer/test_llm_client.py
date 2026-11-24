@@ -139,9 +139,11 @@ class TestInferenceSettings:
             "http://127.1.2.3/v1",
             "http://[::1]:8000/v1",
             "https://inference.example.com/v1",
+            "http://inference.example.com/v1",
+            "http://10.0.0.5:8000/v1",
         ],
     )
-    def test_accepts_https_or_loopback_http(self, endpoint: str) -> None:
+    def test_accepts_http_and_https_endpoints(self, endpoint: str) -> None:
         settings = resolve_inference_settings(LLMConfig(model_id="model"), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
         assert settings.endpoint_url == endpoint
@@ -158,12 +160,9 @@ class TestInferenceSettings:
             ),
             pytest.param("https://inference.example.com/v1?key=abc", "query string or fragment", id="query-string"),
             pytest.param("https://inference.example.com/v1#chat", "query string or fragment", id="fragment"),
-            pytest.param("http://inference.example.com/v1", "must use HTTPS", id="remote-http"),
-            pytest.param("http://10.0.0.5:8000/v1", "must use HTTPS", id="private-network-http"),
-            pytest.param("http://localhost.example.com/v1", "must use HTTPS", id="localhost-lookalike"),
         ],
     )
-    def test_rejects_invalid_or_plaintext_remote_endpoints(self, endpoint: str, message: str) -> None:
+    def test_rejects_invalid_endpoints(self, endpoint: str, message: str) -> None:
         with pytest.raises(ParameterError, match=message):
             resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
@@ -269,7 +268,7 @@ class TestOpenAICompatibleTransport:
 
         assert timeouts == [900.0]
 
-    def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
+    def test_accepts_plaintext_remote_endpoint_from_direct_settings(self) -> None:
         settings = InferenceSettings(
             endpoint_url="http://inference.example.com/v1",
             model_id="remote-model",
@@ -277,8 +276,7 @@ class TestOpenAICompatibleTransport:
             api_key="private-key",  # pragma: allowlist secret
         )
 
-        with pytest.raises(ParameterError, match="must use HTTPS"):
-            OpenAICompatibleTransport(settings)
+        OpenAICompatibleTransport(settings)
 
     def test_sends_chat_completions_with_strict_json_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured = _capture_request(monkeypatch, _StructuredResponse)

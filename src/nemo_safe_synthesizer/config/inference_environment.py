@@ -71,8 +71,7 @@ def nonblank(value: str | None) -> str | None:
 class InferenceEnvironment:
     """The ``NSS_INFERENCE_*`` settings, with blank values read as unset.
 
-    The endpoint is checked where it is used: an explicit endpoint must use HTTPS
-    unless it is a loopback address, while with a local profile it must be the
+    The endpoint is checked where it is used: with a local profile it must be the
     loopback address the managed server listens on.
 
     Example:

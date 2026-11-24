@@ -131,11 +131,7 @@ def is_loopback_host(hostname: str | None) -> bool:
 
 
 def _validate_endpoint(endpoint_url: str) -> None:
-    """Reject endpoints that are malformed, embed credentials, or send data unencrypted.
-
-    Plan enhancement sends raw cell samples and possibly a bearer key, so
-    plaintext HTTP is accepted only for loopback hosts.
-    """
+    """Reject endpoints that are malformed or embed credentials."""
     parsed = urlparse(endpoint_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ParameterError("The PII inference endpoint must be an absolute HTTP(S) URL")
@@ -147,10 +143,6 @@ def _validate_endpoint(endpoint_url: str) -> None:
         raise ParameterError(
             "The PII inference endpoint URL must not contain a query string or fragment; "
             "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
-        )
-    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
-        raise ParameterError(
-            "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, or ::1)"
         )
 
 
@@ -209,8 +201,7 @@ def resolve_inference_settings(
     Raises:
         InvalidRequestSettingsError: If the timeout or request options are invalid.
         ParameterError: If no endpoint is set, or the endpoint is not an
-            absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
-            for a non-loopback host.
+            absolute HTTP(S) URL, or embeds credentials, a query string, or a fragment.
         MissingInferenceModelError: If the endpoint has no model ID.
     """
     return endpoint_inference_settings(config, InferenceEnvironment.from_environ(environ))
@@ -296,8 +287,7 @@ class OpenAICompatibleTransport:
         settings: Resolved endpoint, model, credential, timeout, and request options.
 
     Raises:
-        ParameterError: If the endpoint is malformed, embeds credentials, or
-            uses plaintext HTTP for a non-loopback host.
+        ParameterError: If the endpoint is malformed or embeds credentials, a query string, or a fragment.
     """
 
     def __init__(self, settings: InferenceSettings) -> None:
