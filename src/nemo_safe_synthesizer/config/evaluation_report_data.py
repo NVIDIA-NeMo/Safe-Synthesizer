@@ -1,15 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Evaluation results as structured data: scores, per-metric values and charts, and column statistics.
+"""Evaluation results as structured data, for presenting them outside the HTML report.
 
-``EvaluationReportData`` carries the values behind the evaluation report so another interface can
-present them. Training values are left out, such as detected PII values and per-column distinct
-values. Every field is always present in the JSON; a field typed ``X | None`` is ``null`` when there
-is no value for it.
-
-Readers should accept any ``schema_version`` at or above the one they were written for and ignore
-fields they do not know. The version is raised only when a field is removed or its meaning changes.
+``schema_version`` is raised only when a field is removed or changes meaning; readers ignore unknown fields.
 """
 
 from __future__ import annotations
@@ -19,7 +13,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 REPORT_DATA_SCHEMA_VERSION = 1
-"""Current ``EvaluationReportData.schema_version``."""
 
 
 class ReportDataModel(BaseModel):
