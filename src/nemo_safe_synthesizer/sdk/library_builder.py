@@ -1029,7 +1029,7 @@ class SafeSynthesizer(ConfigBuilder):
                 data_path.unlink(missing_ok=True)
                 return
             data_path.parent.mkdir(parents=True, exist_ok=True)
-            data_path.write_text(report_data.model_dump_json())
+            data_path.write_text(report_data.model_dump_json(), encoding="utf-8")
             logger.info(f"Saved evaluation report data to {data_path}")
         except Exception:
             logger.exception(f"Failed to save evaluation report data to {data_path}; continuing without it.")

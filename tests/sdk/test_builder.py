@@ -429,6 +429,16 @@ class TestSaveResults:
         assert data_path.parent == nss._workdir.evaluation_report.parent
         assert EvaluationReportData.model_validate_json(data_path.read_text()) == nss.results.evaluation_report_data
 
+    def test_saves_report_data_as_utf8(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_data = _report_data().model_copy(update={"job_id": "café-ジョブ"})
+
+        nss.save_results()
+
+        assert nss._workdir is not None
+        saved = nss._workdir.evaluation_report_data.read_bytes().decode("utf-8")
+        assert EvaluationReportData.model_validate_json(saved).job_id == "café-ジョブ"
+
     def test_removes_stale_report_data_when_evaluation_is_skipped(self, tmp_path: Path):
         nss = _builder_with_mock_results(tmp_path)
         assert nss._workdir is not None
