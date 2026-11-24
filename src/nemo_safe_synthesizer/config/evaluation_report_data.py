@@ -19,15 +19,19 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
-
-from ...config.base import NSSBaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 REPORT_DATA_SCHEMA_VERSION = 1
 """Current ``EvaluationReportData.schema_version``."""
 
 
-class ReportScore(NSSBaseModel):
+class ReportDataModel(BaseModel):
+    """Base of the report data models: ignores unknown fields so older readers accept newer data."""
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ReportScore(ReportDataModel):
     """A metric's score and grade."""
 
     raw_score: float | None = Field(description="Unscaled metric value, or null if it could not be computed.")
@@ -36,7 +40,7 @@ class ReportScore(NSSBaseModel):
     notes: str | None = Field(description="Warning or error shown with the score, or null.")
 
 
-class ReportFigure(NSSBaseModel):
+class ReportFigure(ReportDataModel):
     """One chart of a report card."""
 
     title: str = Field(description="Chart title: the column name for per-column charts, else the metric name.")
@@ -48,7 +52,7 @@ class ReportFigure(NSSBaseModel):
     )
 
 
-class ReportCard(NSSBaseModel):
+class ReportCard(ReportDataModel):
     """A metric with its score."""
 
     name: str = Field(description="Metric display name.")
@@ -79,7 +83,7 @@ class MembershipInferenceCard(FigureCard):
     excluded_columns: list[str] = Field(description="Columns left out via `evaluation.mia_excluded_columns`.")
 
 
-class ColumnProfile(NSSBaseModel):
+class ColumnProfile(ReportDataModel):
     """Summary statistics of one column in one dataset."""
 
     type: str = Field(description="Inferred column type, such as 'numeric', 'categorical', or 'text'.")
@@ -91,7 +95,7 @@ class ColumnProfile(NSSBaseModel):
     avg_str_length: float | None = Field(description="Mean length of the values as strings.")
 
 
-class ColumnPIIStatistics(NSSBaseModel):
+class ColumnPIIStatistics(ReportDataModel):
     """PII detected in a training column and how it was replaced."""
 
     assigned_type: str | None = Field(description="Column type assigned by PII detection.")
@@ -101,7 +105,7 @@ class ColumnPIIStatistics(NSSBaseModel):
     transform_functions: list[str] = Field(description="Transforms applied to the column, sorted.")
 
 
-class ColumnReport(NSSBaseModel):
+class ColumnReport(ReportDataModel):
     """One row of the Training Data table."""
 
     name: str = Field(description="Column name.")
@@ -118,7 +122,7 @@ class ColumnDistributionCard(FigureCard):
     columns: list[ColumnReport] = Field(description="Every training column, in training order.")
 
 
-class PIIReplayEntry(NSSBaseModel):
+class PIIReplayEntry(ReportDataModel):
     """Replay counts for one PII type in one column."""
 
     column_name: str = Field(description="Column name.")
@@ -140,7 +144,7 @@ class PIIReplayCard(ReportCard):
     skipped_reason: str | None = Field(description="Why PII replay did not run in full, or null.")
 
 
-class PIIEntity(NSSBaseModel):
+class PIIEntity(ReportDataModel):
     """One PII type of a column in the PII Replacement and Replay table. Replay counts are null without replay."""
 
     pii_type: str = Field(description="PII type.")
@@ -151,21 +155,21 @@ class PIIEntity(NSSBaseModel):
     replay_percentage: float | None = Field(description="replayed / unique * 100.")
 
 
-class PIIPatternSymbol(NSSBaseModel):
+class PIIPatternSymbol(ReportDataModel):
     """A symbol of a replacement pattern and what it stands for."""
 
     symbol: str = Field(description="Pattern symbol.")
     meaning: str = Field(description="What the symbol produces.")
 
 
-class PIIDependency(NSSBaseModel):
+class PIIDependency(ReportDataModel):
     """A column a replacement depends on."""
 
     column_name: str = Field(description="Column the replacement reads.")
     entity_type: str | None = Field(description="That column's entity type, or null.")
 
 
-class PIIColumn(NSSBaseModel):
+class PIIColumn(ReportDataModel):
     """One column of the PII Replacement and Replay table."""
 
     column_name: str = Field(description="Column name.")
@@ -177,7 +181,7 @@ class PIIColumn(NSSBaseModel):
     entities: list[PIIEntity] = Field(description="PII types in the column, most frequent first.")
 
 
-class PIIReplacementReport(NSSBaseModel):
+class PIIReplacementReport(ReportDataModel):
     """The PII Replacement and Replay card."""
 
     replacement_off: bool = Field(description="True when PII replacement was off and PII was only detected.")
@@ -193,7 +197,7 @@ class PIIReplacementReport(NSSBaseModel):
     )
 
 
-class SkippedComparison(NSSBaseModel):
+class SkippedComparison(ReportDataModel):
     """A time-series group and column pair left out of a metric."""
 
     column: str = Field(description="Column name.")
@@ -234,7 +238,7 @@ class AutocorrelationCard(TimeSeriesCard):
     constant_synthetic_profile_count: int = Field(description="Pairs whose synthetic values are constant.")
 
 
-class WindowCounts(NSSBaseModel):
+class WindowCounts(ReportDataModel):
     """Windows compared per split, after and before sampling."""
 
     training_windows: int = Field(description="Training windows compared.")
@@ -246,7 +250,7 @@ class WindowCounts(NSSBaseModel):
     synthetic_windows_total: int = Field(description="Synthetic windows before sampling.")
 
 
-class WindowAttack(NSSBaseModel):
+class WindowAttack(ReportDataModel):
     """Share of windows flagged as close to a synthetic window."""
 
     training_flag_rate: float = Field(description="Share of training windows flagged.")
@@ -270,7 +274,7 @@ class WindowMembershipInferenceCard(TimeSeriesCard):
     )
 
 
-class ReportSections(NSSBaseModel):
+class ReportSections(ReportDataModel):
     """Which report sections have data."""
 
     synthetic_quality: bool = Field(description="The Synthetic Quality section has a score.")
@@ -279,7 +283,7 @@ class ReportSections(NSSBaseModel):
     time_series: bool = Field(description="Time-series metrics ran.")
 
 
-class DifferentialPrivacyReport(NSSBaseModel):
+class DifferentialPrivacyReport(ReportDataModel):
     """Differential privacy settings shown with the Data Privacy Score."""
 
     enabled: bool = Field(description="Whether training used differential privacy.")
@@ -287,7 +291,7 @@ class DifferentialPrivacyReport(NSSBaseModel):
     delta: float | str | None = Field(description="Privacy delta, 'auto', or null when disabled.")
 
 
-class EvaluationReportData(NSSBaseModel):
+class EvaluationReportData(ReportDataModel):
     """Everything the evaluation report displays, for rendering it natively.
 
     Cards are named like ``SafeSynthesizerSummary`` scores and are null when their component did not run.

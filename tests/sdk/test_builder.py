@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.evaluation_report_data import EvaluationReportData
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from nemo_safe_synthesizer.evaluation.data_model.report_data import EvaluationReportData
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry

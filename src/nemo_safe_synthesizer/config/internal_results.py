@@ -8,8 +8,8 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import Field
 
-from ..evaluation.data_model.report_data import EvaluationReportData
 from .base import NSSBaseModel
+from .evaluation_report_data import EvaluationReportData
 from .external_results import SafeSynthesizerSummary
 
 __all__ = ["SafeSynthesizerResults"]

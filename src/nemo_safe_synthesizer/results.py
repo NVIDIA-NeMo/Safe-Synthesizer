@@ -15,7 +15,7 @@ from typing import Any
 import pandas as pd
 
 from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
-from .evaluation.data_model.report_data import EvaluationReportData
+from .config.evaluation_report_data import EvaluationReportData
 from .evaluation.render import render_report
 from .evaluation.report_data import build_report_data
 from .evaluation.reports.multimodal.multimodal_report import MultimodalReport

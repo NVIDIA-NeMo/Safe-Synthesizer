@@ -24,6 +24,7 @@ import plotly.graph_objects as go
 from pydantic import BaseModel
 
 from ..artifacts.base.fields import FieldFeatures
+from ..config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
 from ..observability import get_logger
 from ..package_info import __version__
 from ..pii_replacer.transform_result import ColumnStatistics
@@ -45,7 +46,6 @@ from .components.time_series_common import TimeSeriesComponent
 from .components.window_group_mia import WindowGroupMIA
 from .data_model.evaluation_report import EvaluationReport
 from .data_model.evaluation_score import EvaluationScore
-from .data_model.report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
 
 logger = get_logger(__name__)
 

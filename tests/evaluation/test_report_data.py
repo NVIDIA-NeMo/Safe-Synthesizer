@@ -3,6 +3,8 @@
 
 import datetime
 import json
+import subprocess
+import sys
 from enum import Enum
 from typing import TypeVar
 
@@ -14,6 +16,7 @@ import pytest
 from nemo_safe_synthesizer import results as results_module
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
+from nemo_safe_synthesizer.config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
@@ -22,7 +25,6 @@ from nemo_safe_synthesizer.evaluation.components.column_distribution import Colu
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.correlation import Correlation
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
-from nemo_safe_synthesizer.evaluation.data_model.report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, figure_to_json, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -294,3 +296,18 @@ def test_results_survive_a_failed_report_data_export(monkeypatch: pytest.MonkeyP
 
     assert results.evaluation_report_html
     assert results.evaluation_report_data is None
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "nemo_safe_synthesizer.config.evaluation_report_data",
+        "nemo_safe_synthesizer.config.internal_results",
+        "nemo_safe_synthesizer.evaluation.report_data",
+        "nemo_safe_synthesizer.results",
+    ],
+)
+def test_report_data_modules_import_first_in_a_fresh_interpreter(module: str) -> None:
+    completed = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True, text=True)
+
+    assert completed.returncode == 0, completed.stderr
