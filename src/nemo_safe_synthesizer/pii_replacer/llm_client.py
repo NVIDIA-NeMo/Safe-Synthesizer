@@ -28,6 +28,7 @@ from ..config.inference_environment import (
 from ..config.replace_pii import LLMConfig
 from ..defaults import DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
 from ..errors import GenerationError, ParameterError
+from ..observability import get_logger
 
 __all__ = [
     "ENDPOINT_ENV",
@@ -51,6 +52,8 @@ __all__ = [
     "reserved_request_fields",
     "resolve_inference_settings",
 ]
+
+logger = get_logger(__name__)
 
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 
@@ -82,6 +85,9 @@ class InferenceSettings:
 
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
+
+    allow_http: bool = False
+    """Whether a non-loopback endpoint may use plaintext HTTP, from ``NSS_INFERENCE_ALLOW_HTTP``."""
 
 
 class TransientInferenceError(GenerationError):
@@ -130,11 +136,12 @@ def is_loopback_host(hostname: str | None) -> bool:
         return False
 
 
-def _validate_endpoint(endpoint_url: str) -> None:
+def _validate_endpoint(endpoint_url: str, *, allow_http: bool = False) -> None:
     """Reject endpoints that are malformed, embed credentials, or send data unencrypted.
 
     Plan enhancement sends raw cell samples and possibly a bearer key, so
-    plaintext HTTP is accepted only for loopback hosts.
+    plaintext HTTP is accepted only for loopback hosts, unless ``allow_http``
+    accepts it for an endpoint on a trusted private network.
     """
     parsed = urlparse(endpoint_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -149,8 +156,13 @@ def _validate_endpoint(endpoint_url: str) -> None:
             "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
         )
     if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
-        raise ParameterError(
-            "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, or ::1)"
+        if not allow_http:
+            raise ParameterError(
+                "The PII inference endpoint must use HTTPS unless it is a loopback address (localhost, 127.0.0.0/8, "
+                "or ::1); set NSS_INFERENCE_ALLOW_HTTP=true only for an endpoint on a trusted private network"
+            )
+        logger.warning(
+            "NSS_INFERENCE_ALLOW_HTTP is set, so PII planning samples are sent unencrypted to %s", parsed.netloc
         )
 
 
@@ -210,7 +222,7 @@ def resolve_inference_settings(
         InvalidRequestSettingsError: If the timeout or request options are invalid.
         ParameterError: If no endpoint is set, or the endpoint is not an
             absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
-            for a non-loopback host.
+            for a non-loopback host without ``NSS_INFERENCE_ALLOW_HTTP``.
         MissingInferenceModelError: If the endpoint has no model ID.
     """
     return endpoint_inference_settings(config, InferenceEnvironment.from_environ(environ))
@@ -222,7 +234,7 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
     resolved_model = configured_model_id(config, environment)
     if resolved_endpoint is None:
         raise ParameterError("No PII inference endpoint is set; set NSS_INFERENCE_ENDPOINT or --inference-endpoint-url")
-    _validate_endpoint(resolved_endpoint)
+    _validate_endpoint(resolved_endpoint, allow_http=environment.allow_http)
     if resolved_model is None:
         raise MissingInferenceModelError(
             "NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too: use "
@@ -240,6 +252,7 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
             else environment.timeout_seconds
         ),
         request_options=merge_request_options(environment.request_options),
+        allow_http=environment.allow_http,
     )
 
 
@@ -297,13 +310,13 @@ class OpenAICompatibleTransport:
 
     Raises:
         ParameterError: If the endpoint is malformed, embeds credentials, or
-            uses plaintext HTTP for a non-loopback host.
+            uses plaintext HTTP for a non-loopback host without ``settings.allow_http``.
     """
 
     def __init__(self, settings: InferenceSettings) -> None:
         # Settings built directly, not through ``resolve_inference_settings``,
         # must not send samples or the bearer key over an unsafe endpoint.
-        _validate_endpoint(settings.endpoint_url)
+        _validate_endpoint(settings.endpoint_url, allow_http=settings.allow_http)
         self._settings = settings
         # Loopback servers never need a proxy, and an environment proxy would
         # receive the bearer key and raw cell samples. Remote endpoints keep

@@ -345,3 +345,48 @@ class TestOpenAICompatibleTransport:
             )
 
         assert exc_info.value.retry_after == expected_retry_after
+
+
+class TestAllowHttp:
+    @pytest.mark.parametrize("raw", ["true", "1", "YES", "on"])
+    def test_allows_plaintext_remote_endpoint_when_opted_in(self, raw: str) -> None:
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": "http://models.internal:8080/v1", "NSS_INFERENCE_ALLOW_HTTP": raw},
+        )
+
+        assert settings.endpoint_url == "http://models.internal:8080/v1"
+        assert settings.allow_http is True
+        OpenAICompatibleTransport(settings)
+
+    @pytest.mark.parametrize("raw", ["false", "0", "no", "off", ""])
+    def test_keeps_rejecting_plaintext_remote_endpoint_otherwise(self, raw: str) -> None:
+        with pytest.raises(ParameterError, match="NSS_INFERENCE_ALLOW_HTTP=true"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": "http://models.internal:8080/v1", "NSS_INFERENCE_ALLOW_HTTP": raw},
+            )
+
+    def test_rejects_a_non_boolean_value(self) -> None:
+        with pytest.raises(ParameterError, match="NSS_INFERENCE_ALLOW_HTTP must be true or false"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": "https://example.com/v1", "NSS_INFERENCE_ALLOW_HTTP": "maybe"},
+            )
+
+    def test_still_rejects_credentials_in_the_url(self) -> None:
+        with pytest.raises(ParameterError, match="must not contain credentials"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={
+                    "NSS_INFERENCE_ENDPOINT": "http://user:pw@models.internal/v1",  # pragma: allowlist secret
+                    "NSS_INFERENCE_ALLOW_HTTP": "true",
+                },
+            )
+
+    def test_direct_settings_honor_the_opt_in(self) -> None:
+        settings = InferenceSettings(
+            endpoint_url="http://models.internal:8080/v1", model_id="model", max_workers=1, allow_http=True
+        )
+
+        OpenAICompatibleTransport(settings)
