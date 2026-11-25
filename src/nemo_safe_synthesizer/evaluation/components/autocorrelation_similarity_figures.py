@@ -3,19 +3,19 @@
 
 """Plotly report figures for autocorrelation similarity.
 
-Each builder summarizes the per-pair profiles stored by the metric in
-``AutocorrelationSimilarity.details``.
+Each builder summarizes the per-pair profiles exported in
+``AutocorrelationDetails.profiles``.
 """
 
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping, Sequence
-from typing import Any
+from collections.abc import Sequence
 
 import numpy as np
 import plotly.graph_objects as go
 
+from ...config.evaluation_report_data import AutocorrelationProfile
 from ...errors import DataError
 
 _TRAINING_COLOR = "#3b82f6"
@@ -34,7 +34,7 @@ AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN = 4
 AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS = 8
 
 
-def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
+def generate_autocorrelation_summary_figure(profiles: Sequence[AutocorrelationProfile]) -> go.Figure:
     """Plot typical training and synthetic profiles across groups.
 
     Each value column gets a median profile and an interquartile band for both
@@ -43,7 +43,7 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     first column is visible so the report can switch columns by trace index.
 
     Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
+        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.
 
     Returns:
         A Plotly figure with one visible column at a time.
@@ -54,13 +54,13 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     columns = order_autocorrelation_columns(profiles)
     figure = go.Figure()
     for column_index, column in enumerate(columns):
-        column_profiles = [item for item in profiles if item["column"] == column]
+        column_profiles = [item for item in profiles if item.column == column]
         visible = column_index == 0
-        for key, name, line_color, band_color in (
-            ("training_acf", "Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
-            ("synthetic_acf", "Synthetic", _SYNTHETIC_COLOR, _SYNTHETIC_BAND_COLOR),
+        for rows, name, line_color, band_color in (
+            ([item.training_acf for item in column_profiles], "Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
+            ([item.synthetic_acf for item in column_profiles], "Synthetic", _SYNTHETIC_COLOR, _SYNTHETIC_BAND_COLOR),
         ):
-            lags, lower, median, upper = _profile_quantiles(column_profiles, key)
+            lags, lower, median, upper = _profile_quantiles(rows)
             figure.add_trace(
                 go.Scatter(
                     x=np.concatenate([lags, lags[::-1]]),
@@ -97,7 +97,7 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     return figure
 
 
-def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
+def generate_autocorrelation_lag_error_figure(profiles: Sequence[AutocorrelationProfile]) -> go.Figure:
     """Plot the mean absolute paired profile difference at each lag.
 
     Only lags where both profiles of a pair are finite contribute, matching
@@ -106,7 +106,7 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
     comparable across reports.
 
     Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
+        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.
 
     Returns:
         A Plotly bar figure of mean absolute difference by lag.
@@ -116,8 +116,8 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
     """
     if not profiles:
         raise DataError("At least one autocorrelation profile is required.")
-    training = _profile_matrix(profiles, "training_acf")
-    synthetic = _profile_matrix(profiles, "synthetic_acf")
+    training = _profile_matrix([item.training_acf for item in profiles])
+    synthetic = _profile_matrix([item.synthetic_acf for item in profiles])
     difference = np.abs(training - synthetic)
     support = np.sum(np.isfinite(difference), axis=0)
     with warnings.catch_warnings():
@@ -154,7 +154,7 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
 
 
 def generate_autocorrelation_pair_score_figure(
-    profiles: Sequence[Mapping[str, Any]],
+    profiles: Sequence[AutocorrelationProfile],
     overall_score: float | None,
     *,
     max_columns: int = AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
@@ -168,7 +168,7 @@ def generate_autocorrelation_pair_score_figure(
     to red at 0.
 
     Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
+        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.
         overall_score: Aggregate metric score drawn as a reference line.
         max_columns: Largest number of value columns to plot.
 
@@ -183,9 +183,9 @@ def generate_autocorrelation_pair_score_figure(
     rng = np.random.default_rng(0)
     figure = go.Figure()
     for column in columns:
-        column_profiles = [item for item in profiles if item["column"] == column]
-        groups = ["all rows" if item["group"] is None else str(item["group"]) for item in column_profiles]
-        similarity = np.array([float(item["similarity"]) for item in column_profiles])
+        column_profiles = [item for item in profiles if item.column == column]
+        groups = ["all rows" if item.group is None else str(item.group) for item in column_profiles]
+        similarity = np.array([float(item.similarity) for item in column_profiles])
         jitter = rng.uniform(-_PAIR_SCORE_JITTER, _PAIR_SCORE_JITTER, size=len(column_profiles))
         figure.add_trace(
             go.Scatter(
@@ -244,11 +244,11 @@ def shorten_column_label(name: str) -> str:
     return f"{name[:_LABEL_EDGE_LENGTH]}...{name[-_LABEL_EDGE_LENGTH:]}"
 
 
-def order_autocorrelation_columns(profiles: Sequence[Mapping[str, Any]]) -> list[str]:
+def order_autocorrelation_columns(profiles: Sequence[AutocorrelationProfile]) -> list[str]:
     """Return value columns ordered from lowest to highest mean pair similarity.
 
     Args:
-        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
+        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.
 
     Returns:
         Column names, lowest mean pair similarity first, with names breaking ties.
@@ -260,27 +260,27 @@ def order_autocorrelation_columns(profiles: Sequence[Mapping[str, Any]]) -> list
         raise DataError("At least one autocorrelation profile is required.")
     scores: dict[str, list[float]] = {}
     for item in profiles:
-        scores.setdefault(str(item["column"]), []).append(float(item["similarity"]))
+        scores.setdefault(str(item.column), []).append(float(item.similarity))
     return sorted(scores, key=lambda column: (float(np.mean(scores[column])), column))
 
 
-def _profile_matrix(profiles: Sequence[Mapping[str, Any]], key: str) -> np.ndarray:
-    """Stack profiles of different lengths into a NaN-padded lag matrix."""
-    width = max(len(item["lags"]) for item in profiles)
-    matrix = np.full((len(profiles), width), np.nan)
-    for row, item in enumerate(profiles):
-        values = np.array([np.nan if value is None else value for value in item[key]], dtype=float)
-        matrix[row, : len(values)] = values
+def _profile_matrix(rows: Sequence[Sequence[float | None]]) -> np.ndarray:
+    """Stack per-lag profiles of different lengths into a NaN-padded lag matrix."""
+    width = max(len(row) for row in rows)
+    matrix = np.full((len(rows), width), np.nan)
+    for index, row in enumerate(rows):
+        values = np.array([np.nan if value is None else value for value in row], dtype=float)
+        matrix[index, : len(values)] = values
     return matrix
 
 
-def _profile_quantiles(
-    profiles: Sequence[Mapping[str, Any]],
-    key: str,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _profile_quantiles(rows: Sequence[Sequence[float | None]]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return lags with finite values and their 25th, 50th, and 75th percentiles."""
-    matrix = _profile_matrix(profiles, key)
+    matrix = _profile_matrix(rows)
     valid = np.any(np.isfinite(matrix), axis=0)
     lags = np.arange(1, matrix.shape[1] + 1)[valid]
+    if not valid.any():
+        empty = np.array([], dtype=float)
+        return lags, empty, empty, empty
     lower, median, upper = np.nanpercentile(matrix[:, valid], [25, 50, 75], axis=0)
     return lags, lower, median, upper

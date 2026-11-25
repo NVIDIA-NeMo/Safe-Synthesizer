@@ -28,7 +28,7 @@ from ...config.evaluate import (
     WINDOW_GROUP_MIA_MIN_WINDOWS,
     WindowGroupMIAParameters,
 )
-from ...config.evaluation_report_data import TimeSeriesMetric
+from ...config.evaluation_report_data import WindowMembershipInferenceMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
@@ -46,6 +46,7 @@ from .window_group_mia_figures import (
     generate_window_group_mia_closest_match_figure,
     generate_window_group_mia_distance_figure,
     generate_window_group_mia_group_figure,
+    window_value_count,
 )
 
 logger = get_logger(__name__)
@@ -156,7 +157,7 @@ class _FlagCounts:
         return float(np.clip((np.exp(-loss) - holdout_rate) / (1 - holdout_rate), 0.0, 1.0))
 
 
-class WindowGroupMIA(TimeSeriesComponent):
+class WindowGroupMIA(TimeSeriesComponent[WindowMembershipInferenceMetric]):
     """Measure how well synthetic data protects training sequences from window membership inference.
 
     Training and holdout windows are compared with their nearest synthetic
@@ -198,12 +199,12 @@ class WindowGroupMIA(TimeSeriesComponent):
     )
 
     @classmethod
-    def report_context(cls, metric: TimeSeriesMetric) -> dict[str, Any]:
+    def report_context(cls, metric: WindowMembershipInferenceMetric) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().report_context(metric)
         details = metric.details
         figures: list[FigureSpec] = []
-        if details.get("distances", {}).get("training"):
+        if details.distances is not None and details.distances.training:
             figures.append(
                 (
                     "Distance to synthetic data",
@@ -212,18 +213,16 @@ class WindowGroupMIA(TimeSeriesComponent):
                     "window_group_mia_distance_info",
                 )
             )
-        if "attack" in details:
+        if details.attack is not None:
             figures.append(
                 (
                     "Groups flagged most",
-                    generate_window_group_mia_group_figure(
-                        details["per_group"], details["attack"]["holdout_flag_rate"]
-                    ),
+                    generate_window_group_mia_group_figure(details.per_group, details.attack.holdout_flag_rate),
                     False,
                     "window_group_mia_groups_info",
                 )
             )
-        if details.get("closest_match"):
+        if details.closest_match is not None:
             figures.append(
                 (
                     "Closest match",
@@ -233,13 +232,11 @@ class WindowGroupMIA(TimeSeriesComponent):
                 )
             )
         context["figures"] = cls.figure_rows(figures)
-        match = details.get("closest_match") or {}
-        context["summary_columns"] = details.get("columns", [])
-        context["summary_traces_per_column"] = 2 if "training_values" in match else 1
-        if match:
-            context["closest_match_distance_per_value"] = match["distance"] / np.sqrt(
-                details["window_size"] * len(details["columns"])
-            )
+        match = details.closest_match
+        context["summary_columns"] = details.columns
+        context["summary_traces_per_column"] = 2 if match is not None and match.training_values is not None else 1
+        if match is not None and match.distance is not None:
+            context["closest_match_distance_per_value"] = match.distance / np.sqrt(window_value_count(details))
         return context
 
     @staticmethod

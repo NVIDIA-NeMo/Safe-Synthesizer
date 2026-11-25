@@ -15,13 +15,16 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.evaluation_report_data import (
     REPORT_DATA_SCHEMA_VERSION,
+    EvaluationReportData,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
+from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.report_context import report_context
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, to_json_safe
@@ -183,11 +186,75 @@ def test_export_is_strict_json_with_correlations_and_no_plotly_figures() -> None
         assert all(len(row) == size for row in correlations[matrix])
 
 
-def test_export_of_a_time_series_report() -> None:
+def test_export_of_a_time_series_report_has_typed_details_without_training_only_values() -> None:
     payload = json.loads(build_report_data(_time_series_report()).model_dump_json(), parse_constant=_reject_constant)
+    metrics = EvaluationReportData.model_validate(payload).metrics
+    assert metrics.autocorrelation_similarity is not None
+    assert metrics.window_membership_inference_protection is not None
+    autocorrelation = metrics.autocorrelation_similarity.details
+    window = metrics.window_membership_inference_protection.details
 
-    assert payload["metrics"]["autocorrelation_similarity"]["details"]
-    assert payload["metrics"]["window_membership_inference_protection"]["details"]
+    assert autocorrelation.profiles
+    assert "pair_support" not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
+    assert autocorrelation.groups_only_in_training_count == 2
+    assert '"g0"' not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
+    assert window.attack is not None
+    assert window.training_group_count == 8
+    assert 0 < len(window.per_group) <= 8
+    assert window.closest_match is not None
+    assert window.closest_match.exact_copy is False
+    assert (
+        payload["metrics"]["window_membership_inference_protection"]["details"]["closest_match"]["training_values"]
+        is None
+    )
+
+
+def test_time_series_export_caps_group_rows_at_what_the_report_shows() -> None:
+    per_group = [
+        {"group": f"g{index:02d}", "windows": 20, "exact_copy_rate": 0.0, "flag_rate": index / 20}
+        for index in range(15)
+    ]
+    skipped = [{"group": f"g{index:02d}", "column": "value", "reason": "too short"} for index in range(30)]
+    report = _report_with(
+        WindowGroupMIA(score=EvaluationScore(), details={"evaluation_mode": "full", "per_group": per_group}),
+        AutocorrelationSimilarity(score=EvaluationScore(), details={"skipped": skipped}),
+    )
+
+    metrics = build_report_data(report).metrics
+
+    assert metrics.window_membership_inference_protection is not None
+    window = metrics.window_membership_inference_protection.details
+    assert window.training_group_count == 15
+    assert [group.group for group in window.per_group] == [f"g{index:02d}" for index in range(14, 2, -1)]
+    assert metrics.autocorrelation_similarity is not None
+    assert len(metrics.autocorrelation_similarity.details.skipped) == 12
+
+
+def test_time_series_export_keeps_an_overflowing_distance_as_null() -> None:
+    attack = {
+        "threshold": float("inf"),
+        "training_flag_rate": 0.1,
+        "holdout_flag_rate": 0.1,
+        "privacy_loss_beyond_chance": 0.0,
+        "holdout_exact_match_rate": 0.0,
+        "exact_copy_privacy_loss": 0.0,
+    }
+    match = {"distance": float("inf"), "exact_copy": False, "synthetic_values": [[1.0]], "training_values": [[2.0]]}
+    report = _report_with(
+        WindowGroupMIA(
+            score=EvaluationScore(),
+            details={"evaluation_mode": "full", "attack": attack, "closest_match": match, "per_group": []},
+        )
+    )
+
+    metric = build_report_data(report).metrics.window_membership_inference_protection
+
+    assert metric is not None
+    assert metric.details.attack is not None
+    assert metric.details.attack.threshold is None
+    assert metric.details.closest_match is not None
+    assert metric.details.closest_match.distance is None
+    assert metric.details.closest_match.training_values is None
 
 
 class _Color(Enum):

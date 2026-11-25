@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 import math
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from enum import Enum
 from functools import partial
@@ -27,16 +27,24 @@ from ..config.evaluation_report_data import (
     REPORT_DATA_SCHEMA_VERSION,
     AttackOutcome,
     AttributeInferenceMetric,
+    AutocorrelationCounts,
+    AutocorrelationDetails,
+    AutocorrelationProfile,
+    AutocorrelationSimilarityMetric,
+    ClosestMatch,
     ColumnPIIStatistics,
     ColumnProfile,
     ColumnProtection,
     ColumnResult,
+    ColumnSimilarity,
     CorrelationMatrices,
     CorrelationMetric,
     DatasetCounts,
     DeepStructureMetric,
     DifferentialPrivacySettings,
     EvaluationReportData,
+    GroupSelection,
+    GroupSimilarity,
     MembershipInferenceMetric,
     Metric,
     Metrics,
@@ -50,10 +58,17 @@ from ..config.evaluation_report_data import (
     Points,
     Projection,
     Scores,
+    SkippedComparison,
     TextSemanticMetric,
     TextStructureDistributions,
     TextStructureMetric,
-    TimeSeriesMetric,
+    WindowAttack,
+    WindowCounts,
+    WindowDistances,
+    WindowEvaluationMode,
+    WindowGroupSummary,
+    WindowMembershipInferenceDetails,
+    WindowMembershipInferenceMetric,
 )
 from ..config.parameters import SafeSynthesizerParameters
 from ..package_info import __version__
@@ -75,7 +90,6 @@ from .components.pii_replay import PIIReplay
 from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
-from .components.time_series_common import TimeSeriesComponent
 from .components.window_group_mia import WindowGroupMIA
 from .data_model.evaluation_datasets import EvaluationDatasets
 from .data_model.evaluation_report import EvaluationReport
@@ -84,6 +98,10 @@ from .reports.multimodal.multimodal_report import MultimodalReport
 
 _ComponentT = TypeVar("_ComponentT", bound=Component)
 _ResultT = TypeVar("_ResultT")
+
+# Group-level rows are capped at what the HTML report shows, so no other group is named in the export.
+SKIPPED_MAX_ROWS = 12
+GROUP_MAX_ROWS = 12
 
 
 def build_report_data(report: MultimodalReport) -> EvaluationReportData:
@@ -118,8 +136,10 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
                 _attribute_inference_metric, _find(report, AttributeInferenceProtection)
             ),
             pii_replay=_maybe(partial(_pii_replay_metric, config=config), _find(report, PIIReplay)),
-            autocorrelation_similarity=_maybe(_time_series_metric, _find(report, AutocorrelationSimilarity)),
-            window_membership_inference_protection=_maybe(_time_series_metric, _find(report, WindowGroupMIA)),
+            autocorrelation_similarity=_maybe(_autocorrelation_metric, _find(report, AutocorrelationSimilarity)),
+            window_membership_inference_protection=_maybe(
+                window_membership_inference_metric, _find(report, WindowGroupMIA)
+            ),
         ),
         dataset=_maybe(_dataset_counts, _find(report, DatasetStatistics)),
         columns=_columns(distribution, datasets) if distribution is not None else [],
@@ -378,8 +398,68 @@ def _columns(component: ColumnDistribution, datasets: EvaluationDatasets) -> lis
     ]
 
 
-def _time_series_metric(component: TimeSeriesComponent) -> TimeSeriesMetric:
-    return TimeSeriesMetric(score=_score(component.score), details=to_json_safe(component.details))
+def _autocorrelation_metric(component: AutocorrelationSimilarity) -> AutocorrelationSimilarityMetric:
+    details = to_json_safe(component.details)
+    counts, selection = details.get("counts"), details.get("group_selection")
+    return AutocorrelationSimilarityMetric(
+        score=_score(component.score),
+        details=AutocorrelationDetails(
+            evaluation_mode=details.get("evaluation_mode"),
+            timestamp_column=details.get("timestamp_column"),
+            group_column=details.get("group_column"),
+            max_lag=details.get("max_lag"),
+            min_points=details.get("min_points"),
+            counts=AutocorrelationCounts.model_validate(counts) if counts is not None else None,
+            group_selection=GroupSelection.model_validate(selection) if selection is not None else None,
+            per_group=[GroupSimilarity.model_validate(item) for item in details.get("per_group", [])],
+            per_column=[ColumnSimilarity.model_validate(item) for item in details.get("per_column", [])],
+            profiles=[
+                AutocorrelationProfile.model_validate({"reason": None, **item}) for item in details.get("profiles", [])
+            ],
+            skipped=[SkippedComparison.model_validate(item) for item in details.get("skipped", [])[:SKIPPED_MAX_ROWS]],
+            excluded_columns=details.get("excluded_columns", []),
+            groups_only_in_training_count=len(details.get("groups_only_in_training", [])),
+            groups_only_in_synthetic_count=len(details.get("groups_only_in_synthetic", [])),
+        ),
+    )
+
+
+def _most_flagged_groups(per_group: Sequence[Mapping[str, Any]]) -> list[WindowGroupSummary]:
+    flagged = [group for group in per_group if group.get("flag_rate") is not None]
+    flagged.sort(key=lambda group: (-group["flag_rate"], str(group["group"])))
+    return [WindowGroupSummary.model_validate(group) for group in flagged[:GROUP_MAX_ROWS]]
+
+
+def window_membership_inference_metric(component: WindowGroupMIA) -> WindowMembershipInferenceMetric:
+    """Return the exported results of a window membership inference component."""
+    details = to_json_safe(component.details)
+    counts, match, distances, attack = (details.get(key) for key in ("counts", "closest_match", "distances", "attack"))
+    per_group = details.get("per_group", [])
+    return WindowMembershipInferenceMetric(
+        score=_score(component.score),
+        details=WindowMembershipInferenceDetails(
+            evaluation_mode=details.get("evaluation_mode", WindowEvaluationMode.UNAVAILABLE),
+            columns=details.get("columns", []),
+            excluded_columns=details.get("excluded_columns", []),
+            window_size=details.get("window_size"),
+            counts=WindowCounts.model_validate(counts) if counts is not None else None,
+            exact_copy_rate=details.get("exact_copy_rate"),
+            closest_match=None
+            if match is None
+            else ClosestMatch(
+                distance=match["distance"],
+                exact_copy=match["exact_copy"],
+                synthetic_values=match["synthetic_values"],
+                training_values=match["training_values"] if match["exact_copy"] else None,
+            ),
+            distances=None
+            if distances is None
+            else WindowDistances(training=distances["training"], holdout=distances.get("holdout")),
+            attack=WindowAttack.model_validate(attack) if attack is not None else None,
+            training_group_count=len(per_group),
+            per_group=_most_flagged_groups(per_group),
+        ),
+    )
 
 
 _DETECTION_LABELS = {

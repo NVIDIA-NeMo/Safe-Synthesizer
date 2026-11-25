@@ -3,11 +3,17 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 import pytest
 
+from nemo_safe_synthesizer.config.evaluation_report_data import (
+    ClosestMatch,
+    WindowAttack,
+    WindowDistances,
+    WindowEvaluationMode,
+    WindowGroupSummary,
+    WindowMembershipInferenceDetails,
+)
 from nemo_safe_synthesizer.errors import DataError
 from nemo_safe_synthesizer.evaluation.components.window_group_mia_figures import (
     generate_window_group_mia_closest_match_figure,
@@ -15,26 +21,41 @@ from nemo_safe_synthesizer.evaluation.components.window_group_mia_figures import
     generate_window_group_mia_group_figure,
 )
 
-_EXACT_MATCH: dict[str, Any] = {
-    "exact_copy": True,
-    "training_values": [[1.0, 2.0], [10.0, 11.0]],
-    "synthetic_values": [[1.0, 2.0], [10.0, 11.0]],
-}
-_DETAILS: dict[str, Any] = {
-    "window_size": 2,
-    "columns": ["temperature", "pressure"],
-    "distances": {"training": [0.0, 2.0, 4.0], "holdout": [2.0, 4.0, 6.0]},
-    "attack": {"threshold": 2.0, "holdout_flag_rate": 0.05},
-    "closest_match": _EXACT_MATCH,
-}
+_EXACT_MATCH = ClosestMatch(
+    distance=0.0,
+    exact_copy=True,
+    training_values=[[1.0, 2.0], [10.0, 11.0]],
+    synthetic_values=[[1.0, 2.0], [10.0, 11.0]],
+)
+_DETAILS = WindowMembershipInferenceDetails(
+    evaluation_mode=WindowEvaluationMode.FULL,
+    columns=["temperature", "pressure"],
+    excluded_columns=[],
+    window_size=2,
+    counts=None,
+    exact_copy_rate=1 / 3,
+    closest_match=_EXACT_MATCH,
+    distances=WindowDistances(training=[0.0, 2.0, 4.0], holdout=[2.0, 4.0, 6.0]),
+    attack=WindowAttack(
+        threshold=2.0,
+        training_flag_rate=2 / 3,
+        holdout_flag_rate=0.05,
+        privacy_loss_beyond_chance=0.0,
+        holdout_exact_match_rate=0.0,
+        exact_copy_privacy_loss=0.0,
+    ),
+    training_group_count=0,
+    per_group=[],
+)
 
 
 @pytest.mark.parametrize("with_holdout", [True, False])
 def test_distance_figure_spans_the_distances_per_value_from_zero(with_holdout: bool):
-    details = dict(_DETAILS)
+    details = _DETAILS
     if not with_holdout:
-        details["distances"] = {"training": _DETAILS["distances"]["training"]}
-        details.pop("attack")
+        details = _DETAILS.model_copy(
+            update={"distances": WindowDistances(training=[0.0, 2.0, 4.0], holdout=None), "attack": None}
+        )
 
     figure = generate_window_group_mia_distance_figure(details)
 
@@ -51,8 +72,9 @@ def test_distance_figure_spans_the_distances_per_value_from_zero(with_holdout: b
 
 
 def test_distance_figure_keeps_the_holdout_and_threshold_in_view_when_training_copies_dominate():
-    details = dict(_DETAILS)
-    details["distances"] = {"training": [0.0] * 20_000, "holdout": list(np.linspace(2.0, 6.0, 100))}
+    details = _DETAILS.model_copy(
+        update={"distances": WindowDistances(training=[0.0] * 20_000, holdout=np.linspace(2.0, 6.0, 100).tolist())}
+    )
 
     figure = generate_window_group_mia_distance_figure(details)
 
@@ -62,18 +84,18 @@ def test_distance_figure_keeps_the_holdout_and_threshold_in_view_when_training_c
     assert figure.layout.shapes[0].x0 < high
 
 
-def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over_holdout():
-    rates = [0.05, 0.5, 1.0, *([0.2] * 12)]
+def test_group_figure_puts_the_first_exported_group_on_top_and_shades_excess_over_holdout():
+    rates = [1.0, 0.5, 0.2, 0.05]
     per_group = [
-        {"group": f"g{index:02d}", "windows": 20, "exact_copy_rate": 0.0, "flag_rate": rate}
+        WindowGroupSummary(group=f"g{index:02d}", windows=20, exact_copy_rate=0.0, flag_rate=rate)
         for index, rate in enumerate(rates)
     ]
 
     figure = generate_window_group_mia_group_figure(per_group, 0.05)
 
     bars = figure.data[0]
-    assert len(bars.x) == 12
-    assert list(figure.layout.yaxis.ticktext)[-2:] == ["g01", "g02"]
+    assert len(bars.x) == 4
+    assert list(figure.layout.yaxis.ticktext)[-2:] == ["g01", "g00"]
     assert list(bars.x)[-1] == pytest.approx(100.0)
     assert bars.marker.color[-1] == pytest.approx(1.0)
     assert list(bars.marker.color) == sorted(bars.marker.color)
@@ -82,27 +104,31 @@ def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over
 
 @pytest.mark.parametrize("exact_copy", [True, False])
 def test_closest_match_figure_draws_the_training_window_only_for_an_exact_copy(exact_copy: bool):
-    match: dict[str, Any] = (
-        _EXACT_MATCH if exact_copy else {"exact_copy": False, "synthetic_values": [[1.5, 2.5], [10.5, 12.5]]}
+    match = (
+        _EXACT_MATCH
+        if exact_copy
+        else ClosestMatch(
+            distance=1.0, exact_copy=False, training_values=None, synthetic_values=[[1.5, 2.5], [10.5, 12.5]]
+        )
     )
 
-    figure = generate_window_group_mia_closest_match_figure({**_DETAILS, "closest_match": match})
+    figure = generate_window_group_mia_closest_match_figure(_DETAILS.model_copy(update={"closest_match": match}))
 
     names = [trace.name for trace in figure.data]
     assert ("Training window" in names) is exact_copy
     assert names.count("Synthetic window") == 2
     assert [trace.visible for trace in figure.data].count(True) == len(figure.data) // 2
-    assert list(figure.data[-1].y) == pytest.approx(match["synthetic_values"][1])
+    assert list(figure.data[-1].y) == pytest.approx(match.synthetic_values[1])
 
 
 @pytest.mark.parametrize(
     ("generate", "details"),
     [
-        (generate_window_group_mia_distance_figure, {**_DETAILS, "distances": {}}),
-        (generate_window_group_mia_closest_match_figure, {**_DETAILS, "closest_match": None}),
+        (generate_window_group_mia_distance_figure, _DETAILS.model_copy(update={"distances": None})),
+        (generate_window_group_mia_closest_match_figure, _DETAILS.model_copy(update={"closest_match": None})),
         (
             lambda per_group: generate_window_group_mia_group_figure(per_group, 0.05),
-            [{"group": "a", "windows": 3, "exact_copy_rate": 0.0}],
+            [WindowGroupSummary(group="a", windows=3, exact_copy_rate=0.0, flag_rate=None)],
         ),
     ],
     ids=["distance", "closest_match", "group"],

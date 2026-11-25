@@ -13,18 +13,18 @@ from nemo_safe_synthesizer.config.evaluate import (
     TimeSeriesEvaluationParameters,
     WindowGroupMIAParameters,
 )
-from nemo_safe_synthesizer.config.evaluation_report_data import TimeSeriesMetric
+from nemo_safe_synthesizer.config.evaluation_report_data import WindowMembershipInferenceMetric
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from nemo_safe_synthesizer.evaluation.report_data import to_json_safe
+from nemo_safe_synthesizer.evaluation.report_data import window_membership_inference_metric
 
 GROUPS = 10
 
 
-def _metric(component: WindowGroupMIA) -> TimeSeriesMetric:
-    return TimeSeriesMetric.model_validate(to_json_safe({"score": component.score, "details": component.details}))
+def _metric(component: WindowGroupMIA) -> WindowMembershipInferenceMetric:
+    return window_membership_inference_metric(component)
 
 
 def _config(
@@ -448,7 +448,8 @@ def test_window_group_mia_without_config_runs_with_component_defaults():
 
     assert component.details["window_size"] == 10
     assert component.details["evaluation_mode"] == "copy_diagnostics_only"
-    assert WindowGroupMIA.report_context(_metric(component))["details"] == to_json_safe(component.details)
+    metric = _metric(component)
+    assert WindowGroupMIA.report_context(metric)["details"] is metric.details
 
 
 def test_window_group_mia_isolates_unexpected_metric_failures(monkeypatch):
