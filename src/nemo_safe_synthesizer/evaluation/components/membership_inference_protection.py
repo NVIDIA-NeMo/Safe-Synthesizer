@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 from statistics import mean
 
 import category_encoders as ce
@@ -23,7 +22,6 @@ from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
 from ...evaluation.nearest_neighbors import NearestNeighborSearch
 from ...observability import get_logger
-from . import multi_modal_figures as figures
 from .privacy_metric_utils import divide_tabular_text, embed_text, find_text_fields
 
 logger = get_logger(__name__)
@@ -56,20 +54,6 @@ class MembershipInferenceProtection(Component):
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with the membership-inference pie chart figure."""
-        d = super().jinja_context
-        d["anchor_link"] = "#mia"
-        d["excluded_columns"] = list(self.excluded_columns)
-        if self.attack_sum_df is not None and not self.attack_sum_df.empty:
-            d["figure"] = figures.generate_mia_figure(df=self.attack_sum_df).to_html(
-                full_html=False, include_plotlyjs=False
-            )
-        else:
-            d["figure"] = None
-        return d
 
     @staticmethod
     def from_evaluation_datasets(

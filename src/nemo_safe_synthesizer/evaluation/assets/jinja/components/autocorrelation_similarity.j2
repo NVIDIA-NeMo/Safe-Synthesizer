@@ -1,5 +1,5 @@
 {% from "jinja/components/time_series_charts.j2" import chart_grid, comparison_notes %}
-{% set metric = ctx.autocorrelation_similarity %}
+{% set metric = card %}
 {{ comparison_notes(metric) }}
 {% call chart_grid(metric) %}
 {% if metric.constant_synthetic_profile_count %}

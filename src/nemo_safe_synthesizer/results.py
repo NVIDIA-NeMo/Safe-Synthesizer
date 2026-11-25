@@ -147,6 +147,7 @@ def make_nss_results(
         generation_time_sec=generation_time,
     )
     summary = make_nss_summary(timing, generate_results, report)
+    report_data = maybe_build_report_data(report)
     if generate_results is None:
         raise ValueError("generate_results is required")
     if isinstance(generate_results, pd.DataFrame) and generate_results.empty:
@@ -154,6 +155,6 @@ def make_nss_results(
     return SafeSynthesizerResults(
         synthetic_data=generate_results.df if isinstance(generate_results, GenerateJobResults) else generate_results,
         summary=summary,
-        evaluation_report_html=render_report(report) if report else None,
-        evaluation_report_data=maybe_build_report_data(report),
+        evaluation_report_html=render_report(report_data) if report_data is not None else None,
+        evaluation_report_data=report_data,
     )

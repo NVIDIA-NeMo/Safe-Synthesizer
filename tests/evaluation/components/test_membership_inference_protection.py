@@ -47,7 +47,7 @@ def test_mia_excluded_columns_are_dropped_before_attack(monkeypatch: pytest.Monk
     assert component.excluded_columns == ["group_id", "site"]
     for name in ("training", "synthetic", "test"):
         assert list(captured[name].columns) == ["x"]
-    assert component.jinja_context["excluded_columns"] == ["group_id", "site"]
+    assert component.excluded_columns == ["group_id", "site"]
 
 
 def test_mia_tabular_unit_returns_threshold_counts():

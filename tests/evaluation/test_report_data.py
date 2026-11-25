@@ -28,10 +28,7 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
-from nemo_safe_synthesizer.evaluation.components.column_distribution import (
-    ColumnDistribution,
-    ColumnDistributionPlotRow,
-)
+from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.correlation import Correlation
 from nemo_safe_synthesizer.evaluation.components.deep_structure import DeepStructure
@@ -130,10 +127,14 @@ def test_column_distributions_match_the_charted_values() -> None:
     charted = {c.name: c.distribution for c in data.columns if c.distribution is not None}
     assert set(charted) == set(datasets.get_tabular_columns())
     for name, distribution in charted.items():
-        figure = ColumnDistributionPlotRow._get_figure_for_field(
-            fields[name], datasets.training[name], datasets.synthetic[name]
-        )
-        assert figure is not None
+        field, training, synthetic = fields[name], datasets.training[name], datasets.synthetic[name]
+        if distribution.bin_edges is not None:
+            figure = multi_modal_figures.histogram_figure(training, synthetic)
+        else:
+            assert field.training_distribution is not None and field.synthetic_distribution is not None
+            figure = multi_modal_figures.bar_chart(
+                field.training_distribution, field.synthetic_distribution, len(training)
+            )
         training_bar, synthetic_bar = figure.data[:2]
         assert list(training_bar.y) == pytest.approx(distribution.training_percent)
         assert list(synthetic_bar.y) == pytest.approx(distribution.synthetic_percent)
@@ -374,7 +375,7 @@ def test_results_have_no_report_data_when_evaluation_is_skipped() -> None:
     assert results.evaluation_report_data is None
 
 
-def test_results_survive_a_failed_report_data_export(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_results_keep_the_synthetic_data_when_report_data_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     def fail(_report: MultimodalReport) -> EvaluationReportData:
         raise TypeError("boom")
 
@@ -382,7 +383,8 @@ def test_results_survive_a_failed_report_data_export(monkeypatch: pytest.MonkeyP
 
     results = make_nss_results(generate_results=_frame(2), report=_tabular_report())
 
-    assert results.evaluation_report_html
+    assert results.synthetic_data is not None
+    assert results.evaluation_report_html is None
     assert results.evaluation_report_data is None
 
 

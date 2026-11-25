@@ -3,11 +3,8 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 from ..components.component import Component
 from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
-from . import multi_modal_figures as figures
 
 
 class CompositeScore(Component):
@@ -15,16 +12,6 @@ class CompositeScore(Component):
 
     Used as the base for aggregate metrics like SQS and Data Privacy Score.
     """
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with duplicate gauge figures for overview and detail sections."""
-        d = super().jinja_context
-        # This is some "plotly magic."  The figure is a div with an id and an inlined script.
-        # If you attempt to reuse the figure (we do), it won't render for the second one.
-        d["figure"] = figures.gauge_chart(self.score).to_html(full_html=False, include_plotlyjs=False)
-        d["figure_overview"] = figures.gauge_chart(self.score).to_html(full_html=False, include_plotlyjs=False)
-        return d
 
     @staticmethod
     def from_components(components: list[Component] | Component, name: str) -> CompositeScore:

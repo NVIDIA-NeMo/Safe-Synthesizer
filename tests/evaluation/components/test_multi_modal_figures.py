@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
+from nemo_safe_synthesizer.config.evaluation_report_data import TextStructureDistributions
 from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     bar_chart,
     binned_percent_bars,
@@ -23,6 +24,7 @@ from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     get_auto_bins,
     histogram,
     histogram_figure,
+    numeric_distribution,
     pie,
     safe_bin_edges,
     scatter,
@@ -729,40 +731,15 @@ class TestHistogramFigure:
 class TestGenerateTextStructureSimilarityFigures:
     """Tests for generate_text_structure_similarity_figures function."""
 
-    def test_returns_none_for_empty_statistics(self):
-        training_stats = type(
-            "Stats",
-            (),
-            {"per_record_statistics": pd.DataFrame()},
-        )()
-        synthetic_stats = type(
-            "Stats",
-            (),
-            {"per_record_statistics": pd.DataFrame()},
-        )()
+    def test_charts_each_statistic_with_a_note_for_missing_values(self):
+        values = pd.Series(np.random.default_rng(0).uniform(5, 20, 100))
+        distributions = TextStructureDistributions(
+            sentence_count=numeric_distribution(values.round(), values.round()),
+            words_per_sentence=numeric_distribution(values, values),
+            characters_per_word=None,
+        )
 
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
-
-        assert result is None
-
-    def test_basic_structure_similarity(self):
-        data = {
-            "sentence_count": np.random.randint(1, 10, 100),
-            "average_words_per_sentence": np.random.uniform(5, 20, 100),
-            "average_characters_per_word": np.random.uniform(3, 8, 100),
-        }
-        training_stats = type(
-            "Stats",
-            (),
-            {"per_record_statistics": pd.DataFrame(data)},
-        )()
-        synthetic_stats = type(
-            "Stats",
-            (),
-            {"per_record_statistics": pd.DataFrame(data)},
-        )()
-
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
+        result = generate_text_structure_similarity_figures(distributions)
 
         assert isinstance(result, go.Figure)
         assert result.layout.title.text is None
@@ -771,6 +748,7 @@ class TestGenerateTextStructureSimilarityFigures:
             "Words Per Sentence",
             "Characters Per Word",
         ]
+        assert "No numeric training values to chart" in [trace.text[0] for trace in result.data if trace.text]
 
 
 class TestGenerateTextSemanticSimilarityFigures:

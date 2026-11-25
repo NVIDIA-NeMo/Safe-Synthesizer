@@ -6,7 +6,6 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Iterable
-from functools import cached_property
 from numbers import Integral, Real
 
 import pandas as pd
@@ -69,17 +68,6 @@ class PIIReplay(Component):
     skipped_reason: str | None = Field(
         default=None, description="Why PII replay could not run, such as a failed PII detection, or None."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with PII replay statistics and entity type list."""
-        d = super().jinja_context
-        d["training_total_records"] = self.training_total_records
-        d["synthetic_total_records"] = self.synthetic_total_records
-        d["pii_types"] = list({datum.pii_type for datum in self.pii_replay_data})
-        d["pii_replay_data"] = [datum.model_dump() for datum in self.pii_replay_data]
-        d["skipped_reason"] = self.skipped_reason
-        return d
 
     @staticmethod
     def from_evaluation_datasets(

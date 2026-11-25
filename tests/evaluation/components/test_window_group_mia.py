@@ -13,12 +13,18 @@ from nemo_safe_synthesizer.config.evaluate import (
     TimeSeriesEvaluationParameters,
     WindowGroupMIAParameters,
 )
+from nemo_safe_synthesizer.config.evaluation_report_data import TimeSeriesMetric
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from nemo_safe_synthesizer.evaluation.report_data import to_json_safe
 
 GROUPS = 10
+
+
+def _metric(component: WindowGroupMIA) -> TimeSeriesMetric:
+    return TimeSeriesMetric.model_validate(to_json_safe({"score": component.score, "details": component.details}))
 
 
 def _config(
@@ -284,7 +290,7 @@ def test_window_group_mia_without_holdout_reports_copy_diagnostics_only():
     assert component.score.notes == "No holdout data is available. Reporting copy diagnostics only."
     assert component.details["exact_copy_rate"] == 1.0
     assert [row["group"] for row in component.details["per_group"]][:2] == ["train-0", "train-1"]
-    assert [figure["title"] for figure in component.jinja_context["figures"]] == [
+    assert [figure["title"] for figure in WindowGroupMIA.report_context(_metric(component))["figures"]] == [
         "Distance to synthetic data",
         "Closest match",
     ]
@@ -442,8 +448,7 @@ def test_window_group_mia_without_config_runs_with_component_defaults():
 
     assert component.details["window_size"] == 10
     assert component.details["evaluation_mode"] == "copy_diagnostics_only"
-    assert "jinja_context" not in component.details
-    assert component.jinja_context["details"] is component.details
+    assert WindowGroupMIA.report_context(_metric(component))["details"] == to_json_safe(component.details)
 
 
 def test_window_group_mia_isolates_unexpected_metric_failures(monkeypatch):

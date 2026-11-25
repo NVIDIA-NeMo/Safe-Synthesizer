@@ -15,6 +15,7 @@ import os
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from enum import Enum
+from functools import partial
 from typing import Any, TypeVar
 
 import numpy as np
@@ -23,11 +24,16 @@ from pydantic import BaseModel
 
 from ..artifacts.base.fields import FieldFeatures
 from ..config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
+from ..config.parameters import SafeSynthesizerParameters
 from ..package_info import __version__
+from ..pii_replacer.planning.patterns import describe_pattern
+from ..pii_replacer.replacement.descriptions import SAMPLER_LABELS, describe_replacement
+from ..pii_replacer.replacement.types import DetectionSource
 from ..pii_replacer.transform_result import ColumnStatistics
 from .components import multi_modal_figures as figures
 from .components.attribute_inference_protection import AttributeInferenceProtection
-from .components.column_distribution import ColumnDistribution, ColumnDistributionPlotRow
+from .components.autocorrelation_similarity import AutocorrelationSimilarity
+from .components.column_distribution import ColumnDistribution, distribution_for_field
 from .components.component import Component
 from .components.correlation import Correlation
 from .components.data_privacy_score import DataPrivacyScore
@@ -38,6 +44,8 @@ from .components.pii_replay import PIIReplay
 from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
+from .components.time_series_common import TimeSeriesComponent
+from .components.window_group_mia import WindowGroupMIA
 from .data_model.evaluation_datasets import EvaluationDatasets
 from .data_model.evaluation_report import EvaluationReport
 from .data_model.evaluation_score import EvaluationScore, PrivacyGrade
@@ -77,7 +85,9 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
             "attribute_inference_protection": _maybe(
                 _attribute_inference_metric, _find(report, AttributeInferenceProtection)
             ),
-            "pii_replay": _maybe(_pii_replay_metric, _find(report, PIIReplay)),
+            "pii_replay": _maybe(partial(_pii_replay_metric, config=config), _find(report, PIIReplay)),
+            "autocorrelation_similarity": _maybe(_time_series_metric, _find(report, AutocorrelationSimilarity)),
+            "window_membership_inference_protection": _maybe(_time_series_metric, _find(report, WindowGroupMIA)),
         },
         "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
         "columns": _columns(distribution, datasets) if distribution is not None else [],
@@ -86,6 +96,7 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
             "epsilon": config.get("epsilon") if dp_enabled and config is not None else None,
             "delta": config.get("delta") if dp_enabled and config is not None else None,
         },
+        "pii_replacement": _pii_replacement(config, datasets, _find(report, PIIReplay)),
     }
     return EvaluationReportData.model_validate(to_json_safe(payload))
 
@@ -158,7 +169,11 @@ def _points(df: pd.DataFrame) -> dict[str, Any]:
 def _projection(training: pd.DataFrame, synthetic: pd.DataFrame) -> dict[str, Any] | None:
     if training.shape[1] < 2 or synthetic.shape[1] < 2:
         return None
-    return {"training": _points(training), "synthetic": _points(synthetic)}
+    return {
+        "axes": [str(c) for c in training.columns[:2]],
+        "training": _points(training),
+        "synthetic": _points(synthetic),
+    }
 
 
 def _correlation_metric(component: Correlation) -> dict[str, Any]:
@@ -240,9 +255,10 @@ def _attribute_inference_metric(component: AttributeInferenceProtection) -> dict
     return {**_metric(component), "columns": columns}
 
 
-def _pii_replay_metric(component: PIIReplay) -> dict[str, Any]:
+def _pii_replay_metric(component: PIIReplay, config: SafeSynthesizerParameters | None) -> dict[str, Any]:
     return {
         **_metric(component),
+        "enabled": bool(config is not None and config.get("pii_replay_enabled")),
         "training_total_records": component.training_total_records,
         "synthetic_total_records": component.synthetic_total_records,
         "entries": [datum.model_dump() for datum in component.pii_replay_data],
@@ -300,9 +316,7 @@ def _columns(component: ColumnDistribution, datasets: EvaluationDatasets) -> lis
                 _score(field.distribution_stability) if field.distribution_stability is not None else None
             ),
             "distribution": (
-                ColumnDistributionPlotRow.distribution_for_field(
-                    field, datasets.training[field.name], datasets.synthetic[field.name]
-                )
+                distribution_for_field(field, datasets.training[field.name], datasets.synthetic[field.name])
                 if field.name in tabular_columns
                 else None
             ),
@@ -310,3 +324,78 @@ def _columns(component: ColumnDistribution, datasets: EvaluationDatasets) -> lis
         }
         for field in component.evaluation_fields
     ]
+
+
+def _time_series_metric(component: TimeSeriesComponent) -> dict[str, Any]:
+    return {**_metric(component), "details": component.details}
+
+
+_DETECTION_LABELS = {
+    DetectionSource.GLINER: "GLiNER",
+    DetectionSource.REGEX: "validated patterns",
+    DetectionSource.STRUCTURED_VALUE: "values from replaced columns",
+    DetectionSource.DETECTED_VALUE: "values detected elsewhere in the same record or group",
+}
+
+
+def _pii_replacement(
+    config: SafeSynthesizerParameters | None, datasets: EvaluationDatasets, replay: PIIReplay | None
+) -> dict[str, Any] | None:
+    """Return the applied PII replacement plan, or a summary with ``replaced`` false when PII was only detected.
+
+    Counts come from the replacement run's column statistics, which describe the training split only.
+    """
+    settings = config.replace_pii if config is not None else None
+    # A plan is applied only once it is resolved inline; a path or auto-discovery means none was.
+    if settings is None or settings.inline_plan is None:
+        detected = replay is not None and (replay.pii_replay_data or replay.skipped_reason)
+        if not detected and datasets.column_statistics is None:
+            return None
+        return {
+            "replaced": False,
+            "columns": [],
+            "kept_columns": [],
+            "sampler": None,
+            "locale": None,
+            "seed": None,
+            "value_mappings": {},
+        }
+    plan = settings.inline_plan
+    statistics = datasets.column_statistics or {}
+    planned = {column.column_name: column for column in plan.columns_to_replace}
+    training_columns = list(datasets.training.columns)
+    order = {name: index for index, name in enumerate(training_columns)}
+
+    columns = []
+    for name, column in sorted(planned.items(), key=lambda item: order.get(item[0], len(order))):
+        column_statistics = statistics.get(name)
+        functions = column_statistics.transform_functions if column_statistics else set()
+        symbols = describe_pattern(column.entity_type, column.pattern) if column.pattern else ()
+        columns.append(
+            {
+                "column_name": name,
+                "entity_type": str(column.entity_type.value),
+                "replaced_with": describe_replacement(column, settings),
+                "pattern": column.pattern,
+                "pattern_symbols": [{"symbol": symbol, "meaning": meaning} for symbol, meaning in symbols],
+                "depends_on": [
+                    {
+                        "column_name": dependency.column_name,
+                        "entity_type": dependency.entity_type.value if dependency.entity_type else None,
+                    }
+                    for dependency in column.depends_on
+                ],
+                "found_by": [label for source, label in _DETECTION_LABELS.items() if source in functions],
+                "entity_counts": dict(column_statistics.detected_entity_counts) if column_statistics else {},
+            }
+        )
+    mapping = plan.data_to_sampler_value_mapping or {}
+    return {
+        "replaced": True,
+        "columns": columns,
+        "kept_columns": [name for name in training_columns if name not in planned],
+        "sampler": SAMPLER_LABELS.get(settings.sampler.backend, settings.sampler.backend.value),
+        "locale": settings.locale,
+        "seed": settings.seed,
+        "value_mappings": {column: dict(values) for column, values in mapping.items()},
+    }

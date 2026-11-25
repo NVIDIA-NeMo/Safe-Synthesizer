@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Evaluation results as structured data, for presenting them outside the HTML report.
+"""Evaluation results as structured data, which the HTML report is rendered from and other interfaces can present.
 
 ``schema_version`` is raised only when a field is removed or changes meaning; readers ignore unknown fields.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,6 +56,7 @@ class Points(ReportDataModel):
 class Projection(ReportDataModel):
     """Training and synthetic records projected onto the same two principal components."""
 
+    axes: list[str] = Field(description="Names of the two components, such as 'pc1', with any explained variance.")
     training: Points = Field(description="Training records.")
     synthetic: Points = Field(description="Synthetic records.")
 
@@ -152,10 +155,22 @@ class PIIReplayEntry(ReportDataModel):
 class PIIReplayMetric(Metric):
     """How many training PII values reappear in the synthetic data."""
 
+    enabled: bool = Field(description="Whether `evaluation.pii_replay_enabled` was on.")
     training_total_records: int = Field(description="Training rows checked.")
     synthetic_total_records: int = Field(description="Synthetic rows checked.")
     entries: list[PIIReplayEntry] = Field(description="Replay counts per column and PII type.")
     skipped_reason: str | None = Field(description="Why PII replay did not run in full, or null.")
+
+
+class TimeSeriesMetric(Metric):
+    """A time-series metric's score and the values its charts are drawn from."""
+
+    details: dict[str, Any] = Field(
+        description=(
+            "Per-group and per-column results, skipped comparisons, and summaries. Their shape is not yet covered "
+            "by `schema_version` and may change between releases."
+        )
+    )
 
 
 class Metrics(ReportDataModel):
@@ -177,6 +192,10 @@ class Metrics(ReportDataModel):
         description="Attribute Inference Protection."
     )
     pii_replay: PIIReplayMetric | None = Field(description="PII Replay.")
+    autocorrelation_similarity: TimeSeriesMetric | None = Field(description="Autocorrelation Similarity.")
+    window_membership_inference_protection: TimeSeriesMetric | None = Field(
+        description="Window Membership Inference Protection."
+    )
 
 
 class Scores(ReportDataModel):
@@ -234,6 +253,49 @@ class ColumnResult(ReportDataModel):
     pii: ColumnPIIStatistics | None = Field(description="PII statistics, or null without PII detection.")
 
 
+class PatternSymbol(ReportDataModel):
+    """One symbol of a replacement pattern and what it stands for."""
+
+    symbol: str = Field(description="The symbol as written in the pattern.")
+    meaning: str = Field(description="What the symbol is replaced with.")
+
+
+class PIIDependency(ReportDataModel):
+    """A column whose values a replaced column depends on."""
+
+    column_name: str = Field(description="Column name.")
+    entity_type: str | None = Field(description="Entity type of the column, or null.")
+
+
+class PIIReplacementColumn(ReportDataModel):
+    """How one training column was replaced."""
+
+    column_name: str = Field(description="Column name.")
+    entity_type: str = Field(description="Entity type the column was replaced as.")
+    replaced_with: str = Field(description="How replacement values were generated.")
+    pattern: str | None = Field(description="Replacement pattern, or null.")
+    pattern_symbols: list[PatternSymbol] = Field(description="The pattern's symbols in order of first use.")
+    depends_on: list[PIIDependency] = Field(description="Columns the replacement values depend on.")
+    found_by: list[str] = Field(description="Free-text detectors that found the replaced values.")
+    entity_counts: dict[str, int] = Field(description="Times each entity type was found in the column.")
+
+
+class PIIReplacement(ReportDataModel):
+    """The PII replacement applied to the training data."""
+
+    replaced: bool = Field(description="False when PII replacement was off and PII was detected only to check replay.")
+    columns: list[PIIReplacementColumn] = Field(description="Replaced columns, in training order.")
+    kept_columns: list[str] = Field(description="Training columns left as they were.")
+    sampler: str | None = Field(description="Sampler that generated replacement values, or null.")
+    locale: str | None = Field(description="Sampler locale, or null.")
+    seed: int | None = Field(description="Sampler seed, or null for a random seed.")
+    value_mappings: dict[str, dict[str, list[str]]] = Field(
+        description=(
+            "`replace_pii.data_to_sampler_value_mapping`: values in each dependency column mapped to sampler values."
+        )
+    )
+
+
 class DifferentialPrivacySettings(ReportDataModel):
     """Differential privacy settings of the training run."""
 
@@ -243,7 +305,7 @@ class DifferentialPrivacySettings(ReportDataModel):
 
 
 class EvaluationReportData(ReportDataModel):
-    """Evaluation results for presenting outside the HTML report. Metric keys match the tabular and text scores in ``SafeSynthesizerSummary``; time-series metrics are not exported yet."""
+    """Evaluation results, including everything the HTML report shows. Metric keys match the scores in ``SafeSynthesizerSummary``."""
 
     schema_version: int = Field(description="Schema version; readers accept higher versions.")
     library_version: str = Field(description="nemo-safe-synthesizer version that built the data.")
@@ -255,3 +317,6 @@ class EvaluationReportData(ReportDataModel):
         description="Evaluated training columns, in training order: those also in the synthetic data, sampled down to `evaluation.sqs_report_columns`."
     )
     differential_privacy: DifferentialPrivacySettings = Field(description="Differential privacy settings.")
+    pii_replacement: PIIReplacement | None = Field(
+        description="PII replacement applied to the training data, or null when none was applied or checked."
+    )
