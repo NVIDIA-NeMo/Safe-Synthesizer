@@ -97,6 +97,9 @@ jobs:
       - name: Check copyright headers
         run: mise run check:license:headers
 
+      - name: Check paired MkDocs and Fern pages
+        run: mise run check:docs:pairs
+
       - name: Check uv.lock is up to date
         run: mise run check:lock
 

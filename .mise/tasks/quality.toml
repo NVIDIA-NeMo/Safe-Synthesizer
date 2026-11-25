@@ -52,5 +52,6 @@ depends = [
     "check:lock",
     "check:license:headers",
     "check:tasks",
+    "check:docs:pairs",
 ]
 run = "echo 'quality checks passed'"

@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+["check:docs:pairs"]
+description = "Check that paired docs/**/*.md (MkDocs) and .mdx (Fern) pages change together relative to the target branch."
+run = "uv run tools/codestyle/check_docs_pairs.py"
+
 ["docs:serve"]
 description = "Serve the MkDocs site locally with live reload at http://127.0.0.1:8000. Requires docs dependencies."
 alias = "docs-serve"

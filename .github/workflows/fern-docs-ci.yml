@@ -5,8 +5,30 @@ name: Fern Docs CI
 
 on:
   pull_request:
+    paths:
+      - "docs/**"
+      - "tools/docs/**"
+      - ".github/workflows/fern-docs-ci.yml"
+      - ".github/actions/setup-python-env/**"
+      - ".mise.toml"
+      - "mise.lock"
+      - ".mise/tasks/docs.toml"
+      - ".mise/tasks/docs/fern/**"
+      - "pyproject.toml"
+      - "uv.lock"
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "tools/docs/**"
+      - ".github/workflows/fern-docs-ci.yml"
+      - ".github/actions/setup-python-env/**"
+      - ".mise.toml"
+      - "mise.lock"
+      - ".mise/tasks/docs.toml"
+      - ".mise/tasks/docs/fern/**"
+      - "pyproject.toml"
+      - "uv.lock"
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
