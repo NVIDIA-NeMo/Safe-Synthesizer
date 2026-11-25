@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``GenerationBatches`` probe-batch and adaptive sizing logic."""
+"""Unit tests for ``GenerationBatches`` probe-batch and adaptive sizing logic, and job-level summaries."""
 
 from __future__ import annotations
+
+from unittest.mock import patch
 
 import pytest
 
@@ -230,3 +232,48 @@ class TestAdaptiveMaxNumPromptsPerBatch:
         )
 
         assert batches.max_num_prompts_per_batch == explicit_value
+
+
+class TestJobSummary:
+    """``GenerationBatches`` aggregates the same summary and error tables as a single ``Batch``."""
+
+    def test_results_job_counts_aggregate_all_batches(self, fixture_processor):
+        batches = GenerationBatches()
+        batches._batches = [
+            _make_batch(fixture_processor, num_prompts=2, num_valid=3, num_invalid=1, finish_reasons={"stop": 2}),
+            _make_batch(fixture_processor, num_prompts=1, num_valid=0, num_invalid=2, finish_reasons={"length": 1}),
+        ]
+
+        assert batches.valid_record_fraction == pytest.approx(0.5)
+        assert batches.finish_reasons == {"stop": 2, "length": 1}
+        assert batches.num_data_config_rejected_records == 0
+        assert batches.error_statistics(detailed_errors=False).to_dict()["Percentage"] == {"schema": 1.0}
+
+    def test_results_log_summary_logs_generation_and_error_tables(self, fixture_processor):
+        batches = GenerationBatches()
+        batches._batches = [_make_batch(fixture_processor, num_prompts=2, num_valid=3, num_invalid=1)]
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_logger:
+            batches.log_summary()
+
+        tables = {
+            call.kwargs["extra"]["ctx"]["title"]: call.kwargs["extra"]["ctx"]["tabular_data"]
+            for call in mock_logger.user.info.call_args_list
+        }
+        assert tables["Generation Summary"] == {
+            "num_prompts": 2,
+            "num_valid_records": 3,
+            "num_invalid_records": 1,
+            "valid_record_fraction": 0.75,
+        }
+        assert tables["Error Statistics"] == {"schema": 1.0}
+
+    def test_results_log_summary_omits_error_table_without_errors(self, fixture_processor):
+        batches = GenerationBatches()
+        batches._batches = [_make_batch(fixture_processor, num_prompts=1, num_valid=2)]
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_logger:
+            batches.log_summary()
+
+        titles = [call.kwargs["extra"]["ctx"]["title"] for call in mock_logger.user.info.call_args_list]
+        assert titles == ["Generation Summary"]

@@ -34,6 +34,7 @@ from nemo_safe_synthesizer.generation.timeseries_backend import (
     RecordPromptState,
     TimeseriesBackend,
     _ResolvedTimeseriesSettings,
+    _ResponseOutcome,
 )
 from nemo_safe_synthesizer.llm.metadata import (
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
@@ -42,6 +43,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     ModelMetadata,
     TimeseriesMetadata,
 )
+from nemo_safe_synthesizer.observability import heartbeat
 
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
 
@@ -239,36 +241,6 @@ class TestAdvanceExpectedTime:
 
         assert backend._advance_expected_time(0) == 3600
         assert backend._advance_expected_time(3600) == 7200
-
-
-class TestHasReachedStopTime:
-    """Tests for the _has_reached_stop_time method."""
-
-    def test_returns_true_at_or_past_stop(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test returns True when record is at or past stop time."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        # At stop time
-        records_at_stop = [{"timestamp": "2024-01-01 03:00:00", "value": 1}]
-        assert backend._has_reached_stop_time(records_at_stop) is True
-
-        # Past stop time
-        records_past = [{"timestamp": "2024-01-01 04:00:00", "value": 1}]
-        assert backend._has_reached_stop_time(records_past) is True
-
-    def test_returns_false_before_stop(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test returns False when record is before stop time."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        records_before = [{"timestamp": "2024-01-01 02:00:00", "value": 1}]
-        assert backend._has_reached_stop_time(records_before) is False
-
-    def test_returns_false_for_empty_records(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test returns False for empty or None records."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        assert backend._has_reached_stop_time([]) is False
-        assert backend._has_reached_stop_time(None) is False
 
 
 class TestComputeExpectedRecordsPerGroup:
@@ -775,6 +747,46 @@ class TestBuildModifiedSamplingParamsStopPropagation:
             )
 
 
+def _completions(*texts: str) -> list[SimpleNamespace]:
+    """One vLLM prompt output with one completion per text."""
+    return [
+        SimpleNamespace(
+            outputs=[SimpleNamespace(finish_reason="stop", text=text, token_ids=[1, 2, 3]) for text in texts]
+        )
+    ]
+
+
+def _row(hour: int, value: int | str, group: str = "group_A") -> str:
+    """One complete JSONL row for ``group`` at ``2024-01-01 {hour}:00:00``."""
+    record = {"group_id": group, "timestamp": f"2024-01-01 {hour:02d}:00:00", "value": value}
+    return json.dumps(record, separators=(",", ":")) + "\n"
+
+
+def _logged_tables(mock_logger: MagicMock, title: str) -> list[dict]:
+    """Return every ``render_table`` payload logged through ``logger.user.info`` with ``title``."""
+    return [
+        call.kwargs["extra"]["ctx"]["tabular_data"]
+        for call in mock_logger.user.info.call_args_list
+        if call.kwargs.get("extra", {}).get("ctx", {}).get("title") == title
+    ]
+
+
+def _logged_table(mock_logger: MagicMock, title: str) -> dict:
+    """Return the most recent ``render_table`` payload logged with ``title``."""
+    return _logged_tables(mock_logger, title)[-1]
+
+
+def _reject_value(rejected_value: int):
+    """Data action that rejects rows whose ``value`` equals ``rejected_value``."""
+
+    def data_actions(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        rejected = batch[batch["value"] == rejected_value].copy()
+        rejected[MetadataColumns.REJECT_REASON.value] = "test rejection"
+        return batch[batch["value"] != rejected_value].copy(), rejected
+
+    return data_actions
+
+
 class TestGenerateParallelGroups:
     """Tests for processing vLLM completions during parallel time-series generation."""
 
@@ -823,9 +835,12 @@ class TestGenerateParallelGroups:
         assert batches.num_valid_records == 0
         assert batches.status == GenerationStatus.IN_PROGRESS
         assert sensitive_group not in repr(mock_logger.method_calls)
-        warning_extras = [call.kwargs.get("extra", {}) for call in mock_logger.warning.call_args_list]
-        assert any(extra.get("group_ordinal") == 1 for extra in warning_extras)
-        assert any(extra.get("retry_count") == 2 for extra in warning_extras)
+        mock_logger.warning.assert_not_called()
+        debug_extras = [call.kwargs.get("extra", {}) for call in mock_logger.runtime.debug.call_args_list]
+        assert any(extra.get("group_ordinal") == 1 and extra.get("retry_count") == 2 for extra in debug_extras)
+        group_progress = _logged_table(mock_logger, "Group Progress")
+        assert group_progress["status"] == {"group 1": "Failed"}
+        assert group_progress["retries"] == {"group 1": "2/2"}
 
     def test_completion_log_uses_group_ordinal(
         self,
@@ -863,16 +878,12 @@ class TestGenerateParallelGroups:
         assert all_groups_succeeded is True
         assert batches.num_valid_records == 1
         assert sensitive_group not in repr(mock_logger.method_calls)
-        completion_call = next(
-            call
-            for call in mock_logger.info.call_args_list
-            if call.args[0] == "Time-series group completed after reaching the stop timestamp."
+        mock_logger.runtime.debug.assert_any_call(
+            "Time-series group completed.",
+            extra={"group_ordinal": 1, "total_groups": 1},
         )
-        assert completion_call.kwargs["extra"] == {
-            "group_ordinal": 1,
-            "groups_completed": 1,
-            "total_groups": 1,
-        }
+        group_progress = _logged_table(mock_logger, "Group Progress")
+        assert group_progress["status"] == {"group 1": "Completed"}
 
     def test_uses_per_group_retries_instead_of_global_zero_record_stop(
         self,
@@ -935,7 +946,7 @@ class TestGenerateParallelGroups:
 
         captured = {}
 
-        def _capture_result(state, batch, accepted_records, invalid_fraction_threshold):  # noqa: ARG001
+        def _capture_result(state, batch, accepted_records, invalid_fraction_threshold, **kwargs):  # noqa: ARG001
             captured["state"] = state
             captured["batch"] = batch
             captured["accepted_records"] = accepted_records
@@ -967,6 +978,426 @@ class TestGenerateParallelGroups:
         ]
         assert isinstance(backend.llm.generate.call_args.kwargs["sampling_params"], SamplingParams)
         assert batches.num_length_truncated_completions == 1
+
+
+_BAD_PREFIX_COMPLETION = 'value":"bad"}\n'
+# The processor stops a sample at its first invalid row, so data actions reject the later rows instead.
+_MOSTLY_REJECTED_COMPLETION = 'value":1}\n' + "".join(_row(hour, 99) for hour in range(1, 5))
+
+
+def _single_group_backend(params, metadata, workdir, tokenizer=None, *, stop_timestamp: str, patience: int = 3):
+    """Deterministic backend for ``group_A``; passing ``tokenizer`` also attaches a mocked LLM."""
+    params.time_series.stop_timestamp = stop_timestamp
+    params.generation.patience = patience
+    metadata.timeseries_group_values = ["group_A"]
+    backend = create_timeseries_backend(params, metadata, workdir)
+    if tokenizer is not None:
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = tokenizer
+    return backend
+
+
+class TestKeptSampleStatistics:
+    """Statistics, strikes, and output use only the kept sample; rows past the stop are discarded."""
+
+    def test_timeseries_backend_retained_batch_counts_only_kept_sample(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        kept_error = ("kept error", "test")
+        batch = Batch(processor=MagicMock())
+        batch._responses = [
+            ParsedResponse(
+                records=[
+                    ParsedRecord(text="row0", parsed={"value": 0}),
+                    ParsedRecord(text="row1", parsed={"value": 1}),
+                    ParsedRecord(text="bad", error=kept_error),
+                ]
+            ),
+            ParsedResponse(records=[ParsedRecord(text="bad", error=("discarded error", "test")) for _ in range(3)]),
+        ]
+
+        backend._retain_single_valid_response(batch, 0, batch._responses[0].records[:2])
+
+        assert batch.num_prompts == 2
+        assert batch._responses[1].records == []
+        assert (batch.num_valid_records, batch.num_invalid_records) == (2, 1)
+        assert batch.valid_record_fraction == pytest.approx(2 / 3)
+        assert batch.errors == [kept_error]
+
+    def test_timeseries_backend_batch_without_kept_sample_counts_every_sample_error(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-02 00:00:00",
+            patience=1,
+        )
+        backend.llm.generate.return_value = _completions(_BAD_PREFIX_COMPLETION, _BAD_PREFIX_COMPLETION)
+        batches = GenerationBatches(target_num_records=2)
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_batch_logger:
+            all_groups_succeeded = backend._generate_parallel_groups(
+                batches=batches,
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        assert all_groups_succeeded is False
+        summary = _logged_table(mock_batch_logger, "Generation Summary")
+        assert (summary["num_prompts"], summary["num_valid_records"], summary["num_invalid_records"]) == (2, 0, 2)
+        assert "discarded_sample_tokens" not in summary
+
+    @pytest.mark.parametrize(
+        ("timestamps", "expected_kept", "expected_reached_stop"),
+        [
+            pytest.param(
+                ["2024-01-01 00:00:00", "not a time", "2024-01-01 01:00:00", "2024-01-01 02:00:00"],
+                3,
+                True,
+                id="unparseable-row-before-stop-is-kept",
+            ),
+            pytest.param(["2024-01-01 00:00:00", "not a time"], 2, False, id="stop-not-reached"),
+            pytest.param(["2024-01-01 02:00:00", "2024-01-01 03:00:00"], 0, True, id="first-row-past-stop"),
+        ],
+    )
+    def test_timeseries_backend_split_at_stop_keeps_rows_through_stop(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        timestamps,
+        expected_kept,
+        expected_reached_stop,
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, stop_timestamp="2024-01-01 01:00:00"
+        )
+        records = [ParsedRecord(text=f"row{index}", parsed={"timestamp": ts}) for index, ts in enumerate(timestamps)]
+
+        kept, reached_stop = backend._split_at_stop_timestamp(records)
+
+        assert kept == records[:expected_kept]
+        assert reached_stop is expected_reached_stop
+
+    @pytest.mark.parametrize(
+        ("samples", "expected_result", "expected_invalid_records"),
+        [
+            pytest.param(
+                (f'value":1}}\n{_row(1, 2)}', *[_BAD_PREFIX_COMPLETION] * 4),
+                GroupProcessingResult.IN_PROGRESS,
+                0,
+                id="one-good-sample-four-bad",
+            ),
+            pytest.param(('value":1}\n',) * 5, GroupProcessingResult.IN_PROGRESS, 0, id="short-clean-samples"),
+            pytest.param(
+                (_MOSTLY_REJECTED_COMPLETION, *[_BAD_PREFIX_COMPLETION] * 4),
+                GroupProcessingResult.FAILED,
+                4,
+                id="mostly-junk-kept-sample",
+            ),
+        ],
+    )
+    def test_timeseries_backend_strike_rule_uses_kept_sample(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        samples,
+        expected_result,
+        expected_invalid_records,
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            stop_timestamp="2024-01-02 00:00:00",
+            patience=1,
+        )
+        state = backend._init_group_state("group_A")
+        batch = Batch(processor=backend.processor)
+        for index, text in enumerate(samples):
+            batch.process(index, f"{state.prompt_state.completion_prefix}{text}")
+
+        batches = GenerationBatches(data_actions_fn=_reject_value(99))
+
+        result = backend._process_group_batch(state, batch, batches, invalid_fraction_threshold=0.8)
+
+        assert result == expected_result
+        assert batch.num_prompts == 5
+        assert batch.num_invalid_records == expected_invalid_records
+        if expected_result == GroupProcessingResult.FAILED:
+            assert backend._group_status(state) == "Failed"
+
+    def test_timeseries_backend_deterministic_selection_keeps_response_that_jumped_past_stop(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        outcomes = [_ResponseOutcome([], None), _ResponseOutcome([], None, reached_stop=True)]
+
+        assert backend._select_response(outcomes) == 1
+
+    @pytest.mark.parametrize(
+        "stop_timestamp",
+        [
+            pytest.param("2024-01-01 01:00:00", id="exact-stop"),
+            pytest.param("2024-01-01 01:30:00", id="skips-over-stop"),
+        ],
+    )
+    def test_timeseries_backend_rows_past_stop_are_discarded(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer, stop_timestamp
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp=stop_timestamp,
+        )
+        backend.llm.generate.return_value = _completions(f'value":1}}\n{_row(1, 2)}{_row(2, 3)}')
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            results = backend.generate()
+
+        state = backend._sequence_group_states["group_A"]
+        assert results.status == GenerationStatus.COMPLETE
+        assert (results.num_valid_records, results.num_invalid_records) == (2, 0)
+        assert results.df["timestamp"].tolist() == ["2024-01-01 00:00:00", "2024-01-01 01:00:00"]
+        assert state.total_valid_records == 2
+        group_progress = _logged_table(mock_logger, "Group Progress")
+        assert group_progress["status"] == {"group 1": "Completed"}
+        assert group_progress["valid_record_fraction"] == {"group 1": "100.00%"}
+        assert group_progress["progress"] == {"group 1": "2/2"}
+
+    def test_timeseries_backend_progress_tables_include_finished_groups_without_group_values(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        timeseries_base_params.time_series.stop_timestamp = "2024-01-01 01:00:00"
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.side_effect = [
+            [*_completions('value":1}\n'), *_completions(f'value":1}}\n{_row(1, 2, group="group_B")}')],
+            _completions(_row(1, 2)),
+        ]
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            backend._generate_parallel_groups(
+                batches=GenerationBatches(target_num_records=4),
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        first_groups, second_groups = _logged_tables(mock_logger, "Group Progress")
+        assert first_groups["status"] == {"group 1": "Active", "group 2": "Completed"}
+        assert second_groups["status"] == {"group 1": "Completed"}
+        first_batch, second_batch = _logged_tables(mock_logger, "Batch Progress")
+        assert (first_batch["groups_finished_this_batch"], first_batch["active_groups"]) == (1, 1)
+        assert (second_batch["completed_groups"], second_batch["total_groups"]) == (2, 2)
+        assert "group_A" not in repr(mock_logger.method_calls)
+        assert "group_B" not in repr(mock_logger.method_calls)
+
+    def test_timeseries_backend_batch_tables_follow_tabular_order_and_keys(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-01 01:00:00",
+        )
+        backend.llm.generate.return_value = _completions(f'value":1}}\n{_row(1, 2)}')
+        shared_logger = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.batch.logger", shared_logger),
+            patch("nemo_safe_synthesizer.generation.timeseries_backend.logger", shared_logger),
+        ):
+            backend._generate_parallel_groups(
+                batches=GenerationBatches(target_num_records=2),
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        titles = [call.kwargs["extra"]["ctx"]["title"] for call in shared_logger.user.info.call_args_list]
+        assert titles == ["Generation Summary", "Batch Progress", "Group Progress"]
+        batch_progress = _logged_table(shared_logger, "Batch Progress")
+        assert list(batch_progress)[:2] == ["records_per_second", "duration_seconds"]
+        assert "valid_tokens_per_second" in batch_progress
+        assert list(_logged_table(shared_logger, "Group Progress")) == [
+            "status",
+            "num_valid_records",
+            "valid_record_fraction",
+            "progress",
+            "retries",
+        ]
+
+    def test_timeseries_backend_error_statistics_logged_only_after_a_group_finishes(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-01 01:00:00",
+        )
+        backend.llm.generate.side_effect = [
+            _completions('value":1}\n', _BAD_PREFIX_COMPLETION),
+            _completions(_row(1, 2), _row(1, "bad")),
+        ]
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_batch_logger:
+            backend._generate_parallel_groups(
+                batches=GenerationBatches(target_num_records=2),
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        assert backend.llm.generate.call_count == 2
+        summaries = _logged_tables(mock_batch_logger, "Generation Summary")
+        assert len(summaries) == 1
+        assert summaries[0]["num_valid_records"] == 2
+        assert summaries[0]["num_invalid_records"] == 0
+        assert _logged_tables(mock_batch_logger, "Error Statistics") == []
+
+    @pytest.mark.parametrize("detailed_errors", [False, True])
+    def test_timeseries_backend_error_statistics_count_kept_sample_errors_when_group_fails(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer, detailed_errors
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-02 00:00:00",
+            patience=1,
+        )
+        backend.use_detailed_logs = detailed_errors
+        backend.llm.generate.return_value = _completions(_MOSTLY_REJECTED_COMPLETION, _BAD_PREFIX_COMPLETION)
+        batches = GenerationBatches(target_num_records=2, data_actions_fn=_reject_value(99))
+
+        with patch("nemo_safe_synthesizer.generation.batch.logger") as mock_batch_logger:
+            backend._generate_parallel_groups(
+                batches=batches,
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        summary = _logged_table(mock_batch_logger, "Generation Summary")
+        assert (summary["num_prompts"], summary["num_valid_records"], summary["num_invalid_records"]) == (2, 1, 4)
+        error_table = _logged_table(mock_batch_logger, "Error Statistics")
+        assert error_table == {
+            str(message): round(row["Percentage"], 2)
+            for message, row in batches.error_statistics(detailed_errors=detailed_errors).iterrows()
+        }
+        assert sum(error_table.values()) == pytest.approx(1.0)
+
+
+class TestTimeseriesGenerationObservability:
+    """``generate`` uses the tabular heartbeat and generation-complete observability wrappers."""
+
+    def test_timeseries_backend_generate_emits_observability_and_heartbeat(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-01 00:00:00",
+        )
+        backend.llm.generate.return_value = _completions('value":1}\n')
+
+        with (
+            patch.object(backend, "_emit_generation_observability") as mock_emit,
+            patch("nemo_safe_synthesizer.generation.timeseries_backend.heartbeat", wraps=heartbeat) as mock_heartbeat,
+        ):
+            results = backend.generate()
+
+        assert results.status == GenerationStatus.COMPLETE
+        mock_emit.assert_called_once()
+        assert mock_heartbeat.call_args.args == ("Generation",)
+        assert mock_heartbeat.call_args.kwargs["total_groups"] == 1
+
+    def test_timeseries_backend_generate_emits_observability_even_when_generation_fails(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer
+    ):
+        backend = _single_group_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            stop_timestamp="2024-01-01 00:00:00",
+        )
+
+        with (
+            patch.object(backend, "_generate_parallel_groups", side_effect=GenerationError("generation failed")),
+            patch.object(backend, "_emit_generation_observability") as mock_emit,
+            pytest.raises(GenerationError, match="generation failed"),
+        ):
+            backend.generate()
+
+        mock_emit.assert_called_once()
+
+
+class TestTimeseriesStatusLog:
+    """The final status line counts groups, or records for one ungrouped sequence, never ``num_records``."""
+
+    @staticmethod
+    def _state(group_id: str, *, completed: bool, failed: bool = False, rows: int = 0) -> GroupState:
+        return GroupState(
+            group_id=group_id,
+            group_ordinal=1,
+            prompt_state=RecordPromptState(prefix=""),
+            expected_records=94,
+            completed=completed,
+            failed=failed,
+            total_valid_records=rows,
+        )
+
+    def test_timeseries_backend_complete_status_logs_success(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            backend._log_timeseries_status(GenerationStatus.COMPLETE)
+
+        mock_logger.info.assert_called_once_with("🎉 Generation complete 🎉")
+        mock_logger.warning.assert_not_called()
+
+    def test_timeseries_backend_incomplete_grouped_status_counts_groups(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._sequence_group_states = {
+            "group_A": self._state("group_A", completed=True),
+            "group_B": self._state("group_B", completed=True, failed=True),
+        }
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            backend._log_timeseries_status(GenerationStatus.INCOMPLETE)
+
+        mock_logger.warning.assert_called_once_with("😬 Generation incomplete -> 1 out of 2 groups were generated.")
+
+    def test_timeseries_backend_incomplete_single_sequence_status_counts_records(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        timeseries_base_params.data.group_training_examples_by = PSEUDO_GROUP_COLUMN
+        timeseries_model_metadata.timeseries_group_values = [0]
+        schema = {"properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}}}
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir, schema)
+        backend._sequence_group_states = {0: self._state("0", completed=True, failed=True, rows=40)}
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            backend._log_timeseries_status(GenerationStatus.INCOMPLETE)
+
+        mock_logger.warning.assert_called_once_with("😬 Generation incomplete -> 40 out of 94 records were generated.")
 
 
 def _enable_flexible_timeseries(
@@ -1167,7 +1598,7 @@ class TestFlexibleTimeseries:
 
         assert records[1].is_valid is False
 
-    def test_last_marker_retains_terminal_and_trims_later_rows(
+    def test_timeseries_backend_last_marker_retains_terminal_and_leaves_later_rows_valid(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
@@ -1199,7 +1630,7 @@ class TestFlexibleTimeseries:
         assert reason == "terminal"
         assert [record.parsed["_time_idx"] for record in retained] == [0, 1]
         assert retained[-1].parsed["_is_last_row"] is True
-        assert records[-1].is_valid is False
+        assert records[-1].is_valid is True
 
     def test_cap_retains_only_through_dataset_maximum(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -1230,7 +1661,7 @@ class TestFlexibleTimeseries:
 
         assert reason == "cap"
         assert [record.parsed["_time_idx"] for record in retained] == [0, 1]
-        assert records[-1].is_valid is False
+        assert records[-1].is_valid is True
 
     @pytest.mark.parametrize(
         ("max_records", "is_last_row", "candidate_reason"),
@@ -1496,17 +1927,6 @@ class TestFlexibleTimeseries:
         outcomes = backend._evaluate_responses(state, batch, batches or GenerationBatches())
         return backend._select_response(outcomes)
 
-    @staticmethod
-    def _reject_value(rejected_value: int):
-        """Data action that rejects rows whose ``value`` equals ``rejected_value``."""
-
-        def data_actions(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-            rejected = batch[batch["value"] == rejected_value].copy()
-            rejected[MetadataColumns.REJECT_REASON.value] = "test rejection"
-            return batch[batch["value"] != rejected_value].copy(), rejected
-
-        return data_actions
-
     @pytest.mark.parametrize(
         ("samples", "expected_index"),
         [
@@ -1544,7 +1964,7 @@ class TestFlexibleTimeseries:
         marker_row = batch._responses[0].records[0].parsed
         assert marker_row is not None
         marker_row["value"] = 99
-        batches = GenerationBatches(data_actions_fn=self._reject_value(99))
+        batches = GenerationBatches(data_actions_fn=_reject_value(99))
 
         outcomes = backend._evaluate_responses(state, batch, batches)
 
@@ -1552,7 +1972,7 @@ class TestFlexibleTimeseries:
         assert backend._select_response(outcomes) == 1
         assert outcomes[1].termination_reason == "terminal"
 
-    def test_selected_flexible_response_is_retained_and_others_invalidated(
+    def test_timeseries_backend_selected_flexible_response_is_retained_and_others_emptied(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
@@ -1563,12 +1983,122 @@ class TestFlexibleTimeseries:
         batch = self._sample_batch([(0, False), (1, False), (2, False)], [(0, True)])
         discarded = list(batch._responses[0].records)
 
-        selected_index = self._select(backend, state, batch)
-        retained = backend._retain_single_valid_response(batch, preferred_index=selected_index)
+        outcomes = backend._evaluate_responses(state, batch, GenerationBatches())
+        selected_index = backend._select_response(outcomes)
+        backend._retain_single_valid_response(batch, selected_index, outcomes[selected_index].accepted)
 
-        assert [record.parsed["_is_last_row"] for record in retained if record.parsed is not None] == [True]
-        assert batch._responses[0].valid_records == []
+        assert [record["_is_last_row"] for record in batch._responses[1].valid_records] == [True]
+        assert batch._responses[0].records == []
         assert all(not record.is_valid for record in discarded)
+
+    def test_timeseries_backend_rows_after_rejected_marker_are_invalidated(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+        state = backend._init_group_state("group_A")
+        batch = self._sample_batch([(0, False), (1, True), (2, False)])
+        records = batch._responses[0].records
+        marker_row = records[1].parsed
+        assert marker_row is not None
+        marker_row["value"] = 99
+
+        outcomes = backend._evaluate_responses(state, batch, GenerationBatches(data_actions_fn=_reject_value(99)))
+
+        assert [record.parsed["_time_idx"] for record in outcomes[0].accepted if record.parsed is not None] == [0]
+        assert outcomes[0].termination_reason is None
+        assert records[2].error == ("Generated row follows an invalid sequence row", "TimeSeries")
+
+    def test_timeseries_backend_rows_after_structural_failure_are_invalidated(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+        state = backend._init_group_state("group_A")
+        records = self._sample_batch([(0, False), (5, False), (6, True)])._responses[0].records
+
+        retained, accepted_row_stop = backend._trim_flexible_timeseries_records(state, records)
+
+        assert retained == records[:1]
+        assert accepted_row_stop is None
+        assert records[2].error == ("Generated row follows an invalid sequence row", "TimeSeries")
+
+    @classmethod
+    def _generating_backend(cls, params, metadata, workdir, tokenizer, tmp_path, groups: list[str]):
+        """Flexible backend for ``groups`` with a mocked LLM and artifacts under ``tmp_path``."""
+        _enable_flexible_timeseries(params, metadata)
+        metadata.timeseries_group_values = groups
+        backend = create_timeseries_backend(params, metadata, workdir, cls._schema())
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._flexible_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = tokenizer
+        return backend
+
+    def test_timeseries_backend_generate_discards_rows_after_end_marker(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer, tmp_path
+    ):
+        backend = self._generating_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, fixture_tokenizer, tmp_path, ["group_A"]
+        )
+        after_marker = '{"group_id":"group_A","_time_idx":1,"value":2,"_is_last_row":false}\n'
+        backend.llm.generate.return_value = _completions(f'value":1,"_is_last_row":true}}\n{after_marker}')
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            results = backend.generate()
+
+        assert results.status == GenerationStatus.COMPLETE
+        assert (results.num_valid_records, results.num_invalid_records) == (1, 0)
+        assert results.df.to_dict("records") == [{"value": 1, "group_id": "group_A"}]
+        assert pd.read_csv(backend._internal_output_path)["_time_idx"].tolist() == [0]
+        group_progress = _logged_table(mock_logger, "Group Progress")
+        assert group_progress["status"] == {"group 1": "Completed"}
+        assert group_progress["progress"] == {"group 1": 1}
+
+    @pytest.mark.parametrize(
+        "row_after_marker",
+        [
+            pytest.param({"group_id": "group_A", "_time_idx": 0}, id="restarts-the-sequence"),
+            pytest.param({"group_id": "group_B", "_time_idx": 1}, id="continues-another-group"),
+        ],
+    )
+    def test_timeseries_backend_rows_after_end_marker_never_join_another_sequence(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+        tmp_path,
+        row_after_marker,
+    ):
+        backend = self._generating_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            fixture_tokenizer,
+            tmp_path,
+            ["group_A", "group_B"],
+        )
+        after_marker = json.dumps({**row_after_marker, "value": 77, "_is_last_row": False}, separators=(",", ":"))
+        group_b_end = '{"group_id":"group_B","_time_idx":1,"value":3,"_is_last_row":true}\n'
+        backend.llm.generate.return_value = [
+            *_completions(f'value":1,"_is_last_row":true}}\n{after_marker}\n'),
+            *_completions(f'value":2,"_is_last_row":false}}\n{group_b_end}'),
+        ]
+
+        results = backend.generate()
+
+        assert results.status == GenerationStatus.COMPLETE
+        assert results.df.to_dict("records") == [
+            {"value": 1, "group_id": "group_A"},
+            {"value": 2, "group_id": "group_B"},
+            {"value": 3, "group_id": "group_B"},
+        ]
 
     def test_deterministic_selection_keeps_response_with_most_accepted_rows(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -1579,7 +2109,7 @@ class TestFlexibleTimeseries:
         for record in batch._responses[0].records[1:]:
             assert record.parsed is not None
             record.parsed["value"] = 99
-        batches = GenerationBatches(data_actions_fn=self._reject_value(99))
+        batches = GenerationBatches(data_actions_fn=_reject_value(99))
 
         assert self._select(backend, state, batch, batches) == 1
 

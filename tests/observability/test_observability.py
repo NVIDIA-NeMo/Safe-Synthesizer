@@ -303,6 +303,14 @@ class TestRenderRichTable:
         assert "0.72" in result
         assert "95.00%" in result
 
+    def test_observability_per_second_rates_not_formatted_as_percentage(self):
+        """Rates below one per second, such as a slow time-series batch, are rendered as plain floats."""
+        result = _render_rich_table({"records_per_second": 0.42, "tokens_per_second": 0.5})
+
+        assert "0.42" in result
+        assert "0.50" in result
+        assert "%" not in result
+
     def test_fraction_fields_render_as_percentages_when_generation_overshoots(self):
         result = _render_rich_table({"progress_fraction": 1.25})
 

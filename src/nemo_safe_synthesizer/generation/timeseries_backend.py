@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import NamedTuple, Self
 
 import pandas as pd
+from typing_extensions import override
 from vllm.inputs.llm import TokensPrompt
 from vllm.sampling_params import SamplingParams
 
 from .. import utils
 from ..config import SafeSynthesizerParameters
 from ..data_processing.record_utils import ParsedRecord, _parse_timestamp_to_seconds
-from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
+from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
@@ -34,9 +35,11 @@ from ..generation.timeseries_prompting import (
 )
 from ..generation.vllm_backend import VllmBackend
 from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue, TimeseriesMetadata
-from ..observability import get_logger
+from ..observability import get_logger, heartbeat
 
 logger = get_logger(__name__)
+
+_FOLLOWS_INVALID_ROW_ERROR = ("Generated row follows an invalid sequence row", "TimeSeries")
 
 
 @dataclass(frozen=True)
@@ -182,7 +185,7 @@ class GroupState:
     """Cumulative count of valid records generated for this group."""
 
     total_invalid_records: int = 0
-    """Cumulative count of invalid records generated for this group."""
+    """Cumulative invalid records in this group's kept samples, or in all samples of a batch that kept none."""
 
     no_progress_count: int = 0
     """Consecutive batches that did not advance the accepted timestamp."""
@@ -204,10 +207,13 @@ class _ResponseOutcome(NamedTuple):
     """Validated result of one sampled response for a time-series group."""
 
     accepted: list[ParsedRecord]
-    """Rows that passed every check, in generation order."""
+    """Rows that passed every check and continue the group, in generation order, through the series' end."""
 
     termination_reason: str | None
     """Flexible ``terminal`` or ``cap`` stop accepted in this response, if any."""
+
+    reached_stop: bool = False
+    """Whether a row that passed every check reached or passed the stop timestamp."""
 
 
 class GroupProcessingResult(Enum):
@@ -520,19 +526,6 @@ class TimeseriesBackend(VllmBackend):
             return None
         return timestamp_seconds + self._timestamp_interval_seconds
 
-    def _has_reached_stop_time(self, records: list[dict]) -> bool:
-        """Return ``True`` if any record's timestamp meets or exceeds the stop timestamp."""
-        if not records or self._stop_timestamp_value is None:
-            return False
-        stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
-        if stop_ts is None:
-            return False
-        for record in records:
-            ts = self._parse_timestamp_seconds(record.get(self._time_column))
-            if ts is not None and ts >= stop_ts:
-                return True
-        return False
-
     def _init_group_state(self, group_id: TimeSeriesGroupValue) -> GroupState:
         """Initialize a GroupState for a given group.
 
@@ -645,9 +638,12 @@ class TimeseriesBackend(VllmBackend):
 
         Records must match the active group and advance the generated sequence
         index contiguously. This method invalidates records after the first
-        structural failure or stopping row. The stopping candidate remains
-        tentative until data actions have accepted it. Source timestamps are
-        checked after data actions in ``_validate_postprocessed_sequence_indices``.
+        structural failure. Records after a stopping row are left untouched and
+        are not retained; if the response is kept, they are discarded as rows
+        past the series' end. The stopping candidate remains tentative until data actions
+        have accepted it; ``_resolve_response_outcome`` invalidates the later
+        rows if it is rejected. Source timestamps are checked after data
+        actions in ``_validate_postprocessed_sequence_indices``.
 
         Args:
             state: Active generation state for the group.
@@ -664,13 +660,14 @@ class TimeseriesBackend(VllmBackend):
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
         expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
-        trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
         group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
         index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
 
         for record in records:
+            if accepted_row_stop is not None:
+                break
             if prefix_ended:
-                record.invalidate(trimmed_error)
+                record.invalidate(_FOLLOWS_INVALID_ROW_ERROR)
                 continue
             parsed = record.parsed
             if parsed is None:
@@ -725,29 +722,86 @@ class TimeseriesBackend(VllmBackend):
             batches: Accumulator that applies data actions.
 
         Returns:
-            The accepted rows and termination reason of each response, in order.
+            The accepted rows, termination reason, and stop flag of each response, in order.
         """
-        trimmed = [
-            self._trim_flexible_timeseries_records(
-                state,
-                [record for record in response.records if record.is_valid and record.parsed is not None],
-            )
+        candidates = [
+            [record for record in response.records if record.is_valid and record.parsed is not None]
             for response in batch._responses
         ]
+        trimmed = [self._trim_flexible_timeseries_records(state, records) for records in candidates]
         batches.postprocess_batch(batch, commit_history=False)
-        outcomes: list[_ResponseOutcome] = []
-        for retained, accepted_row_stop in trimmed:
-            self._validate_postprocessed_group_identity(state, retained)
-            self._validate_postprocessed_sequence_indices(state, retained)
-            accepted = [record for record in retained if record.is_valid and record.parsed is not None]
-            outcomes.append(_ResponseOutcome(accepted, self._resolve_postprocessed_termination(accepted_row_stop)))
-        return outcomes
+        return [
+            self._resolve_response_outcome(state, records, retained, accepted_row_stop)
+            for records, (retained, accepted_row_stop) in zip(candidates, trimmed, strict=True)
+        ]
+
+    def _resolve_response_outcome(
+        self,
+        state: GroupState,
+        candidates: list[ParsedRecord],
+        retained: list[ParsedRecord],
+        accepted_row_stop: tuple[str, ParsedRecord] | None,
+    ) -> _ResponseOutcome:
+        """Check one post-processed response and cut its accepted rows at the series' end.
+
+        Rows generated after the series' end (an accepted flexible stop, or the
+        stop timestamp) are not accepted; ``_retain_single_valid_response``
+        discards them. When data actions or post-processed checks reject a
+        tentative flexible stop, the rows after it are invalidated, since the
+        sequence did not end there.
+
+        Args:
+            state: Active generation state for the group.
+            candidates: The response's valid records before trimming, in order.
+            retained: The structurally valid prefix kept by
+                ``_trim_flexible_timeseries_records``.
+            accepted_row_stop: Tentative flexible stop found while trimming.
+
+        Returns:
+            The accepted rows, termination reason, and whether the stop timestamp was reached.
+        """
+        self._validate_postprocessed_group_identity(state, retained)
+        self._validate_postprocessed_sequence_indices(state, retained)
+        accepted = [record for record in retained if record.is_valid and record.parsed is not None]
+        termination_reason = self._resolve_postprocessed_termination(accepted_row_stop)
+        if accepted_row_stop is not None and termination_reason is None:
+            # A tentative stop ends ``retained``, which is then a prefix of ``candidates``.
+            for record in candidates[len(retained) :]:
+                if record.is_valid:
+                    record.invalidate(_FOLLOWS_INVALID_ROW_ERROR)
+        accepted, reached_stop = self._split_at_stop_timestamp(accepted)
+        return _ResponseOutcome(accepted, termination_reason, reached_stop)
+
+    def _split_at_stop_timestamp(self, records: list[ParsedRecord]) -> tuple[list[ParsedRecord], bool]:
+        """Cut accepted rows at the stop timestamp.
+
+        A row exactly at the stop timestamp is kept; the first row past it and
+        everything after are cut. Rows whose timestamp cannot be parsed are kept.
+
+        Args:
+            records: Accepted rows in generation order.
+
+        Returns:
+            The rows through the stop timestamp, and whether any row reached or passed it.
+        """
+        stop_seconds = self._parse_timestamp_seconds(self._stop_timestamp_value)
+        if stop_seconds is None:
+            return records, False
+        for index, record in enumerate(records):
+            seconds = self._parse_timestamp_seconds((record.parsed or {}).get(self._time_column))
+            if seconds is None or seconds < stop_seconds:
+                continue
+            end = index + 1 if seconds == stop_seconds else index
+            return records[:end], True
+        return records, False
 
     def _select_response(self, outcomes: list[_ResponseOutcome]) -> int | None:
         """Choose which validated response continues the group.
 
-        Deterministic groups keep the response with the most accepted rows.
-        Flexible groups keep the first response whose accepted rows end with the
+        Deterministic groups keep the response with the most accepted rows. When
+        no response has an accepted row, they keep the first response that
+        jumped past the stop timestamp, which completes the group. Flexible
+        groups keep the first response whose accepted rows end with the
         final-row marker, otherwise the first response with any accepted row.
         Choosing the most rows in flexible mode would favor responses that
         continue past the point where the group should end.
@@ -757,7 +811,7 @@ class TimeseriesBackend(VllmBackend):
 
         Returns:
             The index of the selected response, or ``None`` when no response has
-            an accepted row.
+            an accepted row or reached the stop timestamp.
         """
         if not self._flexible_timeseries:
             best_index: int | None = None
@@ -765,6 +819,8 @@ class TimeseriesBackend(VllmBackend):
             for index, outcome in enumerate(outcomes):
                 if len(outcome.accepted) > best_count:
                     best_index, best_count = index, len(outcome.accepted)
+            if best_index is None:
+                best_index = next((index for index, outcome in enumerate(outcomes) if outcome.reached_stop), None)
             return best_index
 
         first_valid_index: int | None = None
@@ -891,7 +947,7 @@ class TimeseriesBackend(VllmBackend):
             if prefix_ended or not record.is_valid or record.parsed is None:
                 prefix_ended = True
                 if record.is_valid:
-                    record.invalidate(("Generated row follows an invalid sequence row", "TimeSeries"))
+                    record.invalidate(_FOLLOWS_INVALID_ROW_ERROR)
                 continue
             index_value = record.parsed.get(self._sequence_index_column)
             if not isinstance(index_value, int) or isinstance(index_value, bool) or index_value != expected_index:
@@ -985,6 +1041,27 @@ class TimeseriesBackend(VllmBackend):
         if states and all(state.completed and not state.failed for state in states):
             return GenerationStatus.COMPLETE
         return GenerationStatus.INCOMPLETE
+
+    def _log_timeseries_status(self, status: GenerationStatus) -> None:
+        """Log the final generation status in groups, or in records for a single sequence.
+
+        Replaces ``GenerationBatches.log_status``, whose progress is measured
+        against ``num_records``, which time-series generation does not use as a
+        target. Grouped data reports completed groups out of all groups. A
+        single ungrouped sequence reports its accepted records out of the
+        expected sequence length.
+        """
+        if status == GenerationStatus.COMPLETE:
+            logger.info("🎉 Generation complete 🎉")
+            return
+        states = list(self._sequence_group_states.values())
+        if self._group_column == PSEUDO_GROUP_COLUMN and len(states) == 1:
+            state = states[0]
+            expected = f" out of {state.expected_records}" if state.expected_records > 0 else ""
+            logger.warning(f"😬 Generation incomplete -> {state.total_valid_records}{expected} records were generated.")
+            return
+        completed = sum(state.completed and not state.failed for state in states)
+        logger.warning(f"😬 Generation incomplete -> {completed} out of {len(self._groups)} groups were generated.")
 
     def _discard_failed_group_records(self) -> None:
         """Invalidate accepted rows of failed groups so they are excluded from output."""
@@ -1186,8 +1263,13 @@ class TimeseriesBackend(VllmBackend):
         accepted_records: list[ParsedRecord],
         invalid_fraction_threshold: float,
         termination_reason: str | None = None,
+        reached_stop: bool = False,
     ) -> GroupProcessingResult:
         """Update a group from records accepted after post-processing.
+
+        The invalid-fraction strike uses ``batch.valid_record_fraction``, which
+        after ``_retain_single_valid_response`` describes only the kept sample,
+        or every sample when none was kept.
 
         Args:
             state: The group state.
@@ -1195,14 +1277,13 @@ class TimeseriesBackend(VllmBackend):
             accepted_records: Retained records that passed data actions.
             invalid_fraction_threshold: Threshold for invalid fraction.
             termination_reason: Explicit flexible time-series stop reason, when detected.
+            reached_stop: Whether the kept sample reached or passed the stop
+                timestamp, including rows discarded past it.
 
         Returns:
             GroupProcessingResult enum indicating the group's status.
         """
         previous_timestamp_seconds = state.last_timestamp_seconds
-        reached_stop = self._has_reached_stop_time(
-            [record.parsed for record in accepted_records if record.parsed is not None]
-        )
         self._update_group_state(state, accepted_records)
         made_progress = state.last_timestamp_seconds is not None and (
             previous_timestamp_seconds is None or state.last_timestamp_seconds > previous_timestamp_seconds
@@ -1233,7 +1314,7 @@ class TimeseriesBackend(VllmBackend):
             state.low_valid_fraction_count += 1
 
             if batch.num_valid_records == 0:
-                logger.warning(
+                logger.runtime.debug(
                     "Time-series group batch produced no valid records.",
                     extra={
                         "group_ordinal": state.group_ordinal,
@@ -1242,7 +1323,7 @@ class TimeseriesBackend(VllmBackend):
                     },
                 )
             else:
-                logger.warning(
+                logger.runtime.debug(
                     "Time-series group batch has a high invalid fraction.",
                     extra={
                         "group_ordinal": state.group_ordinal,
@@ -1256,7 +1337,7 @@ class TimeseriesBackend(VllmBackend):
             if state.low_valid_fraction_count >= patience:
                 state.failed = True
                 state.termination_reason = "failure"
-                logger.warning(
+                logger.runtime.debug(
                     "Time-series group skipped after consecutive batches with a high invalid fraction.",
                     extra={
                         "group_ordinal": state.group_ordinal,
@@ -1272,7 +1353,7 @@ class TimeseriesBackend(VllmBackend):
         if state.no_progress_count >= patience:
             state.failed = True
             state.termination_reason = "failure"
-            logger.warning(
+            logger.runtime.debug(
                 "Time-series group skipped after consecutive batches without timestamp progress.",
                 extra={
                     "group_ordinal": state.group_ordinal,
@@ -1286,56 +1367,107 @@ class TimeseriesBackend(VllmBackend):
 
     def _log_parallel_batch_summary(
         self,
-        active_states: list[GroupState],
+        processed_states: list[GroupState],
         group_batches: dict[TimeSeriesGroupValue, Batch],
-        groups_completed: int,
         batches: GenerationBatches,
         duration: float,
         effective_samples_per_prompt: int,
+        num_finished: int,
     ) -> None:
-        """Log progress summary for parallel batch.
+        """Log the "Batch Progress" and "Group Progress" tables for one parallel batch.
+
+        Emits structured data via ``logger.user.info`` that is rendered as Rich
+        ASCII tables on the console and as key/value pairs in JSON logs, like
+        tabular generation's "Batch Progress" table. Groups that finished in
+        this batch are included with their outcome. Groups are labeled by
+        ordinal only, never by group value.
 
         Args:
-            active_states: Currently active group states.
-            group_batches: Batches for each group.
-            groups_completed: Number of completed groups.
+            processed_states: Group states processed in this batch, including
+                groups that completed or failed in it.
+            group_batches: Batches for each processed group.
             batches: The GenerationBatches accumulator.
-            duration: Time taken for this batch.
+            duration: Time taken for this batch, in seconds.
             effective_samples_per_prompt: Samples per prompt used.
+            num_finished: Number of groups that completed or failed in this batch.
         """
-        num_active = len(active_states)
-        total_batch_records = sum(b.num_valid_records for b in group_batches.values())
-        total_prompts_used = num_active * effective_samples_per_prompt
-        records_per_second = 0 if duration == 0 else total_batch_records / duration
-        duration_string = f"{duration:.1f}s" if duration < 120 else f"{duration / 60:.1f}min"
+        batch_valid_records = sum(batch.num_valid_records for batch in group_batches.values())
+        batch_completion_tokens = sum(batch.total_completion_tokens for batch in group_batches.values())
+        batch_valid_record_tokens = sum(batch.total_valid_record_tokens for batch in group_batches.values())
+        states = self._sequence_group_states.values()
+        progress_data: dict[str, int | float] = {
+            "records_per_second": round(0 if duration == 0 else batch_valid_records / duration, 2),
+            "duration_seconds": round(duration, 2),
+            "samples_per_prompt": effective_samples_per_prompt,
+            "valid_records_generated": batches.num_valid_records,
+            "active_groups": len(processed_states) - num_finished,
+            "groups_finished_this_batch": num_finished,
+            "completed_groups": sum(state.completed and not state.failed for state in states),
+            "failed_groups": sum(state.failed for state in states),
+            "total_groups": len(self._groups),
+        }
+        total_expected_records = self._compute_total_expected_records()
+        if total_expected_records > 0 and not self._flexible_timeseries:
+            progress_data["expected_records"] = total_expected_records
+        if batch_completion_tokens > 0 and duration > 0:
+            progress_data["tokens_per_second"] = round(batch_completion_tokens / duration, 1)
+            progress_data["valid_tokens_per_second"] = round(batch_valid_record_tokens / duration, 1)
 
-        # Build per-group progress summary
-        group_progress_lines = []
-        for state in active_states:
-            batch = group_batches[state.group_id]
-            batch_valid_rate = batch.valid_record_fraction
-            progress_pct = (
-                (state.total_valid_records / state.expected_records * 100) if state.expected_records > 0 else 0.0
-            )
-            status = "✓" if batch.num_valid_records > 0 else "✗"
-            group_progress_lines.append(
-                f"  {status} group {state.group_ordinal}: "
-                f"+{batch.num_valid_records} ({batch_valid_rate:.0%} valid), "
-                f"progress={state.total_valid_records}/{state.expected_records} ({progress_pct:.1f}%)"
-            )
-        group_progress_str = "\n".join(group_progress_lines)
-
-        logger.info(
-            f"Parallel batch summary:\n"
-            f"{LOG_DASHES}\n"
-            f"Batch time: {duration_string}\n"
-            f"Speed: {records_per_second:.1f} records/sec\n"
-            f"Groups: {num_active} active, {groups_completed}/{len(self._groups)} completed\n"
-            f"Samples/prompt: {effective_samples_per_prompt} (total prompts: {total_prompts_used})\n"
-            f"Per-group progress this batch:\n{group_progress_str}\n"
-            f"Total records: {batches.num_valid_records}\n"
-            f"{LOG_DASHES}",
+        logger.user.info(
+            "",
+            extra={"ctx": {"render_table": True, "tabular_data": progress_data, "title": "Batch Progress"}},
         )
+        logger.user.info(
+            "",
+            extra={
+                "ctx": {
+                    "render_table": True,
+                    "tabular_data": self._group_progress_rows(processed_states, group_batches),
+                    "title": "Group Progress",
+                }
+            },
+        )
+
+    def _group_progress_rows(
+        self,
+        states: list[GroupState],
+        group_batches: dict[TimeSeriesGroupValue, Batch],
+    ) -> dict[str, dict[str, str | int | float]]:
+        """Build the "Group Progress" table, keyed by column and then by group label.
+
+        The nested layout renders one column per metric and one row per group.
+        ``progress`` is ``accepted/expected`` for fixed-shape groups. Flexible
+        groups have no expected length, only the length cap, so ``progress`` is
+        the accepted row count. ``retries`` is the group's consecutive failed
+        batches against ``patience``: the larger of its high-invalid-fraction and
+        no-progress counts, since either one fails the group.
+        """
+        patience = self.config.generation.patience
+        rows: dict[str, dict[str, str | int | float]] = {}
+        for state in states:
+            batch = group_batches[state.group_id]
+            rows[f"group {state.group_ordinal}"] = {
+                "status": self._group_status(state),
+                "num_valid_records": batch.num_valid_records,
+                "valid_record_fraction": f"{batch.valid_record_fraction:.2%}",
+                "progress": (
+                    f"{state.total_valid_records}/{state.expected_records}"
+                    if state.expected_records > 0 and not self._flexible_timeseries
+                    else state.total_valid_records
+                ),
+                "retries": f"{max(state.low_valid_fraction_count, state.no_progress_count)}/{patience}",
+            }
+        columns = ("status", "num_valid_records", "valid_record_fraction", "progress", "retries")
+        return {column: {label: row[column] for label, row in rows.items()} for column in columns}
+
+    @staticmethod
+    def _group_status(state: GroupState) -> str:
+        """Describe whether a group is ``Active``, ``Completed``, or ``Failed``."""
+        if state.failed:
+            return "Failed"
+        if state.completed:
+            return "Completed"
+        return "Active"
 
     def _generate_parallel_groups(
         self,
@@ -1368,7 +1500,6 @@ class TimeseriesBackend(VllmBackend):
 
         pending_groups = list(self._groups)
         active_states: list[GroupState] = []
-        groups_completed = 0
         all_groups_succeeded = True
 
         logger.info(
@@ -1440,68 +1571,24 @@ class TimeseriesBackend(VllmBackend):
 
             duration = time.perf_counter() - start_time
 
-            # Process results for each group
-            states_to_remove = []
-            for state in active_states:
-                batch = group_batches[state.group_id]
-                if self.config.time_series.timestamp_interval_seconds is not None:
-                    self._check_chronological_for_group(batch, state)
-                outcomes = self._evaluate_responses(state, batch, batches)
-                selected_index = self._select_response(outcomes)
-                self._retain_single_valid_response(batch, preferred_index=selected_index)
-                batches.commit_history(batch)
-                if selected_index is None:
-                    accepted_records: list[ParsedRecord] = []
-                    termination_reason: str | None = None
-                else:
-                    accepted_records, termination_reason = outcomes[selected_index]
-                if termination_reason is None:
-                    result = self._process_group_result(
-                        state,
-                        batch,
-                        accepted_records,
-                        invalid_fraction_threshold,
-                    )
-                else:
-                    result = self._process_group_result(
-                        state,
-                        batch,
-                        accepted_records,
-                        invalid_fraction_threshold,
-                        termination_reason=termination_reason,
-                    )
-                state.batches.append(batch)
-                batches.add_batch(batch, apply_data_actions=False)
-                # Time-series retries are tracked per group. Since completion is
-                # determined from post-processed records, a batch-level zero-record
-                # status can safely be cleared while group processing continues.
-                batches.status = GenerationStatus.IN_PROGRESS
-                if result == GroupProcessingResult.FAILED:
-                    states_to_remove.append(state)
-                    groups_completed += 1
-                    all_groups_succeeded = False
-                elif result == GroupProcessingResult.COMPLETED:
-                    states_to_remove.append(state)
-                    groups_completed += 1
-                    completion_message = (
-                        "Time-series group completed."
-                        if self._flexible_timeseries
-                        else "Time-series group completed after reaching the stop timestamp."
-                    )
-                    logger.info(
-                        completion_message,
-                        extra={
-                            "group_ordinal": state.group_ordinal,
-                            "groups_completed": groups_completed,
-                            "total_groups": len(self._groups),
-                        },
-                    )
-
-            # Remove completed/failed states from active list
-            for state in states_to_remove:
+            processed_states = list(active_states)
+            finished_states: list[GroupState] = []
+            for state in processed_states:
+                result = self._process_group_batch(
+                    state, group_batches[state.group_id], batches, invalid_fraction_threshold
+                )
+                if result == GroupProcessingResult.IN_PROGRESS:
+                    continue
+                finished_states.append(state)
                 active_states.remove(state)
+                if result == GroupProcessingResult.FAILED:
+                    all_groups_succeeded = False
+                    continue
+                logger.runtime.debug(
+                    "Time-series group completed.",
+                    extra={"group_ordinal": state.group_ordinal, "total_groups": len(self._groups)},
+                )
 
-            # Check progress snapshots
             self._maybe_save_progress_snapshots(
                 batches,
                 progress_snapshots,
@@ -1509,69 +1596,106 @@ class TimeseriesBackend(VllmBackend):
                 is_group_based=False,
             )
 
-            # Log progress summary
+            if finished_states:
+                batches.log_summary(detailed_errors=self.use_detailed_logs)
             self._log_parallel_batch_summary(
-                active_states,
+                processed_states,
                 group_batches,
-                groups_completed,
                 batches,
                 duration,
                 effective_samples_per_prompt,
+                num_finished=len(finished_states),
             )
 
         return all_groups_succeeded
 
+    def _process_group_batch(
+        self,
+        state: GroupState,
+        batch: Batch,
+        batches: GenerationBatches,
+        invalid_fraction_threshold: float,
+    ) -> GroupProcessingResult:
+        """Keep one sample from a group's batch, update the group, and record the batch.
+
+        Args:
+            state: Active generation state for the group.
+            batch: The group's batch of sampled responses.
+            batches: Accumulator that applies data actions and collects batches.
+            invalid_fraction_threshold: Threshold for the invalid-fraction strike.
+
+        Returns:
+            Whether the group remains active, completed, or failed.
+        """
+        if self.config.time_series.timestamp_interval_seconds is not None:
+            self._check_chronological_for_group(batch, state)
+        outcomes = self._evaluate_responses(state, batch, batches)
+        selected_index = self._select_response(outcomes)
+        outcome = _ResponseOutcome([], None) if selected_index is None else outcomes[selected_index]
+        self._retain_single_valid_response(batch, selected_index, outcome.accepted)
+        batches.commit_history(batch)
+        result = self._process_group_result(
+            state,
+            batch,
+            outcome.accepted,
+            invalid_fraction_threshold,
+            termination_reason=outcome.termination_reason,
+            reached_stop=outcome.reached_stop,
+        )
+        state.batches.append(batch)
+        batches.add_batch(batch, apply_data_actions=False)
+        # Time-series retries are tracked per group. Since completion is
+        # determined from post-processed records, a batch-level zero-record
+        # status can safely be cleared while group processing continues.
+        batches.status = GenerationStatus.IN_PROGRESS
+        return result
+
     def _retain_single_valid_response(
         self,
         batch: Batch,
-        preferred_index: int | None = None,
-    ) -> list[ParsedRecord]:
-        """Retain one response, discarding all others.
+        selected_index: int | None,
+        accepted: Sequence[ParsedRecord],
+    ) -> None:
+        """Retain the selected response's accepted rows, discarding all others.
 
         For time-series sliding window generation, only one response can be used
-        per batch to maintain chronological continuity. This method keeps
-        ``preferred_index`` when given, otherwise the response with the most
-        valid records, and discards all other responses (both their valid and
-        invalid records are cleared, and an error note is added to track that
-        they were trimmed).
+        per batch to maintain chronological continuity. The other responses are
+        emptied with ``Batch.discard_response``: they stay in the batch so
+        ``Batch.num_prompts`` still counts every sample, but their records no
+        longer count as valid or invalid and their completion tokens are reported
+        as discarded-sample tokens. The selected response's valid rows past the
+        series' end are discarded the same way with ``Batch.discard_records``.
+        Batch statistics and error reasons then describe only the kept sample.
+
+        When ``selected_index`` is ``None``, no sample continues the group, so no
+        response is discarded: every sample keeps its invalid records, and error
+        statistics show why all of them failed. Any row still valid is
+        invalidated, since none is retained.
 
         Args:
             batch: The batch to retain the response from.
-            preferred_index: Index of the response to keep, if already selected.
-
-        Returns:
-            The retained response's valid ``ParsedRecord`` objects, keeping
-            both the parsed dicts and the original emitted text (the latter
-            feeds the next prompt context).
+            selected_index: Index of the response to keep, or ``None`` when no
+                response continues the group.
+            accepted: The selected response's accepted rows, which are kept.
         """
-        final_records: list[ParsedRecord] = []
-
-        max_valid_idx = preferred_index
-        if max_valid_idx is None:
-            # Find the index of the response with the most valid records.
-            max_valid_count = -1
-            for idx, response in enumerate(batch._responses):
-                count = len(response.valid_records)
-                if count > max_valid_count:
-                    max_valid_count = count
-                    max_valid_idx = idx
-
         trim_error = ("Extra response trimmed for sliding window", "TimeSeries")
-        for idx, response in enumerate(batch._responses):
-            if idx != max_valid_idx:
-                # Invalidate the discarded rows themselves so post-processing
-                # bookkeeping that still references them treats them as rejected.
+        if selected_index is None:
+            for response in batch._responses:
                 for record in response.records:
                     if record.is_valid:
                         record.invalidate(trim_error)
-                # Drop all records from the trimmed response; replace with a
-                # single synthetic marker record so the trim is visible in
-                # error statistics without carrying stale text/token counts.
-                response.records = [ParsedRecord(text="", error=trim_error)]
-            else:
-                final_records.extend(r for r in response.records if r.is_valid and r.parsed is not None)
+            return
 
-        return final_records
+        for index in range(batch.num_prompts):
+            if index != selected_index:
+                batch.discard_response(index, trim_error)
+        accepted_ids = {id(record) for record in accepted}
+        past_end = [
+            record
+            for record in batch._responses[selected_index].records
+            if record.is_valid and id(record) not in accepted_ids
+        ]
+        batch.discard_records(selected_index, past_end, ("Generated row is past the series' end", "TimeSeries"))
 
     def generate(
         self,
@@ -1592,11 +1716,28 @@ class TimeseriesBackend(VllmBackend):
             the same as those seen during training in
             ``model_metadata.timeseries_group_values``.
 
+            Record counts describe only the sample kept for each group. Rows
+            past a series' end are discarded like the extra samples, so they
+            count as neither valid nor invalid.
+
+            As in tabular generation, the run is wrapped in an ``NvmlPeakSampler``
+            context, and the generation-complete observability event is emitted
+            even when generation fails.
+
         Args:
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
 
         Returns:
             Generation results object, which includes a DataFrame of generated records.
+        """
+        return super().generate(data_actions_fn)
+
+    @override
+    def _run_generation(self, data_actions_fn: utils.DataActionsFn | None) -> None:
+        """Generate every group, then populate ``self.gen_results`` and ``self.elapsed_time``.
+
+        Args:
+            data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
         """
         self._prepare_flexible_timeseries_artifacts()
         generation_start = time.monotonic()
@@ -1633,16 +1774,22 @@ class TimeseriesBackend(VllmBackend):
             f"Generating for {num_groups} groups using parallel generation "
             f"(total expected records: {total_expected_records})",
         )
-        self._generate_parallel_groups(
-            batches=batches,
-            sampling_params=sampling_params,
-            progress_snapshots=progress_snapshots,
-        )
+        with heartbeat(
+            "Generation",
+            logger_name=__name__,
+            total_groups=num_groups,
+            progress_note="Long stretches with no new records are normal.",
+        ):
+            self._generate_parallel_groups(
+                batches=batches,
+                sampling_params=sampling_params,
+                progress_snapshots=progress_snapshots,
+            )
 
         self._discard_failed_group_records()
         batches.status = self._resolve_timeseries_status()
         batches.job_complete()
-        batches.log_status()
+        self._log_timeseries_status(batches.status)
 
         generation_time_sec = time.monotonic() - generation_start
         self.elapsed_time = generation_time_sec
@@ -1658,5 +1805,3 @@ class TimeseriesBackend(VllmBackend):
         self.gen_results.df = self._sort_dataframe(internal_df)
         self._write_flexible_timeseries_metrics()
         self._finalize_flexible_timeseries_artifacts()
-
-        return self.gen_results

@@ -31,6 +31,7 @@ _GENERATE_RESULT_FIELDS: tuple[str, ...] = (
     "num_valid_record_tokens",
     "num_invalid_record_tokens",
     "num_non_record_tokens",
+    "num_discarded_sample_tokens",
     "tokens_per_prompt",
     "tokens_per_second",
     "valid_tokens_per_second",

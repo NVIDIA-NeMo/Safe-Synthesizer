@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import itertools
 import time
+from collections import Counter
 from dataclasses import dataclass
 from typing import Self
 
@@ -21,7 +23,7 @@ from ..defaults import (
     MAX_NUM_PROMPTS_PER_BATCH,
 )
 from ..errors import GenerationError
-from ..generation.batch import Batch
+from ..generation.batch import Batch, log_generation_summary, summarize_errors
 from ..generation.stopping import (
     GenerationStopCondition,
 )
@@ -94,6 +96,9 @@ class GenerateJobResults:
     num_non_record_tokens: int | None = None
     """Tokens not part of any recognized record."""
 
+    num_discarded_sample_tokens: int | None = None
+    """Tokens discarded unused: the extra time-series samples per prompt and rows past a series' end."""
+
     tokens_per_prompt: float | None = None
     """Average completion tokens per prompt (``num_completion_tokens / num_prompts``)."""
 
@@ -127,11 +132,7 @@ class GenerateJobResults:
         num_valid_records = batches.num_valid_records
         num_invalid_records = batches.num_invalid_records
         num_prompts = batches.num_prompts
-        valid_record_fraction = (
-            batches.num_valid_records / (batches.num_valid_records + batches.num_invalid_records)
-            if (batches.num_valid_records + batches.num_invalid_records) > 0
-            else 0.0
-        )
+        valid_record_fraction = batches.valid_record_fraction
         batch_valid_record_fractions = [batch.valid_record_fraction for batch in batches._batches]
 
         has_token_data = batches.total_completion_tokens > 0
@@ -148,6 +149,7 @@ class GenerateJobResults:
             num_valid_record_tokens=batches.total_valid_record_tokens if has_token_data else None,
             num_invalid_record_tokens=batches.total_invalid_record_tokens if has_token_data else None,
             num_non_record_tokens=batches.total_non_record_tokens if has_token_data else None,
+            num_discarded_sample_tokens=batches.total_discarded_sample_tokens if has_token_data else None,
             tokens_per_prompt=(
                 batches.total_completion_tokens / num_prompts if has_token_data and num_prompts > 0 else None
             ),
@@ -384,8 +386,17 @@ class GenerationBatches:
 
     @property
     def total_non_record_tokens(self) -> int:
-        """Tokens not part of any recognized record across all batches."""
-        return sum(batch.total_non_record_tokens for batch in self._batches)
+        """Tokens not part of any recognized record across all batches.
+
+        Per-batch tokenizer drift is summed before clamping, so it neither
+        inflates the total nor logs a warning for each batch.
+        """
+        return max(0, sum(batch.unclamped_non_record_tokens for batch in self._batches))
+
+    @property
+    def total_discarded_sample_tokens(self) -> int:
+        """Completion tokens of discarded samples across all batches."""
+        return sum(batch.total_discarded_sample_tokens for batch in self._batches)
 
     @property
     def total_tokenization_time_sec(self) -> float:
@@ -396,6 +407,48 @@ class GenerationBatches:
     def num_length_truncated_completions(self) -> int:
         """Total completions that stopped because they reached ``max_tokens``."""
         return sum(batch.num_length_truncated_completions for batch in self._batches)
+
+    @property
+    def valid_record_fraction(self) -> float:
+        """Fraction of records generated in the job that passed validation."""
+        total_records = self.num_valid_records + self.num_invalid_records
+        return 0.0 if total_records == 0 else self.num_valid_records / total_records
+
+    @property
+    def finish_reasons(self) -> Counter[str]:
+        """Completion finish reasons counted across all batches."""
+        return sum((batch.finish_reasons for batch in self._batches), Counter())
+
+    @property
+    def num_data_config_rejected_records(self) -> int:
+        """Count of records rejected by ``data_config`` validation across all batches."""
+        return sum(batch.num_data_config_rejected_records for batch in self._batches)
+
+    def error_statistics(self, detailed_errors: bool) -> pd.DataFrame:
+        """Return count statistics on errors encountered across all batches so far.
+
+        Args:
+            detailed_errors: If ``True``, include expected column names
+                and allowed field values.  If ``False``, report only
+                high-level error categories.
+
+        Returns:
+            DataFrame indexed by error message with a ``Percentage``
+            column, sorted by frequency descending.
+        """
+        return summarize_errors(itertools.chain.from_iterable(batch.errors for batch in self._batches), detailed_errors)
+
+    def log_summary(self, detailed_errors: bool = False) -> None:
+        """Log the "Generation Summary" and "Error Statistics" tables for the job so far.
+
+        Same tables as [`Batch.log_summary`][nemo_safe_synthesizer.generation.batch.Batch.log_summary],
+        aggregated over every batch added so far.
+
+        Args:
+            detailed_errors: If ``True``, include per-column error
+                statistics in the log output.
+        """
+        log_generation_summary(self, detailed_errors=detailed_errors, title="Generation Summary")
 
     @staticmethod
     def _has_no_valid_records(batch: Batch) -> bool:
