@@ -53,7 +53,7 @@
             </p>
             {% if ctx.job_id %}<div class="job-id"><span>Job ID</span>{{ ctx.job_id }}</div>{% endif %}
             {% if ctx.with_synthesizer %}{% include "jinja/components/score_overview.j2" %}{% endif %}
-            {% include "jinja/components/dataset_statistics.j2" %}
+            {% if ctx.dataset_statistics %}{% include "jinja/components/dataset_statistics.j2" %}{% endif %}
         </section>
 
         {% if ctx.with_synthesizer %}
