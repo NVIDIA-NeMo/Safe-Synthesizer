@@ -9,6 +9,8 @@ A field added after a release needs a default, so data saved before it existed s
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field
 
 REPORT_DATA_SCHEMA_VERSION = 1
@@ -18,6 +20,7 @@ __all__ = [
     "AttributeInferenceMetric",
     "AutocorrelationCounts",
     "AutocorrelationDetails",
+    "AutocorrelationEvaluationMode",
     "AutocorrelationProfile",
     "AutocorrelationSimilarityMetric",
     "ClosestMatch",
@@ -34,6 +37,7 @@ __all__ = [
     "Distribution",
     "EvaluationReportData",
     "GroupSelection",
+    "GroupSelectionPolicy",
     "GroupSimilarity",
     "MembershipInferenceMetric",
     "Metric",
@@ -54,9 +58,11 @@ __all__ = [
     "TextSemanticMetric",
     "TextStructureDistributions",
     "TextStructureMetric",
+    "TimeSeriesMetric",
     "WindowAttack",
     "WindowCounts",
     "WindowDistances",
+    "WindowEvaluationMode",
     "WindowGroupSummary",
     "WindowMembershipInferenceDetails",
     "WindowMembershipInferenceMetric",
@@ -216,6 +222,34 @@ class PIIReplayMetric(Metric):
     skipped_reason: str | None = Field(description="Why PII replay did not run in full, or null.")
 
 
+class TimeSeriesMetric(Metric):
+    """A time-series metric, with metric-specific details."""
+
+    details: ReportDataModel = Field(description="Metric-specific details.")
+
+
+class GroupSelectionPolicy(StrEnum):
+    """How groups were chosen for autocorrelation similarity."""
+
+    ALL_SHARED_GROUPS = "all_shared_groups"
+    SEEDED_RANDOM_SAMPLE = "seeded_random_sample"
+
+
+class AutocorrelationEvaluationMode(StrEnum):
+    """Whether autocorrelation is compared per group or over one global sequence."""
+
+    PER_GROUP = "per_group"
+    GLOBAL = "global"
+
+
+class WindowEvaluationMode(StrEnum):
+    """How much of window membership inference ran."""
+
+    FULL = "full"
+    COPY_DIAGNOSTICS_ONLY = "copy_diagnostics_only"
+    UNAVAILABLE = "unavailable"
+
+
 class SkippedComparison(ReportDataModel):
     """A group and column pair left out of the score."""
 
@@ -276,13 +310,17 @@ class GroupSelection(ReportDataModel):
     shared_groups: int = Field(description="Groups in both the training and synthetic data.")
     evaluated_groups: int = Field(description="Groups evaluated.")
     omitted_shared_groups: int = Field(description="Shared groups left out.")
-    policy: str = Field(description="'all_shared_groups', or 'seeded_random_sample' when groups were sampled.")
+    policy: GroupSelectionPolicy = Field(
+        description="'all_shared_groups', or 'seeded_random_sample' when groups were sampled."
+    )
 
 
 class AutocorrelationDetails(ReportDataModel):
     """Autocorrelation profiles and summaries; null or empty where the metric stopped before them."""
 
-    evaluation_mode: str | None = Field(description="'per_group' or 'global', or null when no pair could be compared.")
+    evaluation_mode: AutocorrelationEvaluationMode | None = Field(
+        description="'per_group' or 'global', or null when no pair could be compared."
+    )
     timestamp_column: str | None = Field(description="Column the values are ordered by, or null.")
     group_column: str | None = Field(description="Column that separates sequences, or null.")
     max_lag: int | None = Field(description="Configured largest lag, or null.")
@@ -292,7 +330,11 @@ class AutocorrelationDetails(ReportDataModel):
     per_group: list[GroupSimilarity] = Field(description="Similarity by group.")
     per_column: list[ColumnSimilarity] = Field(description="Similarity by column.")
     profiles: list[AutocorrelationProfile] = Field(description="Compared group and column pairs.")
-    skipped: list[SkippedComparison] = Field(description="Group and column pairs left out.")
+    skipped: list[SkippedComparison] = Field(
+        description=(
+            "Group and column pairs left out, at most the first 12 the report lists; `counts.skipped` is the total."
+        )
+    )
     excluded_columns: list[str] = Field(
         description="Numeric training columns left out because the synthetic data lacks them or has non-numeric values."
     )
@@ -300,7 +342,7 @@ class AutocorrelationDetails(ReportDataModel):
     groups_only_in_synthetic_count: int = Field(description="Groups found only in the synthetic data.")
 
 
-class AutocorrelationSimilarityMetric(Metric):
+class AutocorrelationSimilarityMetric(TimeSeriesMetric):
     """Autocorrelation similarity, with the profiles it compares."""
 
     details: AutocorrelationDetails = Field(description="Profiles, skipped pairs, and summaries.")
@@ -321,8 +363,11 @@ class WindowCounts(ReportDataModel):
 class ClosestMatch(ReportDataModel):
     """The synthetic window closest to any training window."""
 
-    distance: float = Field(
-        description="Euclidean distance between the windows after standardizing each value by the training windows."
+    distance: float | None = Field(
+        description=(
+            "Euclidean distance between the windows after standardizing each value by the training windows, "
+            "or null when it overflows."
+        )
     )
     exact_copy: bool = Field(description="Whether the synthetic window copies the training window exactly.")
     synthetic_values: list[list[float]] = Field(description="Synthetic window values, as `values[column][step]`.")
@@ -346,7 +391,9 @@ class WindowDistances(ReportDataModel):
 class WindowAttack(ReportDataModel):
     """Membership inference attack results against the holdout."""
 
-    threshold: float = Field(description="Distance at or below which a window is flagged.")
+    threshold: float | None = Field(
+        description="Distance at or below which a window is flagged, or null when it overflows."
+    )
     training_flag_rate: float = Field(description="Share of training windows flagged.")
     holdout_flag_rate: float = Field(description="Share of holdout windows flagged.")
     privacy_loss_beyond_chance: float = Field(description="Privacy loss after removing the expected chance loss.")
@@ -366,7 +413,7 @@ class WindowGroupSummary(ReportDataModel):
 class WindowMembershipInferenceDetails(ReportDataModel):
     """Window counts, distances, copies, and attack results; null or empty where the metric stopped before them."""
 
-    evaluation_mode: str = Field(
+    evaluation_mode: WindowEvaluationMode = Field(
         description="'full', 'copy_diagnostics_only' without a usable holdout, or 'unavailable'."
     )
     columns: list[str] = Field(description="Columns in each window, in the order of window values.")
@@ -390,7 +437,7 @@ class WindowMembershipInferenceDetails(ReportDataModel):
     )
 
 
-class WindowMembershipInferenceMetric(Metric):
+class WindowMembershipInferenceMetric(TimeSeriesMetric):
     """Window membership inference protection, with its windows and attack results."""
 
     details: WindowMembershipInferenceDetails = Field(description="Window counts, distances, and attack results.")

@@ -18,13 +18,13 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from nemo_safe_synthesizer.evaluation.report_data import _window_membership_inference_metric, to_json_safe
+from nemo_safe_synthesizer.evaluation.report_data import window_membership_inference_metric
 
 GROUPS = 10
 
 
 def _metric(component: WindowGroupMIA) -> WindowMembershipInferenceMetric:
-    return WindowMembershipInferenceMetric.model_validate(to_json_safe(_window_membership_inference_metric(component)))
+    return window_membership_inference_metric(component)
 
 
 def _config(

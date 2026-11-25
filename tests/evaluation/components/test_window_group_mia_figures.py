@@ -10,6 +10,7 @@ from nemo_safe_synthesizer.config.evaluation_report_data import (
     ClosestMatch,
     WindowAttack,
     WindowDistances,
+    WindowEvaluationMode,
     WindowGroupSummary,
     WindowMembershipInferenceDetails,
 )
@@ -27,7 +28,7 @@ _EXACT_MATCH = ClosestMatch(
     synthetic_values=[[1.0, 2.0], [10.0, 11.0]],
 )
 _DETAILS = WindowMembershipInferenceDetails(
-    evaluation_mode="full",
+    evaluation_mode=WindowEvaluationMode.FULL,
     columns=["temperature", "pressure"],
     excluded_columns=[],
     window_size=2,
@@ -83,8 +84,8 @@ def test_distance_figure_keeps_the_holdout_and_threshold_in_view_when_training_c
     assert figure.layout.shapes[0].x0 < high
 
 
-def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over_holdout():
-    rates = [0.05, 0.5, 1.0, *([0.2] * 12)]
+def test_group_figure_puts_the_first_exported_group_on_top_and_shades_excess_over_holdout():
+    rates = [1.0, 0.5, 0.2, 0.05]
     per_group = [
         WindowGroupSummary(group=f"g{index:02d}", windows=20, exact_copy_rate=0.0, flag_rate=rate)
         for index, rate in enumerate(rates)
@@ -93,8 +94,8 @@ def test_group_figure_puts_the_most_flagged_groups_on_top_and_shades_excess_over
     figure = generate_window_group_mia_group_figure(per_group, 0.05)
 
     bars = figure.data[0]
-    assert len(bars.x) == 12
-    assert list(figure.layout.yaxis.ticktext)[-2:] == ["g01", "g02"]
+    assert len(bars.x) == 4
+    assert list(figure.layout.yaxis.ticktext)[-2:] == ["g01", "g00"]
     assert list(bars.x)[-1] == pytest.approx(100.0)
     assert bars.marker.color[-1] == pytest.approx(1.0)
     assert list(bars.marker.color) == sorted(bars.marker.color)

@@ -85,7 +85,6 @@ class AutocorrelationSimilarity(TimeSeriesComponent[AutocorrelationSimilarityMet
     def report_context(cls, metric: AutocorrelationSimilarityMetric) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().report_context(metric)
-        context["details"] = metric.details
         profiles = metric.details.profiles
         figures: list[FigureSpec] = []
         summary_columns: list[str] = []

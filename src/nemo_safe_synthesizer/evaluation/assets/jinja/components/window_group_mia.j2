@@ -45,9 +45,10 @@
 {% if window_group_mia_details.closest_match and not window_group_mia_details.closest_match.exact_copy %}
 <p class="chart-subheading">
     Closest match shows only the synthetic window. The closest training window is hidden because it is not an exact
-    copy, so the report shows no training values that the synthetic data doesn't contain. It differs from that
+    copy, so the report shows no training values that the synthetic data doesn't contain.
+    {%- if window_group_mia.closest_match_distance_per_value is defined %} It differs from that
     synthetic window by {{ "%.2f" | format(window_group_mia.closest_match_distance_per_value) }} training standard
-    deviations per value.
+    deviations per value.{% endif %}
 </p>
 {% endif %}
 {% if window_group_mia.figures %}

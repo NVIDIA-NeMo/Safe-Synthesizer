@@ -14,13 +14,12 @@ from nemo_safe_synthesizer.config.evaluate import (
     TimeSeriesEvaluationParameters,
     WindowGroupMIAParameters,
 )
-from nemo_safe_synthesizer.config.evaluation_report_data import WindowMembershipInferenceMetric
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.render import _get_template
-from nemo_safe_synthesizer.evaluation.report_data import _window_membership_inference_metric, to_json_safe
+from nemo_safe_synthesizer.evaluation.report_data import window_membership_inference_metric
 
 
 def _render_template(name: str, **context: object) -> str:
@@ -332,9 +331,7 @@ def _window_group_mia_card(*, with_holdout: bool, columns: int) -> tuple[WindowG
         ),
     )
     component = WindowGroupMIA.from_evaluation_datasets(datasets, config)
-    card = WindowGroupMIA.report_context(
-        WindowMembershipInferenceMetric.model_validate(to_json_safe(_window_membership_inference_metric(component)))
-    )
+    card = WindowGroupMIA.report_context(window_membership_inference_metric(component))
     return component, card, _render_template("jinja/components/window_group_mia.j2", card=card)
 
 
