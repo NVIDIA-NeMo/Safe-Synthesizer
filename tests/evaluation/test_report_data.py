@@ -24,6 +24,7 @@ from nemo_safe_synthesizer.evaluation.components.column_distribution import Colu
 from nemo_safe_synthesizer.evaluation.components.component import Component
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
+from nemo_safe_synthesizer.evaluation.report_context import report_context
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
@@ -152,6 +153,18 @@ def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
     assert "detected_entity_values" not in serialized
     assert "training_distribution" not in serialized
     assert [c.name for c in data.columns] == list(training.columns)
+
+
+def test_transform_columns_show_when_the_only_transformed_column_is_not_evaluated() -> None:
+    report = _tabular_report()
+    distribution = _component(report, ColumnDistribution)
+    distribution.evaluation_fields = [f for f in distribution.evaluation_fields if f.name != "contact"]
+
+    data = build_report_data(report)
+
+    assert "contact" not in [c.name for c in data.columns]
+    assert data.any_column_transformed is True
+    assert report_context(data)["with_transform"] is True
 
 
 def test_export_is_strict_json_with_correlations_and_no_plotly_figures() -> None:

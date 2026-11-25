@@ -410,6 +410,28 @@ class TestSaveResults:
         assert not nss._workdir.evaluation_report.exists()
         assert not nss._workdir.evaluation_metrics.exists()
 
+    def test_removes_stale_metrics_when_evaluation_is_skipped(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        assert nss._workdir is not None
+        metrics_path = nss._workdir.evaluation_metrics
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text('{"previous": "run"}')
+        nss.results.evaluation_report_html = None
+        nss.results.summary.timing.evaluation_time_sec = None
+
+        nss.save_results()
+
+        assert not metrics_path.exists()
+
+    def test_saves_a_non_ascii_report_as_utf8(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_html = "<html>0.0–10.0</html>"
+
+        nss.save_results()
+
+        assert nss._workdir is not None
+        assert nss._workdir.evaluation_report.read_bytes() == "<html>0.0–10.0</html>".encode()
+
     def test_keeps_metrics_and_removes_stale_report_when_the_report_could_not_be_built(self, tmp_path: Path):
         nss = _builder_with_mock_results(tmp_path)
         assert nss._workdir is not None
