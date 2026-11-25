@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import warnings
 
+import numpy as np
+
 from nemo_safe_synthesizer.config.evaluation_report_data import (
     DifferentialPrivacySettings,
     EvaluationReportData,
@@ -31,6 +33,7 @@ _EMPTY_REPORT = EvaluationReportData(
     metrics=Metrics(**dict.fromkeys(Metrics.model_fields)),
     dataset=None,
     columns=[],
+    any_column_transformed=False,
     differential_privacy=DifferentialPrivacySettings(enabled=False, epsilon=None, delta=None),
     pii_replacement=None,
 )
@@ -45,6 +48,21 @@ def test_text_semantic_similarity_figures_have_a_column_heading() -> None:
 
     assert [figure["title"] for figure in figures] == ["review"]
     assert "plotly-graph-div" in figures[0]["html"]
+
+
+def test_text_semantic_similarity_figure_embeds_float32_embeddings_as_float32() -> None:
+    values = np.array([0.1, 0.3, 0.2], dtype=np.float32).tolist()
+    projection = {
+        "axes": ["pc1", "pc2"],
+        "training": {"x": values, "y": values},
+        "synthetic": {"x": values, "y": values},
+    }
+    data = _report_data(text_semantic_similarity={"score": _UNAVAILABLE, "projections": {"review": projection}})
+
+    html = report_context(data)["text_semantic_similarity"]["figures"][0]["html"]
+
+    assert '"dtype":"f4"' in html
+    assert '"dtype":"f8"' not in html
 
 
 def test_text_structure_similarity_figures_have_a_column_heading() -> None:

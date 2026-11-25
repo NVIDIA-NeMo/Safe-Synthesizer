@@ -4,6 +4,7 @@
 """Evaluation results as structured data, which the HTML report is rendered from and other interfaces can present.
 
 ``schema_version`` is raised only when a field is removed or changes meaning; readers ignore unknown fields.
+A field added after a release needs a default, so data saved before it existed still loads.
 """
 
 from __future__ import annotations
@@ -484,6 +485,9 @@ class EvaluationReportData(ReportDataModel):
     dataset: DatasetCounts | None = Field(description="Dataset counts, or null when they were not computed.")
     columns: list[ColumnResult] = Field(
         description="Evaluated training columns, in training order: those also in the synthetic data, sampled down to `evaluation.sqs_report_columns`."
+    )
+    any_column_transformed: bool = Field(
+        description="Whether PII replacement transformed any training column, including ones not in `columns`."
     )
     differential_privacy: DifferentialPrivacySettings = Field(description="Differential privacy settings.")
     pii_replacement: PIIReplacement | None = Field(
