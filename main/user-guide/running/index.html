@@ -11461,19 +11461,21 @@ at a glance. <code>&lt;run_name&gt;</code> defaults to an ISO 8601 timestamp (e.
 </span><span id="__span-58-7"><a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a>│   ├── info.json                    # generate-only workflow
 </span><span id="__span-58-8"><a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a>│   ├── synthetic_data.csv
 </span><span id="__span-58-9"><a id="__codelineno-58-9" name="__codelineno-58-9" href="#__codelineno-58-9"></a>│   ├── evaluation_report.html
-</span><span id="__span-58-10"><a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a>│   └── evaluation_metrics.json      # machine-readable metrics
-</span><span id="__span-58-11"><a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a>├── dataset/
-</span><span id="__span-58-12"><a id="__codelineno-58-12" name="__codelineno-58-12" href="#__codelineno-58-12"></a>│   ├── training.csv
-</span><span id="__span-58-13"><a id="__codelineno-58-13" name="__codelineno-58-13" href="#__codelineno-58-13"></a>│   ├── test.csv
-</span><span id="__span-58-14"><a id="__codelineno-58-14" name="__codelineno-58-14" href="#__codelineno-58-14"></a>│   ├── validation.csv               # when training.validation_ratio &gt; 0
-</span><span id="__span-58-15"><a id="__codelineno-58-15" name="__codelineno-58-15" href="#__codelineno-58-15"></a>│   └── transformed_training.csv     # when PII replacement transforms the data
-</span><span id="__span-58-16"><a id="__codelineno-58-16" name="__codelineno-58-16" href="#__codelineno-58-16"></a>└── logs/
-</span><span id="__span-58-17"><a id="__codelineno-58-17" name="__codelineno-58-17" href="#__codelineno-58-17"></a>    └── &lt;phase&gt;.jsonl                # e.g. end_to_end.jsonl or train.jsonl
+</span><span id="__span-58-10"><a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a>│   ├── evaluation_report_data.json  # evaluation results as JSON
+</span><span id="__span-58-11"><a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a>│   └── evaluation_metrics.json      # machine-readable metrics
+</span><span id="__span-58-12"><a id="__codelineno-58-12" name="__codelineno-58-12" href="#__codelineno-58-12"></a>├── dataset/
+</span><span id="__span-58-13"><a id="__codelineno-58-13" name="__codelineno-58-13" href="#__codelineno-58-13"></a>│   ├── training.csv
+</span><span id="__span-58-14"><a id="__codelineno-58-14" name="__codelineno-58-14" href="#__codelineno-58-14"></a>│   ├── test.csv
+</span><span id="__span-58-15"><a id="__codelineno-58-15" name="__codelineno-58-15" href="#__codelineno-58-15"></a>│   ├── validation.csv               # when training.validation_ratio &gt; 0
+</span><span id="__span-58-16"><a id="__codelineno-58-16" name="__codelineno-58-16" href="#__codelineno-58-16"></a>│   └── transformed_training.csv     # when PII replacement transforms the data
+</span><span id="__span-58-17"><a id="__codelineno-58-17" name="__codelineno-58-17" href="#__codelineno-58-17"></a>└── logs/
+</span><span id="__span-58-18"><a id="__codelineno-58-18" name="__codelineno-58-18" href="#__codelineno-58-18"></a>    └── &lt;phase&gt;.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 </span></code></pre></div>
 <p>Key outputs:</p>
 <ul>
 <li><code>generate/synthetic_data.csv</code>: the synthetic dataset</li>
 <li><code>generate/evaluation_report.html</code>: quality and privacy report</li>
+<li><code>generate/evaluation_report_data.json</code>: scores, per-metric results and chart values, and column statistics as JSON, for presenting them elsewhere</li>
 <li><code>generate/evaluation_metrics.json</code>: machine-readable evaluation scores and timing</li>
 <li><code>train/adapter/</code>: LoRA weights for resuming generation</li>
 <li><code>train/safe-synthesizer-config.json</code>: resolved config snapshot</li>
@@ -11487,13 +11489,14 @@ but reclaim training cache space.</p>
 </div>
 <h3 id="sdk-results-access">SDK Results Access<a class="headerlink" href="#sdk-results-access" title="Permanent link">&para;</a></h3>
 <p><code>run()</code> automatically saves <code>synthetic_data.csv</code>, <code>evaluation_report.html</code>,
-and <code>evaluation_metrics.json</code> to the artifacts directory unless an
-<code>output_file</code> override is provided. For stepwise execution, call
+<code>evaluation_report_data.json</code>, and <code>evaluation_metrics.json</code> to the artifacts directory; an
+<code>output_file</code> override changes only where the CSV goes. For stepwise execution, call
 <code>save_results()</code> explicitly after <code>evaluate()</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="n">results</span> <span class="o">=</span> <span class="n">synthesizer</span><span class="o">.</span><span class="n">results</span>
 </span><span id="__span-59-2"><a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">synthetic_data</span>
 </span><span id="__span-59-3"><a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">summary</span>
-</span><span id="__span-59-4"><a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="c1"># synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically</span>
+</span><span id="__span-59-4"><a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="n">report_data</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">evaluation_report_data</span>  <span class="c1"># None when evaluation was skipped</span>
+</span><span id="__span-59-5"><a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a><span class="c1"># synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically</span>
 </span></code></pre></div>
 <h3 id="cleaning-up">Cleaning Up<a class="headerlink" href="#cleaning-up" title="Permanent link">&para;</a></h3>
 <p>See <a href="#artifacts-clean"><code>artifacts clean</code></a> in the CLI Commands section for options.</p>
