@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.evaluation_report_data import (
     REPORT_DATA_SCHEMA_VERSION,
+    EvaluationReportData,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -170,11 +171,26 @@ def test_export_is_strict_json_with_correlations_and_no_plotly_figures() -> None
         assert all(len(row) == size for row in correlations[matrix])
 
 
-def test_export_of_a_time_series_report() -> None:
+def test_export_of_a_time_series_report_has_typed_details_without_training_only_values() -> None:
     payload = json.loads(build_report_data(_time_series_report()).model_dump_json(), parse_constant=_reject_constant)
+    metrics = EvaluationReportData.model_validate(payload).metrics
+    assert metrics.autocorrelation_similarity is not None
+    assert metrics.window_membership_inference_protection is not None
+    autocorrelation = metrics.autocorrelation_similarity.details
+    window = metrics.window_membership_inference_protection.details
 
-    assert payload["metrics"]["autocorrelation_similarity"]["details"]
-    assert payload["metrics"]["window_membership_inference_protection"]["details"]
+    assert autocorrelation.profiles
+    assert autocorrelation.groups_only_in_training_count == 2
+    assert '"g0"' not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
+    assert window.attack is not None
+    assert window.training_group_count == 8
+    assert 0 < len(window.per_group) <= 8
+    assert window.closest_match is not None
+    assert window.closest_match.exact_copy is False
+    assert (
+        payload["metrics"]["window_membership_inference_protection"]["details"]["closest_match"]["training_values"]
+        is None
+    )
 
 
 class _Color(Enum):

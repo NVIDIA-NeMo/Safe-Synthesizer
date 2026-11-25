@@ -270,9 +270,13 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
             "group": str(index),
             "column": column,
             "lags": [1, 2],
+            "effective_max_lag": 2,
             "training_acf": [0.5, 0.2],
             "synthetic_acf": [None, None] if index == 0 else [0.4, None],
+            "training_pair_support": [10, 9],
+            "synthetic_pair_support": [10, 9],
             "evaluated_lags": 0 if index == 0 else 1,
+            "error": 1 - index / 13,
             "similarity": index / 13,
         }
         for index in range(13)

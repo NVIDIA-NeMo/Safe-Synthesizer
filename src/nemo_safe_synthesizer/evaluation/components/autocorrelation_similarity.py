@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from ...config.evaluate import AutocorrelationSimilarityParameters
-from ...config.evaluation_report_data import TimeSeriesMetric
+from ...config.evaluation_report_data import AutocorrelationSimilarityMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
@@ -51,7 +51,7 @@ _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
 
 
-class AutocorrelationSimilarity(TimeSeriesComponent):
+class AutocorrelationSimilarity(TimeSeriesComponent[AutocorrelationSimilarityMetric]):
     """Measure fidelity of lagged self-dependence in numeric time-series data.
 
     The component compares training and synthetic autocorrelation profiles
@@ -82,10 +82,11 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
     )
 
     @classmethod
-    def report_context(cls, metric: TimeSeriesMetric) -> dict[str, Any]:
+    def report_context(cls, metric: AutocorrelationSimilarityMetric) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().report_context(metric)
-        profiles = metric.details.get("profiles", [])
+        context["details"] = metric.details
+        profiles = metric.details.profiles
         figures: list[FigureSpec] = []
         summary_columns: list[str] = []
         if profiles:
@@ -115,9 +116,9 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
         context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
         context["pair_score_column_count"] = min(len(summary_columns), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)
         context["evaluated_profile_count"] = len(profiles)
-        context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
-        context["evaluated_column_count"] = len({item["column"] for item in profiles})
-        context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item["evaluated_lags"] == 0)
+        context["evaluated_group_count"] = len({str(item.group) for item in profiles})
+        context["evaluated_column_count"] = len({item.column for item in profiles})
+        context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item.evaluated_lags == 0)
         return context
 
     @staticmethod

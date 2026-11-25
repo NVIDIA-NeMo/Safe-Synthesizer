@@ -5,12 +5,12 @@
 {% if window_group_mia_details.counts %}
 {% set counts = window_group_mia_details.counts %}
 {% set column_count = window_group_mia_details.columns | length %}
-{% set training_group_count = window_group_mia_details.per_group | default([]) | length %}
+{% set training_group_count = window_group_mia_details.training_group_count %}
 {% set full = window_group_mia_details.evaluation_mode == "full" %}
 {% set sampled = [] %}
 {% for split in ["training", "holdout", "synthetic"] %}
-{% if (split != "holdout" or full) and counts[split ~ "_windows"] < counts[split ~ "_windows_total"] %}
-{% set _ = sampled.append("{:,}".format(counts[split ~ "_windows_total"]) ~ " " ~ split) %}
+{% if (split != "holdout" or full) and counts | attr(split ~ "_windows") < counts | attr(split ~ "_windows_total") %}
+{% set _ = sampled.append("{:,}".format(counts | attr(split ~ "_windows_total")) ~ " " ~ split) %}
 {% endif %}
 {% endfor %}
 <p class="chart-subheading">
@@ -31,7 +31,7 @@
     {% endif %}
 </p>
 {% endif %}
-{% if window_group_mia_details.exact_copy_rate is defined %}
+{% if window_group_mia_details.exact_copy_rate is not none %}
 <p class="chart-subheading">
     {% if window_group_mia_details.attack %}
     {{ "%.1f" | format(100 * window_group_mia_details.attack.training_flag_rate) }}% of training windows and

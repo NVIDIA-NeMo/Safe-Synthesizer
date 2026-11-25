@@ -3,17 +3,17 @@
 
 """Plotly report figures for window membership inference protection.
 
-Each builder summarizes values stored by the metric in ``WindowGroupMIA.details``.
+Each builder summarizes values exported in ``WindowMembershipInferenceDetails``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import Any
+from collections.abc import Sequence
 
 import numpy as np
 import plotly.graph_objects as go
 
+from ...config.evaluation_report_data import WindowGroupSummary, WindowMembershipInferenceDetails
 from ...errors import DataError
 from .autocorrelation_similarity_figures import shorten_column_label
 
@@ -25,10 +25,21 @@ _DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [
 _FIGURE_HEIGHT = 340
 _DISTANCE_BINS = 30
 _DISTANCE_RANGE_QUANTILE = 0.99
-_GROUP_MAX_ROWS = 12
+GROUP_MAX_ROWS = 12
 
 
-def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.Figure:
+def window_value_count(details: WindowMembershipInferenceDetails) -> int:
+    """Return the number of values in a window, the window size times the number of columns.
+
+    Raises:
+        DataError: If no window size is exported.
+    """
+    if details.window_size is None:
+        raise DataError("A window size is required.")
+    return details.window_size * len(details.columns)
+
+
+def generate_window_group_mia_distance_figure(details: WindowMembershipInferenceDetails) -> go.Figure:
     """Plot the distribution of each window's distance to its nearest synthetic window.
 
     Distances are shown as the typical difference per value, in training
@@ -41,7 +52,7 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
     its color alone.
 
     Args:
-        details: ``WindowGroupMIA.details`` with ``distances`` and, for a full
+        details: Exported details with ``distances`` and, for a full
             evaluation, ``attack``.
 
     Returns:
@@ -50,20 +61,20 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
     Raises:
         DataError: If no training distances are stored.
     """
-    distances = details.get("distances", {})
-    training = np.asarray(distances.get("training", []), dtype=float)
-    if training.size == 0:
+    distances = details.distances
+    if distances is None or not distances.training:
         raise DataError("At least one training window distance is required.")
-    holdout = np.asarray(distances.get("holdout", []), dtype=float)
-    scale = float(np.sqrt(details["window_size"] * len(details["columns"])))
-    attack = details.get("attack")
+    training = np.asarray(distances.training, dtype=float)
+    holdout = np.asarray(distances.holdout or [], dtype=float)
+    scale = float(np.sqrt(window_value_count(details)))
+    attack = details.attack
     # Clip each distribution's tail separately, so many exact training copies
     # can't push the holdout windows or the threshold off the chart.
     limits = [
         float(np.quantile(values / scale, _DISTANCE_RANGE_QUANTILE)) for values in (training, holdout) if values.size
     ]
     if attack is not None:
-        limits.append(attack["threshold"] / scale)
+        limits.append(attack.threshold / scale)
     top = max([*limits, 1e-6]) * 1.05
     bins = {"start": 0.0, "end": top, "size": top / _DISTANCE_BINS}
     figure = go.Figure()
@@ -92,7 +103,7 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
         )
     if attack is not None:
         figure.add_vline(
-            x=attack["threshold"] / scale,
+            x=attack.threshold / scale,
             line={"color": "rgba(255,255,255,0.6)", "dash": "dash", "width": 1},
             annotation_text="flag threshold",
             annotation_position="top",
@@ -111,7 +122,7 @@ def generate_window_group_mia_distance_figure(details: Mapping[str, Any]) -> go.
 
 
 def generate_window_group_mia_group_figure(
-    per_group: Sequence[Mapping[str, Any]], holdout_flag_rate: float
+    per_group: Sequence[WindowGroupSummary], holdout_flag_rate: float
 ) -> go.Figure:
     """Plot the share of each training group's windows that are flagged, for the 12 most-flagged groups.
 
@@ -122,7 +133,7 @@ def generate_window_group_mia_group_figure(
     axis labels; hover shows the full name, window count, and exact copies.
 
     Args:
-        per_group: ``WindowGroupMIA.details["per_group"]`` from a full evaluation.
+        per_group: Exported group summaries from a full evaluation.
         holdout_flag_rate: Share of holdout windows flagged.
 
     Returns:
@@ -131,22 +142,21 @@ def generate_window_group_mia_group_figure(
     Raises:
         DataError: If no group summaries with flag rates are supplied.
     """
-    flagged = [item for item in per_group if "flag_rate" in item]
+    flagged = [(item, item.flag_rate) for item in per_group if item.flag_rate is not None]
     if not flagged:
         raise DataError("At least one group summary with a flag rate is required.")
-    rows = sorted(flagged, key=lambda item: (-float(item["flag_rate"]), str(item["group"])))[:_GROUP_MAX_ROWS]
+    rows = sorted(flagged, key=lambda pair: (-pair[1], str(pair[0].group)))[:GROUP_MAX_ROWS]
     rows.reverse()
-    rates = np.array([float(item["flag_rate"]) for item in rows])
+    rates = np.array([rate for _, rate in rows])
     excess = np.clip((rates - holdout_flag_rate) / max(1.0 - holdout_flag_rate, 1e-12), 0.0, 1.0)
-    labels = ["all rows" if item["group"] is None else str(item["group"]) for item in rows]
+    labels = ["all rows" if item.group is None else str(item.group) for item, _ in rows]
     figure = go.Figure(
         go.Bar(
             x=100 * rates,
             y=list(range(len(rows))),
             orientation="h",
             customdata=[
-                [label, item["windows"], 100 * float(item["exact_copy_rate"])]
-                for label, item in zip(labels, rows, strict=True)
+                [label, item.windows, 100 * item.exact_copy_rate] for label, (item, _) in zip(labels, rows, strict=True)
             ],
             marker={
                 "color": excess,
@@ -186,19 +196,19 @@ def generate_window_group_mia_group_figure(
     return figure
 
 
-def generate_window_group_mia_closest_match_figure(details: Mapping[str, Any]) -> go.Figure:
+def generate_window_group_mia_closest_match_figure(details: WindowMembershipInferenceDetails) -> go.Figure:
     """Plot the synthetic window closest to the training data, with its training window for exact copies.
 
-    The training window is plotted only when the match stores its values,
-    which ``WindowGroupMIA`` does only for exact copies, so the report never
+    The training window is plotted only when the match has its values,
+    which the export has only for exact copies, so the report never
     shows training values that the synthetic data doesn't already contain.
     Each value column contributes two consecutive traces, training then
     synthetic, or only the synthetic trace when the training window is
-    hidden. Columns follow ``details["columns"]`` order, and only the first
+    hidden. Columns follow ``details.columns`` order, and only the first
     column is visible so the report can switch columns by trace index.
 
     Args:
-        details: ``WindowGroupMIA.details`` with ``closest_match`` and ``columns``.
+        details: Exported details with ``closest_match`` and ``columns``.
 
     Returns:
         A Plotly line figure with one visible column at a time.
@@ -206,21 +216,21 @@ def generate_window_group_mia_closest_match_figure(details: Mapping[str, Any]) -
     Raises:
         DataError: If no closest match is stored.
     """
-    match = details.get("closest_match")
-    if not match:
+    match = details.closest_match
+    if match is None or details.window_size is None:
         raise DataError("A closest training and synthetic window match is required.")
-    steps = np.arange(1, details["window_size"] + 1)
+    steps = np.arange(1, details.window_size + 1)
     figure = go.Figure()
-    windows = [("synthetic_values", "Synthetic window", _SYNTHETIC_COLOR, "dash")]
-    if "training_values" in match:
-        windows.insert(0, ("training_values", "Training window", _TRAINING_COLOR, "solid"))
-    for column_index, column in enumerate(details["columns"]):
+    windows = [(match.synthetic_values, "Synthetic window", _SYNTHETIC_COLOR, "dash")]
+    if match.training_values is not None:
+        windows.insert(0, (match.training_values, "Training window", _TRAINING_COLOR, "solid"))
+    for column_index, column in enumerate(details.columns):
         visible = column_index == 0
-        for key, name, color, dash in windows:
+        for values, name, color, dash in windows:
             figure.add_trace(
                 go.Scatter(
                     x=steps,
-                    y=match[key][column_index],
+                    y=values[column_index],
                     mode="lines+markers",
                     name=name,
                     line={"color": color, "dash": dash},
@@ -236,5 +246,5 @@ def generate_window_group_mia_closest_match_figure(details: Mapping[str, Any]) -
         yaxis_title="Value",
         margin={"l": 54, "r": 16, "t": 40, "b": 48},
     )
-    figure.update_xaxes(range=[0.5, details["window_size"] + 0.5])
+    figure.update_xaxes(range=[0.5, details.window_size + 0.5])
     return figure
