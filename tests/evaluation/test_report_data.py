@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer import results as results_module
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.evaluation_report_data import (
@@ -27,6 +28,7 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Evaluat
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
+from nemo_safe_synthesizer.results import make_nss_results
 
 PLANTED_PII = "planted-ssn-123-45-6789@example.com"
 
@@ -217,3 +219,32 @@ def test_to_json_safe_converts_to_strict_json(value: object, expected: object) -
 def test_to_json_safe_rejects_unknown_types() -> None:
     with pytest.raises(TypeError, match="object"):
         to_json_safe(object())
+
+
+def test_results_carry_report_data_next_to_html() -> None:
+    report = _tabular_report()
+
+    results = make_nss_results(generate_results=_frame(2), report=report)
+
+    assert results.evaluation_report_html
+    assert isinstance(results.evaluation_report_data, EvaluationReportData)
+
+
+def test_results_have_no_report_data_when_evaluation_is_skipped() -> None:
+    results = make_nss_results(generate_results=_frame(2), report=None)
+
+    assert results.evaluation_report_html is None
+    assert results.evaluation_report_data is None
+
+
+def test_results_keep_the_synthetic_data_when_report_data_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(_report: MultimodalReport) -> EvaluationReportData:
+        raise TypeError("boom")
+
+    monkeypatch.setattr(results_module, "build_report_data", fail)
+
+    results = make_nss_results(generate_results=_frame(2), report=_tabular_report())
+
+    assert results.synthetic_data is not None
+    assert results.evaluation_report_html is None
+    assert results.evaluation_report_data is None

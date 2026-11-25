@@ -341,6 +341,7 @@ class TestWorkdir:
         assert gen.logs == gen.path / "logs.jsonl"
         assert gen.output == gen.path / "synthetic_data.csv"
         assert gen.report == gen.path / "evaluation_report.html"
+        assert gen.report_data == gen.path / "evaluation_report_data.json"
         assert gen.evaluation_metrics == gen.path / "evaluation_metrics.json"
 
     # =========================================================================
@@ -381,6 +382,10 @@ class TestWorkdir:
     def test_evaluation_report_alias(self, workdir: Workdir):
         """evaluation_report shortcut matches full path."""
         assert workdir.evaluation_report == workdir.generate.report
+
+    def test_evaluation_report_data_alias(self, workdir: Workdir):
+        """evaluation_report_data shortcut matches full path."""
+        assert workdir.evaluation_report_data == workdir.generate.report_data
 
     def test_evaluation_metrics_alias(self, workdir: Workdir):
         """evaluation_metrics shortcut matches full path."""

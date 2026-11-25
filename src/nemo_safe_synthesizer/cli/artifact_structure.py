@@ -360,6 +360,7 @@ class _GenerateDir(BoundDir):
         logs: Path
         output: Path
         report: Path
+        report_data: Path
         evaluation_metrics: Path
         info: Path
 
@@ -397,6 +398,7 @@ class Workdir:
           - info.json                    (generate-only workflow)
           - synthetic_data.csv
           - evaluation_report.html
+          - evaluation_report_data.json  (evaluation results as JSON)
           - evaluation_metrics.json      (machine-readable metrics)
         - dataset/
           - training.csv
@@ -466,6 +468,7 @@ class Workdir:
         logs=FileNode("logs.jsonl"),
         output=FileNode("synthetic_data.csv"),
         report=FileNode("evaluation_report.html"),
+        report_data=FileNode("evaluation_report_data.json"),
         evaluation_metrics=FileNode("evaluation_metrics.json"),
         info=FileNode("info.json"),
     )
@@ -580,6 +583,11 @@ class Workdir:
     def evaluation_report(self) -> Path:
         """Shortcut to generate.report."""
         return self.generate.report
+
+    @property
+    def evaluation_report_data(self) -> Path:
+        """Shortcut to generate.report_data."""
+        return self.generate.report_data
 
     @property
     def evaluation_metrics(self) -> Path:
