@@ -13,6 +13,7 @@ readonly DRY_RUN="${DRY_RUN:-0}"
 readonly NSS_INSTALLER_RESOLVE_FIND_LINKS="${NSS_INSTALLER_RESOLVE_FIND_LINKS:-0}"
 readonly NSS_INSTALLER_RESOLVE_ONLY="${NSS_INSTALLER_RESOLVE_ONLY:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
+readonly NSS_PYTHON="${NSS_PYTHON:-}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly PYPI_INDEX_URL="https://pypi.org/simple"
 # The PRIVATE_ prefix indicates an env var that users should not set and may
@@ -114,6 +115,10 @@ Environment:
   NSS_INSTALLER_ISOLATED=1
                           Disable discovery of persistent uv configuration and
                           tool.uv.sources, and use PyPI as the default index.
+  NSS_PYTHON=<path>       Existing Python interpreter to install into, such as a
+                          notebook kernel's sys.executable. No virtual
+                          environment is created. Takes precedence over
+                          UV_PROJECT_ENVIRONMENT and VIRTUAL_ENV.
   UV_PROJECT_ENVIRONMENT=<path>
                           Virtual environment to create or reuse.
   VIRTUAL_ENV=<path>      Active virtual environment. Used when
@@ -210,9 +215,26 @@ resolve_venv_path() {
     printf '%s\n' "$path"
 }
 
+resolve_target_python() {
+    if [[ -n "$NSS_PYTHON" ]]; then
+        [[ -f "$NSS_PYTHON" && -x "$NSS_PYTHON" ]] || die "NSS_PYTHON is not an executable file: '$NSS_PYTHON'"
+        TARGET_PYTHON="$NSS_PYTHON"
+        return
+    fi
+
+    VENV_PATH="$(resolve_venv_path)"
+    TARGET_PYTHON="$VENV_PATH/bin/python"
+}
+
 build_venv_command() {
     VENV_CMD=()
-    if [[ ! -x "$VENV_PATH/bin/python" ]]; then
+    if [[ ! -x "$TARGET_PYTHON" ]]; then
+        # A system Python prefix such as /usr has files but no bin/python on many distributions.
+        # Creating a virtual environment over existing files fails, or with UV_VENV_CLEAR=1 deletes them.
+        if [[ -e "$VENV_PATH" && ( ! -d "$VENV_PATH" || -n "$(ls -A "$VENV_PATH")" ) ]]; then
+            die "'$VENV_PATH' exists but has no bin/python, so it is not a virtual environment to reuse." \
+                "To install into a specific interpreter, such as a notebook kernel, set NSS_PYTHON to it."
+        fi
         VENV_CMD=("${UV_CMD[@]}" venv --seed)
         if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then
             VENV_CMD+=(--default-index "$PYPI_INDEX_URL")
@@ -231,7 +253,7 @@ build_install_command() {
     INSTALL_CMD=(
         "${UV_CMD[@]}" pip install "$(package_spec "$extra")"
         -c "$CONSTRAINTS_URL"
-        --python "$VENV_PATH/bin/python"
+        --python "$TARGET_PYTHON"
     )
     if (( ${#PACKAGE_OVERRIDES[@]} )); then
         INSTALL_CMD+=(--overrides -)
@@ -308,7 +330,7 @@ main() {
         # https://docs.astral.sh/uv/concepts/configuration-files/
         UV_CMD+=(--no-config)
     fi
-    VENV_PATH="$(resolve_venv_path)"
+    resolve_target_python
     build_venv_command
     if [[ "$extra" == "cu130" && "$DRY_RUN" != "1" ]]; then
         check_cuda_13_driver
@@ -321,5 +343,6 @@ FIND_LINKS=()
 INSTALL_CMD=()
 VENV_CMD=()
 VENV_PATH=""
+TARGET_PYTHON=""
 UV_CMD=()
 main "$@"
