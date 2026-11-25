@@ -108,7 +108,7 @@ def render_report(
         )
         output = template.render(ctx=report_context(data))
         if output_path:
-            with open(output_path, "w") as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 f.write(output)
         else:
             return output

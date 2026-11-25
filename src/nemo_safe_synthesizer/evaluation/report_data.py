@@ -91,6 +91,7 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
         },
         "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
         "columns": _columns(distribution, datasets) if distribution is not None else [],
+        "any_column_transformed": any(s.is_transformed for s in (datasets.column_statistics or {}).values()),
         "differential_privacy": {
             "enabled": dp_enabled,
             "epsilon": config.get("epsilon") if dp_enabled and config is not None else None,

@@ -59,7 +59,7 @@ def report_context(data: EvaluationReportData) -> dict[str, Any]:
         "job_id": data.job_id,
         "with_synthesizer": _available(data.scores.synthetic_quality),
         "with_data_privacy": _available(data.scores.data_privacy),
-        "with_transform": any(column.pii is not None and column.pii.is_transformed for column in data.columns),
+        "with_transform": data.any_column_transformed,
         "dp_enabled": data.differential_privacy.enabled,
         "epsilon": data.differential_privacy.epsilon,
         "delta": data.differential_privacy.delta,
@@ -151,9 +151,18 @@ def _correlation_figure(metric: CorrelationMetric) -> go.Figure | None:
     )
 
 
+def _narrowest_floats(values: list[float]) -> np.ndarray:
+    # Plotly embeds float64 at twice the size, and float32 embeddings come back from the data as float64.
+    wide = np.asarray(values, dtype=np.float64)
+    narrow = wide.astype(np.float32)
+    return narrow if np.array_equal(narrow, wide) else wide
+
+
 def _points(projection: Projection, which: str) -> pd.DataFrame:
     points = getattr(projection, which)
-    return pd.DataFrame({projection.axes[0]: points.x, projection.axes[1]: points.y})
+    return pd.DataFrame(
+        {projection.axes[0]: _narrowest_floats(points.x), projection.axes[1]: _narrowest_floats(points.y)}
+    )
 
 
 def _deep_structure_figure(metric: DeepStructureMetric) -> go.Figure | None:
