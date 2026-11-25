@@ -131,7 +131,7 @@ def test_export_carries_privacy_attack_results() -> None:
         ("Poor", 1),
     ]
     assert metrics.attribute_inference_protection is not None
-    assert [(c.column, c.risk, c.grade) for c in metrics.attribute_inference_protection.columns] == [
+    assert [(c.column, c.protection, c.grade) for c in metrics.attribute_inference_protection.columns] == [
         ("b", 2.0, "Poor"),
         ("a", 9.5, "Excellent"),
     ]

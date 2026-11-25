@@ -17,6 +17,7 @@ from nemo_safe_synthesizer.config.evaluation_report_data import (
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import _suppress_ks_exact_fallback
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.report_context import report_context
+from nemo_safe_synthesizer.evaluation.report_data import to_json_safe
 
 
 def _report_data(**metrics: object) -> EvaluationReportData:
@@ -46,6 +47,17 @@ def test_report_without_dataset_counts_renders_without_dataset_statistics() -> N
     assert html is not None
     assert 'id="dataset-statistics"' not in html
 
+
+def test_report_renders_with_undefined_chart_values() -> None:
+    points = {"x": [0.1, float("nan")], "y": [float("inf"), 0.2]}
+    projection = {"axes": ["pc1", "pc2"], "training": points, "synthetic": points}
+    data = _report_data(
+        text_semantic_similarity=to_json_safe({"score": _UNAVAILABLE, "projections": {"review": projection}})
+    )
+
+    assert data.metrics.text_semantic_similarity is not None
+    assert data.metrics.text_semantic_similarity.projections["review"].training.x == [0.1, None]
+    assert render_report(data) is not None
 
 def test_text_semantic_similarity_figures_have_a_column_heading() -> None:
     points = {"x": [0.1, 0.3, 0.2], "y": [0.2, 0.1, 0.4]}
