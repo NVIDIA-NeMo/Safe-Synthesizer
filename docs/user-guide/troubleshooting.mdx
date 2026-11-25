@@ -128,10 +128,9 @@ Training OOM errors appear during the "Training" phase with HuggingFace Trainer
 stack traces. If you see `torch.cuda.OutOfMemoryError`:
 
 1. Enable 4-bit quantization -- the single largest memory saver. Set
-   `training.quantize_model: true` and `training.quantization_scheme: bnb-4bit`
-   (or for back-compat, `training.quantization_bits: 4`). QLoRA stores the
-   frozen base model in 4-bit NF4 while training LoRA adapters in full
-   precision, cutting model weight memory by ~4x. Quantization reduces
+   `training.quantize_model: true` and `training.quantization_scheme: bnb-4bit`.
+   QLoRA stores the frozen base model in 4-bit NF4 while training LoRA
+   adapters in full precision, cutting model weight memory by ~4x. Quantization reduces
    precision in the frozen weights; in practice QLoRA typically produces
    results close to full-precision LoRA, but verify with your evaluation
    report. On Blackwell hardware, `nvfp4` and `mxfp4` schemes offer similar

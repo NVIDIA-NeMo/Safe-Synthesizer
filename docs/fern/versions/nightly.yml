@@ -85,6 +85,9 @@ navigation:
     - page: Autocorrelation Similarity
       path: ../../user-guide/time-series-metrics/autocorrelation-similarity.mdx
       slug: user-guide/time-series-metrics/autocorrelation-similarity
+    - page: Window Membership Inference Protection
+      path: ../../user-guide/time-series-metrics/window-membership-inference-protection.mdx
+      slug: user-guide/time-series-metrics/window-membership-inference-protection
 - section: Developer Guide
   skip-slug: true
   contents:
@@ -112,6 +115,9 @@ navigation:
   - page: Dev Notes
     path: ../../dev-notes/index.mdx
     slug: dev-notes
+  - page: Replacing Identifiers in Tabular Data Before Training
+    path: ../../dev-notes/posts/replacing-identifiers-in-tabular-data-before-training.mdx
+    slug: dev-notes/posts/replacing-identifiers-in-tabular-data-before-training
   - page: Tuning NeMo Safe Synthesizer for Agent Conversations (Part 2)
     path: ../../dev-notes/posts/tuning-synthetic-conversations-abcd.mdx
     slug: dev-notes/posts/tuning-synthetic-conversations-abcd
