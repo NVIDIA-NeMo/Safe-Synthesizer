@@ -9,6 +9,7 @@ import pandas as pd
 from pydantic import Field
 
 from .base import NSSBaseModel
+from .evaluation_report_data import EvaluationReportData
 from .external_results import SafeSynthesizerSummary
 
 __all__ = ["SafeSynthesizerResults"]
@@ -25,4 +26,12 @@ class SafeSynthesizerResults(NSSBaseModel):
 
     evaluation_report_html: str | None = Field(
         default=None, description="HTML evaluation report string, or ``None`` if evaluation was not run."
+    )
+
+    evaluation_report_data: EvaluationReportData | None = Field(
+        default=None,
+        description=(
+            "Evaluation scores, per-metric results and chart values, and column statistics as structured data, or "
+            "``None`` if evaluation was not run or the data could not be built."
+        ),
     )
