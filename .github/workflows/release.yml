@@ -169,6 +169,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Docs on main follow the latest release; each versioned copy installs its own release.
+      - name: Pin installer download URLs to this release
+        env:
+          VERSION: ${{ needs.publish-wheel.outputs.version }}
+        run: |
+          latest_url="releases/latest/download/install_nss.sh"
+          grep -rlZF "$latest_url" docs | xargs -0 --no-run-if-empty \
+            sed -i "s|${latest_url}|releases/download/v${VERSION}/install_nss.sh|g"
+          if grep -rnF "$latest_url" docs; then
+            echo "::error::installer URLs in docs were not pinned to v${VERSION}"
+            exit 1
+          fi
+
       - name: Publish versioned docs to GitHub Pages
         env:
           VERSION: ${{ needs.publish-wheel.outputs.version }}
