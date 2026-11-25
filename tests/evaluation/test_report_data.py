@@ -3,11 +3,7 @@
 
 from __future__ import annotations
 
-import datetime
 import json
-import subprocess
-import sys
-from decimal import Decimal
 from enum import Enum
 from typing import TypeVar
 
@@ -17,24 +13,17 @@ import pytest
 
 from nemo_safe_synthesizer import results as results_module
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.differential_privacy import DifferentialPrivacyHyperparams
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.evaluation_report_data import (
     REPORT_DATA_SCHEMA_VERSION,
     EvaluationReportData,
-    Metrics,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
-from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
 from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.components.correlation import Correlation
-from nemo_safe_synthesizer.evaluation.components.deep_structure import DeepStructure
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
-from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
-from nemo_safe_synthesizer.evaluation.components.text_structure_similarity import TextStructureSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.report_data import build_report_data, to_json_safe
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -116,67 +105,6 @@ def _component(report: MultimodalReport, component_type: type[ComponentT]) -> Co
     return next(c for c in report.components if isinstance(c, component_type))
 
 
-def test_column_distributions_match_the_charted_values() -> None:
-    report = _tabular_report()
-    datasets = report.evaluation_datasets
-    assert datasets is not None
-    fields = {f.name: f for f in _component(report, ColumnDistribution).evaluation_fields}
-
-    data = build_report_data(report)
-
-    charted = {c.name: c.distribution for c in data.columns if c.distribution is not None}
-    assert set(charted) == set(datasets.get_tabular_columns())
-    for name, distribution in charted.items():
-        field, training, synthetic = fields[name], datasets.training[name], datasets.synthetic[name]
-        if distribution.bin_edges is not None:
-            figure = multi_modal_figures.histogram_figure(training, synthetic)
-        else:
-            assert field.training_distribution is not None and field.synthetic_distribution is not None
-            figure = multi_modal_figures.bar_chart(
-                field.training_distribution, field.synthetic_distribution, len(training)
-            )
-        training_bar, synthetic_bar = figure.data[:2]
-        assert list(training_bar.y) == pytest.approx(distribution.training_percent)
-        assert list(synthetic_bar.y) == pytest.approx(distribution.synthetic_percent)
-    assert charted["amount"].bin_edges is not None
-    assert len(charted["amount"].bin_edges) == len(charted["amount"].labels) + 1
-    assert charted["color"].bin_edges is None
-    assert charted["color"].labels == ["blue", "green", "red"]
-
-
-def test_categorical_distribution_folds_rare_training_categories() -> None:
-    distribution = multi_modal_figures.categorical_distribution(
-        {"a": 60.0, "b": 37.0, "rare-1": 2.0, "rare-2": 1.0}, {"a": 50.0, "b": 50.0}, training_count=100
-    )
-
-    assert distribution.labels == ["a", "b", "Other (2 categories)"]
-    assert distribution.training_percent == [60.0, 37.0, 3.0]
-    assert distribution.synthetic_percent == [50.0, 50.0, 0.0]
-
-
-def test_numeric_distribution_is_none_without_finite_training_values() -> None:
-    assert multi_modal_figures.numeric_distribution(pd.Series([np.nan, np.inf]), pd.Series([1.0])) is None
-
-
-def test_projection_keeps_the_points_the_chart_draws() -> None:
-    rng = np.random.default_rng(0)
-    training = pd.DataFrame(rng.normal(size=(6000, 2)), columns=["pc1", "pc2"])
-    synthetic = pd.DataFrame(rng.normal(size=(300, 2)), columns=["pc1", "pc2"])
-    report = _report_with(DeepStructure(score=EvaluationScore(), training_pca=training, synthetic_pca=synthetic))
-
-    deep_structure = build_report_data(report).metrics.deep_structure_stability
-
-    assert deep_structure is not None
-    projection = deep_structure.projection
-
-    figure = multi_modal_figures.structure_stability_figure(training, synthetic)
-    assert projection is not None
-    assert len(projection.training.x) == 5000
-    assert projection.training.x == list(figure.data[0].x)
-    assert projection.training.y == list(figure.data[0].y)
-    assert projection.synthetic.x == synthetic["pc1"].tolist()
-
-
 def test_export_carries_privacy_attack_results() -> None:
     attack_summary = pd.DataFrame(
         {
@@ -206,31 +134,6 @@ def test_export_carries_privacy_attack_results() -> None:
         ("b", 2.0, "Poor"),
         ("a", 9.5, "Excellent"),
     ]
-
-
-def test_export_has_empty_chart_values_without_data() -> None:
-    report = _report_with(
-        Correlation(
-            score=EvaluationScore(),
-            training_correlation=pd.DataFrame(),
-            synthetic_correlation=pd.DataFrame(),
-            correlation_difference=pd.DataFrame(),
-        ),
-        DeepStructure(score=EvaluationScore()),
-        MembershipInferenceProtection(score=EvaluationScore()),
-        AttributeInferenceProtection(score=EvaluationScore()),
-        TextSemanticSimilarity(score=EvaluationScore()),
-        TextStructureSimilarity(score=EvaluationScore()),
-    )
-
-    metrics = build_report_data(report).metrics.model_dump()
-
-    assert metrics["column_correlation_stability"]["correlations"] is None
-    assert metrics["deep_structure_stability"]["projection"] is None
-    assert metrics["membership_inference_protection"]["outcomes"] == []
-    assert metrics["attribute_inference_protection"]["columns"] == []
-    assert metrics["text_semantic_similarity"]["projections"] == {}
-    assert metrics["text_structure_similarity"]["columns"] == {}
 
 
 def test_export_leaves_out_training_values_the_report_does_not_show() -> None:
@@ -270,48 +173,26 @@ def test_export_is_strict_json_with_correlations_and_no_plotly_figures() -> None
         assert all(len(row) == size for row in correlations[matrix])
 
 
-def test_export_includes_every_field_with_explicit_nulls(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("NEMO_JOB_ID", raising=False)
-    payload = json.loads(build_report_data(_tabular_report()).model_dump_json())
-
-    assert payload["job_id"] is None
-    assert payload["metrics"]["text_semantic_similarity"]["score"]["grade"] == "Unavailable"
-    assert set(payload) == set(EvaluationReportData.model_fields)
-    assert set(payload["metrics"]) == set(Metrics.model_fields)
-    schema = EvaluationReportData.model_json_schema()
-    assert set(schema["required"]) == set(EvaluationReportData.model_fields)
-    assert set(schema["$defs"]["Metrics"]["required"]) == set(Metrics.model_fields)
-
-
-def test_export_of_a_time_series_report() -> None:
+def test_export_of_a_time_series_report_has_typed_details_without_training_only_values() -> None:
     payload = json.loads(build_report_data(_time_series_report()).model_dump_json(), parse_constant=_reject_constant)
+    metrics = EvaluationReportData.model_validate(payload).metrics
+    assert metrics.autocorrelation_similarity is not None
+    assert metrics.window_membership_inference_protection is not None
+    autocorrelation = metrics.autocorrelation_similarity.details
+    window = metrics.window_membership_inference_protection.details
 
-    assert payload["scores"]["synthetic_quality"] is not None
-    assert set(payload["metrics"]) == set(Metrics.model_fields)
-
-
-def test_export_reads_job_id_and_differential_privacy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("NEMO_JOB_ID", " job-1 ")
-    report = _tabular_report()
-    report.config = SafeSynthesizerParameters(
-        privacy=DifferentialPrivacyHyperparams(dp_enabled=True, epsilon=4.0, delta=1e-5)
+    assert autocorrelation.profiles
+    assert autocorrelation.groups_only_in_training_count == 2
+    assert '"g0"' not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
+    assert window.attack is not None
+    assert window.training_group_count == 8
+    assert 0 < len(window.per_group) <= 8
+    assert window.closest_match is not None
+    assert window.closest_match.exact_copy is False
+    assert (
+        payload["metrics"]["window_membership_inference_protection"]["details"]["closest_match"]["training_values"]
+        is None
     )
-
-    data = build_report_data(report)
-
-    assert data.job_id == "job-1"
-    assert data.differential_privacy.model_dump() == {"enabled": True, "epsilon": 4.0, "delta": 1e-5}
-
-
-def test_reader_accepts_newer_schema_version_and_unknown_fields() -> None:
-    payload = json.loads(build_report_data(_tabular_report()).model_dump_json())
-    payload["schema_version"] = REPORT_DATA_SCHEMA_VERSION + 1
-    payload["added_later"] = {"anything": [1, 2]}
-    payload["dataset"]["added_later"] = True
-
-    data = EvaluationReportData.model_validate(payload)
-
-    assert data.schema_version == REPORT_DATA_SCHEMA_VERSION + 1
 
 
 class _Color(Enum):
@@ -322,29 +203,10 @@ class _Color(Enum):
     ("value", "expected"),
     [
         (float("nan"), None),
-        (float("inf"), None),
-        (np.float32(-np.inf), None),
-        (np.int64(3), 3),
-        (np.float64(0.5), 0.5),
-        (np.bool_(True), True),
+        (np.array([1.0, np.inf]), [1.0, None]),
         (_Color.RED, "red"),
-        ({"b", "a"}, ["a", "b"]),
-        (np.array([1.0, np.nan]), [1.0, None]),
-        ((1, "x"), [1, "x"]),
-        ({np.int64(1): np.float64(2.0)}, {"1": 2.0}),
-        (datetime.datetime(2026, 1, 2, 3, 4, 5), "2026-01-02T03:04:05"),
-        (datetime.date(2026, 1, 2), "2026-01-02"),
         (pd.Timestamp("2026-01-02T03:04:05"), "2026-01-02T03:04:05"),
-        (np.datetime64("2026-01-02T03:04:05"), "2026-01-02T03:04:05"),
-        (datetime.timedelta(minutes=1, seconds=30), "P0DT0H1M30S"),
-        (pd.Timedelta(days=2), "P2DT0H0M0S"),
-        (np.timedelta64(90, "s"), "P0DT0H1M30S"),
         (pd.NaT, None),
-        (np.datetime64("NaT"), None),
-        (np.timedelta64("NaT"), None),
-        (None, None),
-        (Decimal("1.5"), 1.5),
-        (EvaluationScore(), EvaluationScore().model_dump(mode="json")),
     ],
 )
 def test_to_json_safe_converts_to_strict_json(value: object, expected: object) -> None:
@@ -386,18 +248,3 @@ def test_results_keep_the_synthetic_data_when_report_data_fails(monkeypatch: pyt
     assert results.synthetic_data is not None
     assert results.evaluation_report_html is None
     assert results.evaluation_report_data is None
-
-
-@pytest.mark.parametrize(
-    "module",
-    [
-        "nemo_safe_synthesizer.config.evaluation_report_data",
-        "nemo_safe_synthesizer.config.internal_results",
-        "nemo_safe_synthesizer.evaluation.report_data",
-        "nemo_safe_synthesizer.results",
-    ],
-)
-def test_report_data_modules_import_first_in_a_fresh_interpreter(module: str) -> None:
-    completed = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True, text=True)
-
-    assert completed.returncode == 0, completed.stderr

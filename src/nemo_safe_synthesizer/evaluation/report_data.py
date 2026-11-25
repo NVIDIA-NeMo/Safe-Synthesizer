@@ -31,6 +31,7 @@ from ..pii_replacer.replacement.descriptions import SAMPLER_LABELS, describe_rep
 from ..pii_replacer.replacement.types import DetectionSource
 from ..pii_replacer.transform_result import ColumnStatistics
 from .components import multi_modal_figures as figures
+from .components import window_group_mia_figures
 from .components.attribute_inference_protection import AttributeInferenceProtection
 from .components.autocorrelation_similarity import AutocorrelationSimilarity
 from .components.column_distribution import ColumnDistribution, distribution_for_field
@@ -44,7 +45,6 @@ from .components.pii_replay import PIIReplay
 from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
-from .components.time_series_common import TimeSeriesComponent
 from .components.window_group_mia import WindowGroupMIA
 from .data_model.evaluation_datasets import EvaluationDatasets
 from .data_model.evaluation_report import EvaluationReport
@@ -86,8 +86,10 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
                 _attribute_inference_metric, _find(report, AttributeInferenceProtection)
             ),
             "pii_replay": _maybe(partial(_pii_replay_metric, config=config), _find(report, PIIReplay)),
-            "autocorrelation_similarity": _maybe(_time_series_metric, _find(report, AutocorrelationSimilarity)),
-            "window_membership_inference_protection": _maybe(_time_series_metric, _find(report, WindowGroupMIA)),
+            "autocorrelation_similarity": _maybe(_autocorrelation_metric, _find(report, AutocorrelationSimilarity)),
+            "window_membership_inference_protection": _maybe(
+                _window_membership_inference_metric, _find(report, WindowGroupMIA)
+            ),
         },
         "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
         "columns": _columns(distribution, datasets) if distribution is not None else [],
@@ -326,8 +328,64 @@ def _columns(component: ColumnDistribution, datasets: EvaluationDatasets) -> lis
     ]
 
 
-def _time_series_metric(component: TimeSeriesComponent) -> dict[str, Any]:
-    return {**_metric(component), "details": component.details}
+def _autocorrelation_metric(component: AutocorrelationSimilarity) -> dict[str, Any]:
+    details = component.details
+    return {
+        **_metric(component),
+        "details": {
+            "evaluation_mode": details.get("evaluation_mode"),
+            "timestamp_column": details.get("timestamp_column"),
+            "group_column": details.get("group_column"),
+            "max_lag": details.get("max_lag"),
+            "min_points": details.get("min_points"),
+            "counts": details.get("counts"),
+            "group_selection": details.get("group_selection"),
+            "per_group": details.get("per_group", []),
+            "per_column": details.get("per_column", []),
+            "profiles": [{"reason": None, **profile} for profile in details.get("profiles", [])],
+            "skipped": details.get("skipped", []),
+            "excluded_columns": details.get("excluded_columns", []),
+            "groups_only_in_training_count": len(details.get("groups_only_in_training", [])),
+            "groups_only_in_synthetic_count": len(details.get("groups_only_in_synthetic", [])),
+        },
+    }
+
+
+def _window_membership_inference_metric(component: WindowGroupMIA) -> dict[str, Any]:
+    details = component.details
+    match = details.get("closest_match")
+    distances = details.get("distances")
+    return {
+        **_metric(component),
+        "details": {
+            "evaluation_mode": details.get("evaluation_mode", "unavailable"),
+            "columns": details.get("columns", []),
+            "excluded_columns": details.get("excluded_columns", []),
+            "window_size": details.get("window_size"),
+            "counts": details.get("counts"),
+            "exact_copy_rate": details.get("exact_copy_rate"),
+            "closest_match": None
+            if match is None
+            else {
+                "distance": match["distance"],
+                "exact_copy": match["exact_copy"],
+                "synthetic_values": match["synthetic_values"],
+                "training_values": match["training_values"] if match["exact_copy"] else None,
+            },
+            "distances": None
+            if distances is None
+            else {"training": distances["training"], "holdout": distances.get("holdout")},
+            "attack": details.get("attack"),
+            "training_group_count": len(details.get("per_group", [])),
+            "per_group": _most_flagged_groups(details.get("per_group", [])),
+        },
+    }
+
+
+def _most_flagged_groups(per_group: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    flagged = [group for group in per_group if group.get("flag_rate") is not None]
+    flagged.sort(key=lambda group: (-group["flag_rate"], str(group["group"])))
+    return flagged[: window_group_mia_figures.GROUP_MAX_ROWS]
 
 
 _DETECTION_LABELS = {

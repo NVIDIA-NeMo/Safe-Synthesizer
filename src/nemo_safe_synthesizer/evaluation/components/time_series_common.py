@@ -14,7 +14,7 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Generic, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ import plotly.graph_objects as go
 from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
-from ...config.evaluation_report_data import TimeSeriesMetric
+from ...config.evaluation_report_data import Metric
 from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.assets.text.multi_modal_tooltips import tooltips
@@ -32,14 +32,17 @@ from .component import Component
 FigureSpec = tuple[str, go.Figure, bool, str]
 """Chart title, figure, whether it gets the column select, and its tooltip key."""
 
+MetricT = TypeVar("MetricT", bound=Metric)
 
-class TimeSeriesComponent(Component):
+
+class TimeSeriesComponent(Component, Generic[MetricT]):
     """Base for components run with time-series evaluation and shown as report cards.
 
     The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
     each as a metric card from the class attributes below, in the section
-    named by ``report_section``. Subclasses extend ``report_context`` with
-    their figures, built with ``figure_rows`` from the exported metric.
+    named by ``report_section``. Subclasses are parametrized by their exported
+    metric type and extend ``report_context`` with its details and their
+    figures, built with ``figure_rows`` from the exported metric.
 
     Attributes:
         metric_key: Key of the metric in ``EvaluationReportData.metrics``.
@@ -65,12 +68,11 @@ class TimeSeriesComponent(Component):
     details: dict[str, Any] = Field(default_factory=dict, description="Metric-specific diagnostic details.")
 
     @classmethod
-    def report_context(cls, metric: TimeSeriesMetric) -> dict[str, Any]:
-        """Return the metric's score, details, and card attributes for report rendering."""
+    def report_context(cls, metric: MetricT) -> dict[str, Any]:
+        """Return the metric's score and card attributes for report rendering."""
         return {
             "name": cls.model_fields["name"].default,
             "score": metric.score,
-            "details": metric.details,
             "card_id": cls.card_id,
             "description": cls.description,
             "tooltip_key": cls.tooltip_key,

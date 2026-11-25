@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+from nemo_safe_synthesizer.config.evaluation_report_data import AutocorrelationProfile
 from nemo_safe_synthesizer.errors import DataError
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figures import (
     generate_autocorrelation_lag_error_figure,
@@ -15,15 +16,28 @@ from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figu
 )
 
 
-def _profile(group, column, training_acf, synthetic_acf, similarity):
-    return {
-        "group": group,
-        "column": column,
-        "lags": list(range(1, len(training_acf) + 1)),
-        "training_acf": training_acf,
-        "synthetic_acf": synthetic_acf,
-        "similarity": similarity,
-    }
+def _profile(
+    group: str | None,
+    column: str,
+    training_acf: list[float | None],
+    synthetic_acf: list[float | None],
+    similarity: float,
+) -> AutocorrelationProfile:
+    lags = len(training_acf)
+    return AutocorrelationProfile(
+        group=group,
+        column=column,
+        lags=list(range(1, lags + 1)),
+        effective_max_lag=lags,
+        evaluated_lags=lags,
+        error=1.0 - similarity,
+        similarity=similarity,
+        reason=None,
+        training_acf=training_acf,
+        synthetic_acf=synthetic_acf,
+        training_pair_support=[10] * lags,
+        synthetic_pair_support=[10] * lags,
+    )
 
 
 _SUMMARY_PROFILES = [
