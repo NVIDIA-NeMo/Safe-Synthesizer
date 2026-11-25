@@ -11,14 +11,20 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 
 | Workflow                                           | Trigger                     | Description                                                                                                |
 | -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, typecheck, unit tests, and CPU smoke tests                                                         |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, merge queue, manual | Format, typecheck, wheel installation, unit tests, and CPU smoke tests                                                         |
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
 | [container-build.yml](container-build.yml)         | `v*`, manual                 | Builds the extra-driven GPU container image and publishes GHCR tags for release tags                       |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
 | [pr-linked-issue.yml](pr-linked-issue.yml)         | PRs, issue triage/state changes | Requires an open, triaged issue for external PRs and closes invalid new or reopened PRs                   |
-| [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
+| [docs.yml](docs.yml)                               | Push to `main` (docs/source paths), manual | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
 | [release.yml](release.yml)                         | Push tags to `v*`           | Publishes the package, release-coupled installer, a GitHub release, and versioned docs                      |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
+| [fern-docs-ci.yml](fern-docs-ci.yml) | PRs and pushes to `main` (path-filtered), merge queue, manual | Validates Fern configuration, MDX, and links without a publishing token |
+| [fern-docs-preview.yml](fern-docs-preview.yml) | Manual | Validates and generates a hosted Fern preview |
+| [codeql.yml](codeql.yml) | Push to `main`, PRs to `main`, weekly, manual | Python security analysis with extended queries |
+| [labeler.yml](labeler.yml) | PR opened, synchronized, reopened | Adds area labels using `.github/labeler.yml` |
+| [dependabot-sync-lock.yml](dependabot-sync-lock.yml) | PRs to `main` changing `pyproject.toml` | Regenerates `uv.lock` for Dependabot PRs |
+| [request-nvskills-ci.yml](request-nvskills-ci.yml) | PR events, `/nvskills-ci` comments, signature pushes | Requests NVSkills validation through the NVIDIA reusable workflow |
 
 ## External pull request issue triage
 
@@ -73,8 +79,9 @@ flowchart LR
         unit[Unit Tests]
         smoke_cpu[Smoke Tests]
         ci_status[CI Status]
-        changes_ci --> unit & smoke_cpu
-        format & typecheck & unit & smoke_cpu --> ci_status
+        wheel[End-user Wheel Install]
+        changes_ci --> wheel & unit & smoke_cpu
+        format & typecheck & wheel & unit & smoke_cpu --> ci_status
     end
 
     subgraph gpu [GPU Tests - on-prem runners]
@@ -89,14 +96,15 @@ flowchart LR
     subgraph compliance [Compliance Workflows]
         conventional[Conventional Commit]
         secrets[Secrets Detector]
-        copyright[Copyright Check]
+        linked[Linked Issue Check]
+        codeql[CodeQL]
     end
 
     subgraph release [Release Workflow]
         buildWheel[Build Wheel]
         publishPyPI[Publish to PyPI]
         ghRelease[GitHub Release]
-        slackNotify[Slack Notification]
+        releaseDocs[Versioned MkDocs]
     end
 
     subgraph containers [Container Build]
@@ -104,20 +112,25 @@ flowchart LR
         publishGhcr[Publish GHCR Tags]
     end
 
-    subgraph internalRelease [Internal Release]
-        buildWheelInt[Build Wheel]
-        publishArtifactory[Publish to Artifactory/PyPI]
+    subgraph docs [Documentation]
+        mkdocs[Deploy MkDocs latest]
+        fernCheck[Fern Check]
+        fernPreview[Fern Preview]
     end
 
     push --> ci
     schedule --> gpu
     manual --> ci & gpu
-    pr --> ci & conventional & secrets
+    pr --> ci & conventional & secrets & linked & codeql
+    push --> codeql
+    push -->|matching paths| mkdocs & fernCheck
+    pr -->|matching paths| fernCheck
+    manual --> mkdocs & fernCheck & fernPreview
+    merge[Merge queue] --> ci & fernCheck
     tag[Tag push v[0-9]*] --> release & containers
 
-    buildWheel --> publishPyPI --> ghRelease --> slackNotify
+    buildWheel --> publishPyPI --> ghRelease --> releaseDocs
     buildContainer --> publishGhcr
-    buildWheelInt --> publishArtifactory
 
     conventional -.->|reuses| FW-CI-templates
     secrets -.->|reuses| FW-CI-templates
@@ -125,27 +138,30 @@ flowchart LR
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`.
+The `ci-checks.yml` workflow runs on pushes to `main`, pull requests targeting `main`, merge queue checks, and manual dispatch. Every check step calls a mise task. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`.
 
 | Job | mise task | What it checks |
 | --- | --- | --- |
 | Format | `check:format`, `check:lint`, `check:license:headers` | `dprint check` for TOML + `ruff format --check` + `ruff check` + SPDX copyright headers |
 | Format (lock) | `check:lock` | generated CUDA metadata matches `cuda_deps.toml` + `uv.lock` matches `pyproject.toml` |
 | Typecheck | `check:type` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
+| Paired docs (Format job) | `check:docs:pairs` | Paired MkDocs/Fern pages change together relative to the target branch |
+| End-user Wheel Install | `test:installer`, `build-wheel`, `release:verify-wheel` | Installer dry runs and wheel installation in a clean container |
 | Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
 The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, CI, or mise task path changes. Smoke tests run when source, test, `pytest.ini`, or dependency paths change.
 
-On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs unit tests and CPU smoke tests even when there is no changed-file signal to inspect.
+On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs wheel installation, unit tests, and CPU smoke tests even when there is no changed-file signal to inspect.
 
-Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These paths trigger unit tests through the aggregate `any` output, but do not trigger CPU smoke tests. The CI Status aggregation job is the single required check for branch protection.
+Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These paths trigger unit tests through the aggregate `any` output, but do not trigger CPU smoke tests. Wheel installation runs for source, dependency, or CI/task changes. Unit tests cover Python 3.11–3.14; coverage is uploaded only from Python 3.13. The CI Status aggregation job combines the CPU workflow results; the separate Fern Check is not included in that aggregation.
 
 To replicate CI locally:
 
 ```bash
 mise run check        # all read-only static checks
 mise run check:lock   # verify generated CUDA metadata and uv.lock
+mise run check:docs:pairs  # verify paired MkDocs/Fern edits
 mise run test:ci      # CI unit tests with coverage selectors
 mise run test:smoke   # CPU smoke tests
 ```
@@ -186,8 +202,6 @@ Internal runners and projects are defined in an internal repo, `nv-gha-runners/e
 | GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | GPU Tests | Notify Slack | `ubuntu-latest` | GitHub-hosted |
-| Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
-| Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
 ### Coverage
 

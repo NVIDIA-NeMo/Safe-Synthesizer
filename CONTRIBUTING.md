@@ -690,11 +690,14 @@ the unauthenticated local server starts without the central theme.
 An unauthenticated missing-redirects warning concerns comparison with the hosted
 instance; it does not establish that redirects work.
 
-`fern-docs-ci.yml` runs the same `docs:fern:check` task on every PR, pushes to
-`main`, merge queue checks, and manual dispatch. Its stable job name is
-**Fern Check**, and it requires no publishing token. `fern-docs-preview.yml` is
+`fern-docs-ci.yml` runs the same `docs:fern:check` task on PRs and pushes to
+`main` that change documentation or Fern tooling/configuration paths, plus all
+merge queue checks and manual dispatches. See the
+[workflow reference](.github/workflows/README.md#documentation-workflows) for the
+path filters. Its stable job name is
+`Fern Check`, and it requires no publishing token. `fern-docs-preview.yml` is
 manually dispatched from any repository branch. It runs `docs:fern:check` before
-`docs:fern:preview`, supplies the repository or organization `FERN_TOKEN` secret
+`docs:fern:preview` and supplies the repository or organization `FERN_TOKEN` secret
 only to the preview step. Both workflows use the shared Python environment
 action to install mise tools. Neither publishes production
 documentation. See the [migration status](docs/fern/FERN_MIGRATION.md#current-status)
