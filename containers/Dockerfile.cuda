@@ -1,3 +1,4 @@
+# check=skip=InvalidDefaultArgInFrom
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,12 +8,15 @@
 # image. Supported variants are cu129 and cu130; adding a future variant should
 # only require a matching pyproject extra plus another workflow matrix row.
 #
-# Build:
+# Build with `mise run container:build:gpu` or `mise run container:build:gpu-dev`,
+# which pass PYTHON_VERSION from .python-version and UV_VERSION from
+# [tool.uv] required-version in pyproject.toml. Both are required:
 #   docker build -f containers/Dockerfile.cuda \
+#     --build-arg PYTHON_VERSION="$(cat .python-version)" \
+#     --build-arg UV_VERSION=<[tool.uv] required-version> \
 #     --build-arg CONTAINER_EXTRA=cu129 \
 #     --build-arg CONTAINER_VARIANT=cu129 \
 #     --target runtime -t nss-gpu:latest .
-#   docker build -f containers/Dockerfile.cuda --target dev -t nss-gpu-dev:latest .
 #
 # Run with your data. HF_HOME already points at /workspace/.hf_cache, so
 # mounting a host cache there is enough; --user keeps the container uid aligned
@@ -26,9 +30,13 @@
 #
 # uv Docker best practices: https://docs.astral.sh/uv/guides/integration/docker/
 
-ARG PYTHON_VERSION=3.13
+# Required, with no default (hence the skipped InvalidDefaultArgInFrom check);
+# the build tasks and the container workflow pass them from .python-version
+# and [tool.uv] required-version.
+ARG PYTHON_VERSION
+ARG UV_VERSION
 ARG PYTHON_IMAGE=python:${PYTHON_VERSION}-slim-bookworm
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.4
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:${UV_VERSION}
 
 # ---------------------------------------------------------------------------
 # Stage 1: uv -- copy the pinned uv binaries from the official image
@@ -43,7 +51,7 @@ FROM ${PYTHON_IMAGE} AS runtime
 ARG CONTAINER_EXTRA=cu129
 ARG CONTAINER_VARIANT=cu129
 ARG PACKAGE_VERSION=
-ARG PYTHON_VERSION=3.13
+ARG PYTHON_VERSION
 ARG OMIT_FLASHINFER_PACKAGES="--no-install-package flashinfer-cubin --no-install-package flashinfer-jit-cache"
 ARG OMIT_TORCH_PACKAGES="--no-install-package torch --no-install-package torch-c-dlpack-ext --no-install-package torchaudio --no-install-package torchao --no-install-package torchvision --no-install-package triton"
 ARG OMIT_VLLM_PACKAGES="--no-install-package vllm"

@@ -15,7 +15,7 @@ install-mise: ## Install mise (version from .mise.toml min_version; GPG-verified
 	@MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
 
 .PHONY: setup
-setup: install-mise ## Install dev tools and create the virtual environment via mise
+setup: install-mise ## Install mise, trust this checkout's Mise config, then run the setup task
 	MISE_YES=1 mise trust
 	MISE_YES=1 mise run setup
 
@@ -41,21 +41,24 @@ $(BOOTSTRAP_EXTRAS):
 .PHONY: bootstrap-nss
 bootstrap-nss:
 	$(eval EXTRA := $(filter-out $@, $(MAKECMDGOALS)))
+	$(eval PROFILE := $(if $(filter cuda,$(EXTRA)),cu129,$(EXTRA)))
 	@if [ -z "$(EXTRA)" ]; then \
-		echo 'usage: mise run bootstrap-nss <extra>' >&2; \
+		echo 'usage: mise run deps:sync <profile>' >&2; \
 		exit 1; \
 	fi
-	@printf '%s\n' 'deprecated; forwarding to `mise run bootstrap-nss $(EXTRA)`' >&2
-	@mise run bootstrap-nss "$(EXTRA)"
+	@printf '%s\n' 'deprecated; forwarding to `mise run deps:sync $(PROFILE)`' >&2
+	@mise run deps:sync "$(PROFILE)"
 
-$(eval $(call deprecated_target,verify-python-version,verify-python-version))
-$(eval $(call deprecated_target,.venv,venv))
+$(eval $(call deprecated_target,verify-python-version,deps:sync dev))
+$(eval $(call deprecated_target,.venv,deps:sync dev))
 
+# The old extras map onto deps:sync profiles; cuda was the alias of cu129.
 .PHONY: bootstrap-python
 bootstrap-python:
-	@extra="$${PYTORCH_DEPS:-cpu}"; \
-		printf '%s\n' "deprecated; forwarding to \`mise run bootstrap-nss $$extra\`" >&2; \
-		mise run bootstrap-nss "$$extra"
+	@profile="$${PYTORCH_DEPS:-cpu}"; \
+		if [ "$$profile" = cuda ]; then profile=cu129; fi; \
+		printf '%s\n' "deprecated; forwarding to \`mise run deps:sync $$profile\`" >&2; \
+		mise run deps:sync "$$profile"
 
 $(eval $(call deprecated_target,bootstrap-tools,bootstrap-tools))
 $(eval $(call deprecated_target,bootstrap-tools-ci,bootstrap-tools-ci))

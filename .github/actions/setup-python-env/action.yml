@@ -33,7 +33,7 @@ inputs:
     required: false
     default: "true"
   bootstrap-tools:
-    description: "Whether to install dev tools via mise"
+    description: "Whether to install mise and its pinned tools; callers then run mise run deps:sync <profile>"
     required: false
     default: "true"
 
@@ -126,7 +126,8 @@ runs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
         MISE_YES=1 mise trust
-        MISE_YES=1 mise run setup
+        # CI never runs setup, which installs hooks; jobs sync a profile themselves.
+        MISE_YES=1 mise install
 
     - name: Install uv (fallback when mise is skipped)
       if: inputs.bootstrap-tools != 'true'

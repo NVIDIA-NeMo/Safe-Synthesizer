@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 class _CtxWithConfig(Protocol):
     """Minimal structural protocol satisfied by all stage views and ``PreflightContext``."""
 
-    config: SafeSynthesizerParameters
+    @property
+    def config(self) -> SafeSynthesizerParameters:
+        """The run's parameters, which every stage view exposes read-only."""
 
 
 def resolved_record_count(ctx: _CtxWithConfig) -> int | None:

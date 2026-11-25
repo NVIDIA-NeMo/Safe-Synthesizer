@@ -2,25 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [setup]
-description = "Install pinned mise-managed tools and create the project virtualenv. Modifies the mise tool cache and .venv or UV_PROJECT_ENVIRONMENT."
+description = "Set up a development checkout: install the pinned Mise tools, sync every dependency group and extra (deps:sync all), and install the Git hooks. Takes no arguments; run make setup first on a new machine."
 run = [
-    "MISE_YES=1 mise trust",
     "MISE_YES=1 mise install",
-    { task = "venv" },
-    "echo 'tools and virtual environment installed successfully via mise'",
+    { task = "deps:sync", args = ["all"] },
+    { task = "hooks:install" },
 ]
 
+["hooks:install"]
+description = "Install the Git hooks with prek. Hooks install into .git/hooks; a leftover core.hooksPath silently disables them, so unset it first."
+run = "prek install"
+
 ["bootstrap-tools"]
-description = "(legacy alias) Bootstrap tools via mise"
+description = "(legacy alias) Set up the checkout via setup"
 hide = true
 depends = ["setup"]
 run = "true"
 
 ["bootstrap-tools-ci"]
-description = "(legacy alias) Bootstrap tools via mise"
+description = "(legacy alias) Install the pinned Mise tools; installs no hooks"
 hide = true
-depends = ["setup"]
-run = "true"
+run = "MISE_YES=1 mise install"
 
 ["clean-uv"]
 description = "Remove uv cache files. Frees disk space; future uv operations will re-download packages."

@@ -15,7 +15,6 @@ Try it without installing anything: the launchable above deploys a GPU instance 
 
 Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
-
 ### Prerequisites
 
 - Python 3.11–3.14 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, 3.13, or 3.14 interpreter works)
@@ -65,8 +64,8 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make setup # installs pinned mise, pinned tools from mise.lock, and .venv
-mise run bootstrap-nss cuda
+make setup # pinned mise and tools, all dependencies (CUDA 13.0 on Linux), and Git hooks
+mise run deps:sync cu129 # optional: switch .venv to CUDA 12.9
 ```
 
 ### Run the public container

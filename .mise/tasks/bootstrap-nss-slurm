@@ -43,7 +43,6 @@ export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export VLLM_CACHE_ROOT="${LUSTRE_DIR}/.cache/vllm"
-export NSS_UV_BIN="${uv_bin}"
 
 mkdir -p \
   "${UV_CACHE_DIR}" \
@@ -81,8 +80,13 @@ fi
 
 "${uv_bin}" venv --seed --allow-existing --python "${python_bin}" "${venv_path}"
 
-echo "[slurm-bootstrap] syncing NSS dependencies with profile ${usage_extra?}"
-sync_nss_dependencies "${usage_extra?}" "${python_bin}"
+# `cuda` is the older name of the CUDA 12.9 profile.
+profile="${usage_extra?}"
+[[ "${profile}" == "cuda" ]] && profile="cu129"
+readonly profile
+
+echo "[slurm-bootstrap] syncing NSS dependencies with profile ${profile}"
+UV_PYTHON="${python_bin}" mise run deps:sync "${profile}"
 
 venv_python="$(readlink -f "${venv_path}/bin/python")"
 readonly venv_python

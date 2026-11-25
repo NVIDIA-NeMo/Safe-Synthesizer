@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -35,6 +37,20 @@ exclude = [
 target-version = "py311"
 line-length = 120
 indent-width = 4
+extend-exclude = [
+    "vendor/**",
+    "third_party/**",
+    "uv.lock",
+    "mise.lock",
+    "LICENSE",
+    "**/skill.oms.sig",
+    "docs/**/*.markdown",
+    "docs/**/*.md",
+    "docs/**/*.mdx",
+    "skills/safe-synthesizer/BENCHMARK.md",
+    "skills/safe-synthesizer/skill-card.md",
+]
+force-exclude = true
 
 [lint]
 select = [
@@ -74,6 +90,7 @@ select = [
     "D411", # blank line before section
     "D414", # empty docstring section
     "D419", # empty docstring
+    "I",
 ]
 ignore = []
 

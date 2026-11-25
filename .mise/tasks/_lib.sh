@@ -22,6 +22,19 @@ resolve_python_version() {
   printf '%s\n' "${python_version}"
 }
 
+resolve_uv_version() {
+  local pyproject="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT is required}/pyproject.toml"
+  local uv_version
+
+  if ! uv_version="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["tool"]["uv"]["required-version"])' "${pyproject}")" \
+    || [[ -z "${uv_version}" ]]; then
+    echo "Error: cannot read [tool.uv] required-version from ${pyproject}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${uv_version}"
+}
+
 resolve_venv_path() {
   local venv_path="${UV_PROJECT_ENVIRONMENT:-${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT is required}/.venv}"
 
@@ -36,38 +49,6 @@ resolve_venv_path() {
   fi
 
   printf '%s\n' "${venv_path}"
-}
-
-sync_nss_dependencies() {
-  local extra="${1:?Python dependency profile is required}"
-  local python="${2:-}"
-  local sync_uv_bin="${NSS_UV_BIN:-uv}"
-
-  if [[ -z "${python}" ]]; then
-    python="$(resolve_python_version)" || return
-  fi
-
-  case "${extra}" in
-    cuda|cu129)
-      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu129 --extra engine --group dev
-      ;;
-    cu130)
-      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu130 --extra engine --group dev
-      ;;
-    cpu)
-      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cpu --extra engine --group dev
-      ;;
-    engine)
-      "${sync_uv_bin}" sync --frozen --python "${python}" --extra engine --group dev
-      ;;
-    dev)
-      "${sync_uv_bin}" sync --frozen --python "${python}" --group dev
-      ;;
-    *)
-      echo "Error: Invalid extra '${extra}'. Use one of: dev engine cpu cuda cu129 cu130" >&2
-      return 1
-      ;;
-  esac
 }
 
 resolve_container_cmd() {

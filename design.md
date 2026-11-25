@@ -1,6 +1,7 @@
 # NeMo Safe Synthesizer - Architecture Diagram
 
 ## Overview
+
 NeMo Safe Synthesizer is a comprehensive package for generating safe synthetic data with privacy guarantees. The architecture follows a pipeline design with configurable stages for data processing, PII replacement, training, generation, and evaluation.
 
 ---
@@ -17,7 +18,7 @@ graph TB
     subgraph "Configuration Layer"
         ConfigBuilder[ConfigBuilder]
         SafeSynthesizerParams[SafeSynthesizerParameters]
-        
+
         subgraph "Config Components"
             DataConfig[DataParameters]
             TrainConfig[TrainingHyperparams]
@@ -39,7 +40,7 @@ graph TB
     subgraph "Training Backend"
         TrainingBackend[TrainingBackend<br/>Abstract]
         HFBackend[HuggingFaceBackend<br/>LoRA + DP Support]
-        
+
         subgraph "Training Components"
             ModelLoader[Model Loader<br/>AutoModel + Tokenizer]
             Quantization[Quantization<br/>4-bit/8-bit]
@@ -52,7 +53,7 @@ graph TB
     subgraph "Generation Backend"
         GenBackend[GeneratorBackend<br/>Abstract]
         VLLMBackend[VllmBackend<br/>Fast Inference]
-        
+
         subgraph "Generation Components"
             RegexManager[RegexManager<br/>Structured Output]
             BatchGen[BatchGenerator]
@@ -63,7 +64,7 @@ graph TB
 
     subgraph "Evaluation System"
         Evaluator[Evaluator]
-        
+
         subgraph "Evaluation Components"
             DataPrivacy[Data Privacy Score]
             PIIReplay[PII Replay Detection]
@@ -75,7 +76,7 @@ graph TB
             StructureSimilarity[Text Structure<br/>Similarity]
             SQS[SQS Score]
         end
-        
+
         subgraph "Reporting"
             ReportGen[Report Generator]
             HTMLReport[HTML Report<br/>Multi-modal]
@@ -182,7 +183,6 @@ sequenceDiagram
     Report->>User: HTML Report + Synthetic Data
 ```
 
-
 ## Simple overview
 ```mermaid
 flowchart LR
@@ -219,7 +219,7 @@ Path: `src/nemo_safe_synthesizer/data_processing/`
 - Holdout (`holdout/`): Splits data into train/test sets with stratification support
 - `pii_replacer/`: PII replacement plan discovery, its OpenAI-compatible LLM client, and `local_inference/`, which runs a vLLM server on the local GPU only while LLM-assisted planning runs
 - `ActionExecutor` (`actions/`): Executes data transformations (date normalization, distributions)
-- `ExampleAssembler` (`assembler.py`): 
+- `ExampleAssembler` (`assembler.py`):
   - Converts records to JSON format
   - Tokenizes for model training
   - Handles truncation and padding
@@ -234,12 +234,12 @@ Path: `src/nemo_safe_synthesizer/training/`
 
 #### Implementations:
 
-- `HuggingFaceBackend`: 
+- `HuggingFaceBackend`:
   - Supports quantization (4-bit, 8-bit via bitsandbytes)
   - LoRA fine-tuning via PEFT
   - Differential Privacy via Opacus integration
   - Custom callbacks for monitoring
-  
+
 #### Key Features:
 
 - Model loading from HuggingFace Hub
@@ -253,15 +253,13 @@ Path: `src/nemo_safe_synthesizer/generation/`
 
 #### Components:
 
-- `VllmBackend`: 
+- `VllmBackend`:
   - Fast inference using VLLM
   - Loads base model + LoRA adapter
   - Batch generation support
-  
-- `RegexManager`: 
+- `RegexManager`:
   - Enforces structured output (JSON format)
   - Validates generated records
-  
 - Processors: Post-processing of generated text
 - `BatchGenerator`: Manages batch generation with retry logic
 - Stopping Criteria: Custom stopping conditions for generation
@@ -633,6 +631,7 @@ synthesizer.run()
 ### 2. Backend Abstraction
 
 Training and generation backends use abstract base classes to allow multiple implementations:
+
 - Training: HuggingFace
 - Generation: VLLM (extensible to others)
 
@@ -692,7 +691,7 @@ results = synthesizer.results
 5. Training: Fine-tune LLM with LoRA (+ optional DP)
 6. Generation: Generate synthetic records using trained adapter
 7. Evaluation: Compute privacy and quality metrics
-8. Output: 
+8. Output:
    - Synthetic data CSV
    - HTML evaluation report
    - Timing and summary statistics

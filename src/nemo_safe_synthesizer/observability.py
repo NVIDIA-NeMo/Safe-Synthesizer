@@ -660,7 +660,7 @@ class CategoryLogger(logging.Logger):
         )
 
     @property
-    def name(self) -> str:
+    def name(self) -> str:  # ty: ignore[invalid-property-type-override] -- delegates to the wrapped logger; Logger.__init__ never runs
         return self._logger.name
 
     def isEnabledFor(self, level: int) -> bool:
