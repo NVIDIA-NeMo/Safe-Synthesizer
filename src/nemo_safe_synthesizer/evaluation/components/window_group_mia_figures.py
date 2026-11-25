@@ -25,7 +25,11 @@ _DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [
 _FIGURE_HEIGHT = 340
 _DISTANCE_BINS = 30
 _DISTANCE_RANGE_QUANTILE = 0.99
-GROUP_MAX_ROWS = 12
+
+
+def _finite(values: Sequence[float | None]) -> np.ndarray:
+    array = np.asarray(values, dtype=float)
+    return array[np.isfinite(array)]
 
 
 def window_value_count(details: WindowMembershipInferenceDetails) -> int:
@@ -64,17 +68,17 @@ def generate_window_group_mia_distance_figure(details: WindowMembershipInference
     distances = details.distances
     if distances is None or not distances.training:
         raise DataError("At least one training window distance is required.")
-    training = np.asarray(distances.training, dtype=float)
-    holdout = np.asarray(distances.holdout or [], dtype=float)
+    training = _finite(distances.training)
+    holdout = _finite(distances.holdout or [])
     scale = float(np.sqrt(window_value_count(details)))
-    attack = details.attack
+    threshold = details.attack.threshold if details.attack is not None else None
     # Clip each distribution's tail separately, so many exact training copies
     # can't push the holdout windows or the threshold off the chart.
     limits = [
         float(np.quantile(values / scale, _DISTANCE_RANGE_QUANTILE)) for values in (training, holdout) if values.size
     ]
-    if attack is not None:
-        limits.append(attack.threshold / scale)
+    if threshold is not None:
+        limits.append(threshold / scale)
     top = max([*limits, 1e-6]) * 1.05
     bins = {"start": 0.0, "end": top, "size": top / _DISTANCE_BINS}
     figure = go.Figure()
@@ -101,9 +105,9 @@ def generate_window_group_mia_distance_figure(details: WindowMembershipInference
                 hovertemplate="Holdout windows<br>difference %{x}<br>%{y:.1f}% of windows<extra></extra>",
             )
         )
-    if attack is not None:
+    if threshold is not None:
         figure.add_vline(
-            x=attack.threshold / scale,
+            x=threshold / scale,
             line={"color": "rgba(255,255,255,0.6)", "dash": "dash", "width": 1},
             annotation_text="flag threshold",
             annotation_position="top",
@@ -124,7 +128,7 @@ def generate_window_group_mia_distance_figure(details: WindowMembershipInference
 def generate_window_group_mia_group_figure(
     per_group: Sequence[WindowGroupSummary], holdout_flag_rate: float
 ) -> go.Figure:
-    """Plot the share of each training group's windows that are flagged, for the 12 most-flagged groups.
+    """Plot the share of each training group's windows that are flagged, most flagged first, as exported.
 
     Bars shade from white at the holdout flag rate, which is what chance
     alone produces, to red when every window of the group is flagged. The
@@ -145,8 +149,7 @@ def generate_window_group_mia_group_figure(
     flagged = [(item, item.flag_rate) for item in per_group if item.flag_rate is not None]
     if not flagged:
         raise DataError("At least one group summary with a flag rate is required.")
-    rows = sorted(flagged, key=lambda pair: (-pair[1], str(pair[0].group)))[:GROUP_MAX_ROWS]
-    rows.reverse()
+    rows = flagged[::-1]
     rates = np.array([rate for _, rate in rows])
     excess = np.clip((rates - holdout_flag_rate) / max(1.0 - holdout_flag_rate, 1e-12), 0.0, 1.0)
     labels = ["all rows" if item.group is None else str(item.group) for item, _ in rows]

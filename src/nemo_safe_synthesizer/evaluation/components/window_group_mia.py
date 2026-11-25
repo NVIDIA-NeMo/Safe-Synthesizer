@@ -203,7 +203,6 @@ class WindowGroupMIA(TimeSeriesComponent[WindowMembershipInferenceMetric]):
         """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().report_context(metric)
         details = metric.details
-        context["details"] = details
         figures: list[FigureSpec] = []
         if details.distances is not None and details.distances.training:
             figures.append(
@@ -236,7 +235,7 @@ class WindowGroupMIA(TimeSeriesComponent[WindowMembershipInferenceMetric]):
         match = details.closest_match
         context["summary_columns"] = details.columns
         context["summary_traces_per_column"] = 2 if match is not None and match.training_values is not None else 1
-        if match is not None:
+        if match is not None and match.distance is not None:
             context["closest_match_distance_per_value"] = match.distance / np.sqrt(window_value_count(details))
         return context
 

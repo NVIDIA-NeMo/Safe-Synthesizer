@@ -22,7 +22,7 @@ import plotly.graph_objects as go
 from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
-from ...config.evaluation_report_data import Metric
+from ...config.evaluation_report_data import TimeSeriesMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.assets.text.multi_modal_tooltips import tooltips
@@ -32,7 +32,7 @@ from .component import Component
 FigureSpec = tuple[str, go.Figure, bool, str]
 """Chart title, figure, whether it gets the column select, and its tooltip key."""
 
-MetricT = TypeVar("MetricT", bound=Metric)
+MetricT = TypeVar("MetricT", bound=TimeSeriesMetric)
 
 
 class TimeSeriesComponent(Component, Generic[MetricT]):
@@ -41,7 +41,7 @@ class TimeSeriesComponent(Component, Generic[MetricT]):
     The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
     each as a metric card from the class attributes below, in the section
     named by ``report_section``. Subclasses are parametrized by their exported
-    metric type and extend ``report_context`` with its details and their
+    metric type and extend ``report_context`` with their
     figures, built with ``figure_rows`` from the exported metric.
 
     Attributes:
@@ -73,6 +73,7 @@ class TimeSeriesComponent(Component, Generic[MetricT]):
         return {
             "name": cls.model_fields["name"].default,
             "score": metric.score,
+            "details": metric.details,
             "card_id": cls.card_id,
             "description": cls.description,
             "tooltip_key": cls.tooltip_key,

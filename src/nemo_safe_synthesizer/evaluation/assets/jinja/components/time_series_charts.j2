@@ -8,7 +8,7 @@
 {% if metric.details.skipped %}
 <h3 class="chart-subheading">Skipped comparisons</h3>
 <ul>
-{% for item in metric.details.skipped[:12] %}
+{% for item in metric.details.skipped %}
     <li>
         {{ item.column }}{% if item.group is not none %}, group {{ item.group }}{% endif %}: {{ item.reason }}
     </li>
