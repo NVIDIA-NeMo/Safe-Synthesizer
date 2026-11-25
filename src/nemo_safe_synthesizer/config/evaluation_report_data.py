@@ -71,8 +71,8 @@ class Distribution(ReportDataModel):
 
     labels: list[str] = Field(
         description=(
-            "Category names, with categories under 5 training records folded into one 'Other (N categories)' label, "
-            "or bin labels such as '[0, 10)', or '3' for a one-value bin."
+            "Category names, with categories under 5 training records folded into one 'Other (N categories)' "
+            "label ('Other (1 category)' for one), or bin labels such as '[0, 10)', or '3' for a one-value bin."
         )
     )
     bin_edges: list[float] | None = Field(

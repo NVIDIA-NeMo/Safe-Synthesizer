@@ -59,6 +59,7 @@ def test_report_renders_with_undefined_chart_values() -> None:
     assert data.metrics.text_semantic_similarity.projections["review"].training.x == [0.1, None]
     assert render_report(data) is not None
 
+
 def test_text_semantic_similarity_figures_have_a_column_heading() -> None:
     points = {"x": [0.1, 0.3, 0.2], "y": [0.2, 0.1, 0.4]}
     projection = {"axes": ["pc1", "pc2"], "training": points, "synthetic": points}
