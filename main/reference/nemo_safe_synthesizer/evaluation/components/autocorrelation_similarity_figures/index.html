@@ -9361,8 +9361,8 @@
     <div class="doc doc-contents first">
 
         <p>Plotly report figures for autocorrelation similarity.</p>
-<p>Each builder summarizes the per-pair profiles stored by the metric in
-<code>AutocorrelationSimilarity.details</code>.</p>
+<p>Each builder summarizes the per-pair profiles exported in
+<code>AutocorrelationDetails.profiles</code>.</p>
 
 
 
@@ -9476,11 +9476,16 @@ first column is visible so the report can switch columns by trace index.</p>
                 <code>profiles</code>
             </td>
             <td>
-                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Mapping">Mapping</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            AutocorrelationProfile
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile)" href="../../../config/evaluation_report_data/#nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile">AutocorrelationProfile</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stored profiles from <code>AutocorrelationSimilarity.details</code>.</p>
+                <p>Exported profiles from <code>AutocorrelationDetails.profiles</code>.</p>
               </div>
             </td>
             <td>
@@ -9599,7 +9604,7 @@ first column is visible so the report can switch columns by trace index.</p>
 <span class="normal"><a href="#__codelineno-0-94">94</a></span>
 <span class="normal"><a href="#__codelineno-0-95">95</a></span>
 <span class="normal"><a href="#__codelineno-0-96">96</a></span>
-<span class="normal"><a href="#__codelineno-0-97">97</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_autocorrelation_summary_figure</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-97">97</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_autocorrelation_summary_figure</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">AutocorrelationProfile</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">:</span>
 </span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot typical training and synthetic profiles across groups.</span>
 </span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>
 </span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">    Each value column gets a median profile and an interquartile band for both</span>
@@ -9608,7 +9613,7 @@ first column is visible so the report can switch columns by trace index.</p>
 </span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    first column is visible so the report can switch columns by trace index.</span>
 </span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>
 </span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.</span>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.</span>
 </span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>
 </span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    Returns:</span>
 </span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        A Plotly figure with one visible column at a time.</span>
@@ -9619,13 +9624,13 @@ first column is visible so the report can switch columns by trace index.</p>
 </span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="n">columns</span> <span class="o">=</span> <span class="n">order_autocorrelation_columns</span><span class="p">(</span><span class="n">profiles</span><span class="p">)</span>
 </span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="n">figure</span> <span class="o">=</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">()</span>
 </span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="k">for</span> <span class="n">column_index</span><span class="p">,</span> <span class="n">column</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">columns</span><span class="p">):</span>
-</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="n">column_profiles</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;column&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">column</span><span class="p">]</span>
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="n">column_profiles</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">column</span> <span class="o">==</span> <span class="n">column</span><span class="p">]</span>
 </span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a>        <span class="n">visible</span> <span class="o">=</span> <span class="n">column_index</span> <span class="o">==</span> <span class="mi">0</span>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a>        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">line_color</span><span class="p">,</span> <span class="n">band_color</span> <span class="ow">in</span> <span class="p">(</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>            <span class="p">(</span><span class="s2">&quot;training_acf&quot;</span><span class="p">,</span> <span class="s2">&quot;Training&quot;</span><span class="p">,</span> <span class="n">_TRAINING_COLOR</span><span class="p">,</span> <span class="n">_TRAINING_BAND_COLOR</span><span class="p">),</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>            <span class="p">(</span><span class="s2">&quot;synthetic_acf&quot;</span><span class="p">,</span> <span class="s2">&quot;Synthetic&quot;</span><span class="p">,</span> <span class="n">_SYNTHETIC_COLOR</span><span class="p">,</span> <span class="n">_SYNTHETIC_BAND_COLOR</span><span class="p">),</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a>        <span class="k">for</span> <span class="n">rows</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">line_color</span><span class="p">,</span> <span class="n">band_color</span> <span class="ow">in</span> <span class="p">(</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>            <span class="p">([</span><span class="n">item</span><span class="o">.</span><span class="n">training_acf</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">],</span> <span class="s2">&quot;Training&quot;</span><span class="p">,</span> <span class="n">_TRAINING_COLOR</span><span class="p">,</span> <span class="n">_TRAINING_BAND_COLOR</span><span class="p">),</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>            <span class="p">([</span><span class="n">item</span><span class="o">.</span><span class="n">synthetic_acf</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">],</span> <span class="s2">&quot;Synthetic&quot;</span><span class="p">,</span> <span class="n">_SYNTHETIC_COLOR</span><span class="p">,</span> <span class="n">_SYNTHETIC_BAND_COLOR</span><span class="p">),</span>
 </span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a>        <span class="p">):</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>            <span class="n">lags</span><span class="p">,</span> <span class="n">lower</span><span class="p">,</span> <span class="n">median</span><span class="p">,</span> <span class="n">upper</span> <span class="o">=</span> <span class="n">_profile_quantiles</span><span class="p">(</span><span class="n">column_profiles</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>            <span class="n">lags</span><span class="p">,</span> <span class="n">lower</span><span class="p">,</span> <span class="n">median</span><span class="p">,</span> <span class="n">upper</span> <span class="o">=</span> <span class="n">_profile_quantiles</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
 </span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a>            <span class="n">figure</span><span class="o">.</span><span class="n">add_trace</span><span class="p">(</span>
 </span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>                <span class="n">go</span><span class="o">.</span><span class="n">Scatter</span><span class="p">(</span>
 </span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>                    <span class="n">x</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">lags</span><span class="p">,</span> <span class="n">lags</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]]),</span>
@@ -9700,11 +9705,16 @@ comparable across reports.</p>
                 <code>profiles</code>
             </td>
             <td>
-                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Mapping">Mapping</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            AutocorrelationProfile
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile)" href="../../../config/evaluation_report_data/#nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile">AutocorrelationProfile</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stored profiles from <code>AutocorrelationSimilarity.details</code>.</p>
+                <p>Exported profiles from <code>AutocorrelationDetails.profiles</code>.</p>
               </div>
             </td>
             <td>
@@ -9816,7 +9826,7 @@ comparable across reports.</p>
 <span class="normal"><a href="#__codelineno-0-150">150</a></span>
 <span class="normal"><a href="#__codelineno-0-151">151</a></span>
 <span class="normal"><a href="#__codelineno-0-152">152</a></span>
-<span class="normal"><a href="#__codelineno-0-153">153</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_autocorrelation_lag_error_figure</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-153">153</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_autocorrelation_lag_error_figure</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">AutocorrelationProfile</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">:</span>
 </span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot the mean absolute paired profile difference at each lag.</span>
 </span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>
 </span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    Only lags where both profiles of a pair are finite contribute, matching</span>
@@ -9825,7 +9835,7 @@ comparable across reports.</p>
 </span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">    comparable across reports.</span>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>
 </span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="sd">        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.</span>
+</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="sd">        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.</span>
 </span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>
 </span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="sd">    Returns:</span>
 </span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="sd">        A Plotly bar figure of mean absolute difference by lag.</span>
@@ -9835,8 +9845,8 @@ comparable across reports.</p>
 </span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">    &quot;&quot;&quot;</span>
 </span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">profiles</span><span class="p">:</span>
 </span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a>        <span class="k">raise</span> <span class="n">DataError</span><span class="p">(</span><span class="s2">&quot;At least one autocorrelation profile is required.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>    <span class="n">training</span> <span class="o">=</span> <span class="n">_profile_matrix</span><span class="p">(</span><span class="n">profiles</span><span class="p">,</span> <span class="s2">&quot;training_acf&quot;</span><span class="p">)</span>
-</span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="n">synthetic</span> <span class="o">=</span> <span class="n">_profile_matrix</span><span class="p">(</span><span class="n">profiles</span><span class="p">,</span> <span class="s2">&quot;synthetic_acf&quot;</span><span class="p">)</span>
+</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>    <span class="n">training</span> <span class="o">=</span> <span class="n">_profile_matrix</span><span class="p">([</span><span class="n">item</span><span class="o">.</span><span class="n">training_acf</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">])</span>
+</span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="n">synthetic</span> <span class="o">=</span> <span class="n">_profile_matrix</span><span class="p">([</span><span class="n">item</span><span class="o">.</span><span class="n">synthetic_acf</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">])</span>
 </span><span id="__span-0-121"><a id="__codelineno-0-121" name="__codelineno-0-121"></a>    <span class="n">difference</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">training</span> <span class="o">-</span> <span class="n">synthetic</span><span class="p">)</span>
 </span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>    <span class="n">support</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">difference</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>    <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
@@ -9911,11 +9921,16 @@ to red at 0.</p>
                 <code>profiles</code>
             </td>
             <td>
-                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Mapping">Mapping</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            AutocorrelationProfile
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile)" href="../../../config/evaluation_report_data/#nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile">AutocorrelationProfile</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stored profiles from <code>AutocorrelationSimilarity.details</code>.</p>
+                <p>Exported profiles from <code>AutocorrelationDetails.profiles</code>.</p>
               </div>
             </td>
             <td>
@@ -10081,7 +10096,7 @@ to red at 0.</p>
 <span class="normal"><a href="#__codelineno-0-228">228</a></span>
 <span class="normal"><a href="#__codelineno-0-229">229</a></span>
 <span class="normal"><a href="#__codelineno-0-230">230</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_autocorrelation_pair_score_figure</span><span class="p">(</span>
-</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">AutocorrelationProfile</span><span class="p">],</span>
 </span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="n">overall_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>    <span class="o">*</span><span class="p">,</span>
 </span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>    <span class="n">max_columns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS</span><span class="p">,</span>
@@ -10095,7 +10110,7 @@ to red at 0.</p>
 </span><span id="__span-0-168"><a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">    to red at 0.</span>
 </span><span id="__span-0-169"><a id="__codelineno-0-169" name="__codelineno-0-169"></a>
 </span><span id="__span-0-170"><a id="__codelineno-0-170" name="__codelineno-0-170"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-171"><a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.</span>
+</span><span id="__span-0-171"><a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.</span>
 </span><span id="__span-0-172"><a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">        overall_score: Aggregate metric score drawn as a reference line.</span>
 </span><span id="__span-0-173"><a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">        max_columns: Largest number of value columns to plot.</span>
 </span><span id="__span-0-174"><a id="__codelineno-0-174" name="__codelineno-0-174"></a>
@@ -10110,9 +10125,9 @@ to red at 0.</p>
 </span><span id="__span-0-183"><a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-0-184"><a id="__codelineno-0-184" name="__codelineno-0-184"></a>    <span class="n">figure</span> <span class="o">=</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">()</span>
 </span><span id="__span-0-185"><a id="__codelineno-0-185" name="__codelineno-0-185"></a>    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
-</span><span id="__span-0-186"><a id="__codelineno-0-186" name="__codelineno-0-186"></a>        <span class="n">column_profiles</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;column&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">column</span><span class="p">]</span>
-</span><span id="__span-0-187"><a id="__codelineno-0-187" name="__codelineno-0-187"></a>        <span class="n">groups</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;all rows&quot;</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;group&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">&quot;group&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">]</span>
-</span><span id="__span-0-188"><a id="__codelineno-0-188" name="__codelineno-0-188"></a>        <span class="n">similarity</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">&quot;similarity&quot;</span><span class="p">])</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">])</span>
+</span><span id="__span-0-186"><a id="__codelineno-0-186" name="__codelineno-0-186"></a>        <span class="n">column_profiles</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">column</span> <span class="o">==</span> <span class="n">column</span><span class="p">]</span>
+</span><span id="__span-0-187"><a id="__codelineno-0-187" name="__codelineno-0-187"></a>        <span class="n">groups</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;all rows&quot;</span> <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">group</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">]</span>
+</span><span id="__span-0-188"><a id="__codelineno-0-188" name="__codelineno-0-188"></a>        <span class="n">similarity</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">similarity</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">column_profiles</span><span class="p">])</span>
 </span><span id="__span-0-189"><a id="__codelineno-0-189" name="__codelineno-0-189"></a>        <span class="n">jitter</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="o">-</span><span class="n">_PAIR_SCORE_JITTER</span><span class="p">,</span> <span class="n">_PAIR_SCORE_JITTER</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">column_profiles</span><span class="p">))</span>
 </span><span id="__span-0-190"><a id="__codelineno-0-190" name="__codelineno-0-190"></a>        <span class="n">figure</span><span class="o">.</span><span class="n">add_trace</span><span class="p">(</span>
 </span><span id="__span-0-191"><a id="__codelineno-0-191" name="__codelineno-0-191"></a>            <span class="n">go</span><span class="o">.</span><span class="n">Scatter</span><span class="p">(</span>
@@ -10290,11 +10305,16 @@ to red at 0.</p>
                 <code>profiles</code>
             </td>
             <td>
-                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Mapping">Mapping</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            AutocorrelationProfile
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile)" href="../../../config/evaluation_report_data/#nemo_safe_synthesizer.config.evaluation_report_data.AutocorrelationProfile">AutocorrelationProfile</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stored profiles from <code>AutocorrelationSimilarity.details</code>.</p>
+                <p>Exported profiles from <code>AutocorrelationDetails.profiles</code>.</p>
               </div>
             </td>
             <td>
@@ -10370,11 +10390,11 @@ to red at 0.</p>
 <span class="normal"><a href="#__codelineno-0-261">261</a></span>
 <span class="normal"><a href="#__codelineno-0-262">262</a></span>
 <span class="normal"><a href="#__codelineno-0-263">263</a></span>
-<span class="normal"><a href="#__codelineno-0-264">264</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="k">def</span><span class="w"> </span><span class="nf">order_autocorrelation_columns</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="k">def</span><span class="w"> </span><span class="nf">order_autocorrelation_columns</span><span class="p">(</span><span class="n">profiles</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">AutocorrelationProfile</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 </span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return value columns ordered from lowest to highest mean pair similarity.</span>
 </span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>
 </span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.</span>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        profiles: Exported profiles from ``AutocorrelationDetails.profiles``.</span>
 </span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>
 </span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">    Returns:</span>
 </span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">        Column names, lowest mean pair similarity first, with names breaking ties.</span>
@@ -10386,7 +10406,7 @@ to red at 0.</p>
 </span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>        <span class="k">raise</span> <span class="n">DataError</span><span class="p">(</span><span class="s2">&quot;At least one autocorrelation profile is required.&quot;</span><span class="p">)</span>
 </span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="n">scores</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">:</span>
-</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="n">scores</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">&quot;column&quot;</span><span class="p">]),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">&quot;similarity&quot;</span><span class="p">]))</span>
+</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="n">scores</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">column</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">similarity</span><span class="p">))</span>
 </span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">column</span><span class="p">:</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">column</span><span class="p">])),</span> <span class="n">column</span><span class="p">))</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
