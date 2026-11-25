@@ -311,6 +311,7 @@ def test_results_keep_the_synthetic_data_when_report_data_fails(monkeypatch: pyt
 
     results = make_nss_results(generate_results=synthetic, report=_tabular_report())
 
+    assert results.synthetic_data is not None
     pd.testing.assert_frame_equal(results.synthetic_data, synthetic)
     assert results.evaluation_report_html is None
     assert results.evaluation_report_data is None
