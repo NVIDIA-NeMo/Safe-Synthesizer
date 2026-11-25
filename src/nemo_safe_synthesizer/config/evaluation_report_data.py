@@ -16,10 +16,16 @@ REPORT_DATA_SCHEMA_VERSION = 1
 __all__ = [
     "AttackOutcome",
     "AttributeInferenceMetric",
+    "AutocorrelationCounts",
+    "AutocorrelationDetails",
+    "AutocorrelationProfile",
+    "AutocorrelationSimilarityMetric",
+    "ClosestMatch",
     "ColumnPIIStatistics",
     "ColumnProfile",
     "ColumnProtection",
     "ColumnResult",
+    "ColumnSimilarity",
     "CorrelationMatrices",
     "CorrelationMetric",
     "DatasetCounts",
@@ -27,6 +33,8 @@ __all__ = [
     "DifferentialPrivacySettings",
     "Distribution",
     "EvaluationReportData",
+    "GroupSelection",
+    "GroupSimilarity",
     "MembershipInferenceMetric",
     "Metric",
     "MetricScore",
@@ -42,10 +50,16 @@ __all__ = [
     "REPORT_DATA_SCHEMA_VERSION",
     "ReportDataModel",
     "Scores",
+    "SkippedComparison",
     "TextSemanticMetric",
     "TextStructureDistributions",
     "TextStructureMetric",
-    "TimeSeriesMetric",
+    "WindowAttack",
+    "WindowCounts",
+    "WindowDistances",
+    "WindowGroupSummary",
+    "WindowMembershipInferenceDetails",
+    "WindowMembershipInferenceMetric",
 ]
 
 
@@ -323,8 +337,10 @@ class ClosestMatch(ReportDataModel):
 class WindowDistances(ReportDataModel):
     """Euclidean distance from each window to its nearest synthetic window, after standardizing each value."""
 
-    training: list[float] = Field(description="Distance of each training window.")
-    holdout: list[float] | None = Field(description="Distance of each holdout window, or null without the attack.")
+    training: list[float | None] = Field(description="Distance of each training window, or null where undefined.")
+    holdout: list[float | None] | None = Field(
+        description="Distance of each holdout window, null where undefined, or null without the attack."
+    )
 
 
 class WindowAttack(ReportDataModel):
