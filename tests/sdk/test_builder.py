@@ -498,3 +498,20 @@ class TestSaveResults:
         assert nss._workdir is not None
         assert nss._workdir.evaluation_report.exists()
         assert not nss._workdir.evaluation_report_data.exists()
+
+    def test_failure_to_remove_stale_report_data_fails_save(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_data = None
+        assert nss._workdir is not None
+        data_path = nss._workdir.evaluation_report_data
+        original_unlink = Path.unlink
+
+        def unlink(path: Path, missing_ok: bool = False) -> None:
+            if path == data_path:
+                raise PermissionError("read-only")
+            original_unlink(path, missing_ok=missing_ok)
+
+        monkeypatch.setattr(Path, "unlink", unlink)
+
+        with pytest.raises(PermissionError, match="read-only"):
+            nss.save_results()
