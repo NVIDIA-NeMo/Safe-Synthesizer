@@ -13,9 +13,10 @@ from __future__ import annotations
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
-from ..config.data import DEFAULT_HOLDOUT, MIN_HOLDOUT
+from ..config.data import MIN_HOLDOUT
 from ..config.parameters import SafeSynthesizerParameters
 from ..data_processing.validation import check_groupby_column
+from ..errors import ParameterError
 from ..observability import get_logger
 
 MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS = 200
@@ -60,18 +61,17 @@ def naive_train_test_split(
 
 
 def grouped_train_test_split(
-    input_df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
+    input_df: pd.DataFrame, test_size: float, group_by: str, random_state: int | None = None
 ) -> DataFrameOptionalTuple:
     """Split the input dataframe so that all rows sharing a group stay in the same fold.
 
-    Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
-    whose test-set size is closest to the requested ``test_size``.  If
-    ``test_size`` exceeds the number of groups, equals 0, or equals 1, it
-    falls back to ``DEFAULT_HOLDOUT``.
+    ``GroupShuffleSplit`` holds out ``test_size`` of the groups, rounded up to
+    whole groups. Of 20 candidate splits, the one whose row count is closest to
+    ``test_size`` of the rows is kept, which matters when groups differ in size.
 
     Args:
         input_df: Input dataframe to split.
-        test_size: Desired number of test rows (int) or fraction (float).
+        test_size: Fraction of groups to hold out, in ``(0, 1)``.
         group_by: Column name whose values define the groups.
         random_state: Seed for reproducibility.
 
@@ -80,23 +80,18 @@ def grouped_train_test_split(
         grouped split could be produced.
 
     Raises:
-        ParameterError: If the ``group_by`` column is not present in ``df``.
+        ParameterError: If ``test_size`` is not in ``(0, 1)`` or the
+            ``group_by`` column is not present in ``df``.
         DataError: If the ``group_by`` column contains missing values.
     """
+    if not 0 < test_size < 1:
+        raise ParameterError(f"Grouped test_size must be a fraction in (0, 1), got {test_size}.")
     check_groupby_column(input_df, group_by)
 
-    if test_size > input_df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
-        logger.info(
-            f"test_size ({test_size}) is greater than number of groups ({input_df.groupby(group_by).ngroups}) or equals to 0 or 1. Proceeding with default test_size ({DEFAULT_HOLDOUT})."
-        )
-        test_size = DEFAULT_HOLDOUT
     splitter = GroupShuffleSplit(test_size=test_size, n_splits=20, random_state=random_state)
     split = splitter.split(input_df, groups=input_df[group_by])
     training_df, test_df = pd.DataFrame(), pd.DataFrame()
-    if test_size > 1:
-        aim_num_records = test_size
-    else:
-        aim_num_records = round(len(input_df) * test_size)
+    aim_num_records = round(len(input_df) * test_size)
     for train_idx, test_idx in split:
         if len(training_df) == 0:
             training_df = input_df.iloc[train_idx]
@@ -117,29 +112,25 @@ class Holdout:
     to either ``naive_train_test_split`` or ``grouped_train_test_split``
     depending on whether a ``group_training_examples_by`` column is set.
 
-    The holdout size is resolved as follows:
-
-      - If ``holdout < 1.0``, it is treated as a fraction of the input rows.
-      - If ``holdout >= 1.0``, it is treated as an absolute row count.
-      - The result is clamped to ``max_holdout`` and must be at least
-        ``MIN_HOLDOUT`` rows.
+    ``holdout`` is a fraction in ``[0, 1)``. Ungrouped data holds out that
+    fraction of the rows, rounded down. Grouped data holds out that fraction of
+    the groups, rounded up to whole groups. Either way the holdout must cover at
+    least ``MIN_HOLDOUT`` rows.
 
     Args:
-        config: Pipeline parameters providing ``holdout``, ``max_holdout``,
+        config: Pipeline parameters providing ``holdout``,
             ``group_training_examples_by``, and ``random_state``.
     """
 
     def __init__(self, config: SafeSynthesizerParameters):
         self.holdout = config.get("holdout")
-        self.max_holdout = config.get("max_holdout")
         self.group_by = config.get("group_training_examples_by")
         self.random_state = config.get("random_state")
 
     def train_test_split(self, input_df: pd.DataFrame) -> DataFrameOptionalTuple:
         """Split the input dataframe into training and holdout test sets.
 
-        Returns the full dataframe with no test set when holdout is disabled
-        (``holdout == 0`` or ``max_holdout == 0``).
+        Returns the full dataframe with no test set when ``holdout`` is 0.
 
         Args:
             input_df: The full input dataframe to split.
@@ -156,7 +147,8 @@ class Holdout:
             DataError: If the configured ``group_by`` column contains missing
                 values.
         """
-        if not self.holdout or not self.max_holdout:
+        holdout_val = self.holdout
+        if not holdout_val:
             return input_df, None
 
         # Check if the input dataset is large enough to hold out
@@ -165,26 +157,10 @@ class Holdout:
                 INPUT_DATA_TOO_SMALL_ERROR,
             )
 
-        holdout_val = self.holdout
-        max_holdout_val = self.max_holdout
-        if holdout_val is None or max_holdout_val is None:
-            return input_df, None
-
         # Narrow from Unknown (Pydantic descriptor) so ty can check arithmetic.
-        holdout: float | int = holdout_val
-        max_holdout: float | int = max_holdout_val
-
-        # Find the number of records to hold out
-        if holdout < 1.0:
-            final_holdout = len(input_df) * holdout
-        else:
-            final_holdout = holdout
-
-        # Clip the number of records to hold out as needed. We always want an int at this point, do a cast.
-        final_holdout = int(min(final_holdout, max_holdout))
-
-        # Check that the holdout is at least 10 records
-        if final_holdout < MIN_HOLDOUT:
+        holdout: float = holdout_val
+        holdout_rows = int(len(input_df) * holdout)
+        if holdout_rows < MIN_HOLDOUT:
             raise ValueError(
                 HOLDOUT_TOO_SMALL_ERROR,
             )
@@ -194,14 +170,14 @@ class Holdout:
         if self.group_by:
             training_df, test_df = grouped_train_test_split(
                 input_df=input_df,
-                test_size=final_holdout,
+                test_size=holdout,
                 group_by=self.group_by,
                 random_state=self.random_state,
             )
         else:
             training_df, test_df = naive_train_test_split(
                 input_df=input_df,
-                test_size=final_holdout,
+                test_size=holdout_rows,
                 random_state=self.random_state,
             )
 
