@@ -153,7 +153,9 @@ class PIIReplayEntry(ReportDataModel):
 class PIIReplayMetric(Metric):
     """How many training PII values reappear in the synthetic data."""
 
-    enabled: bool = Field(description="Whether `evaluation.pii_replay_enabled` was on.")
+    enabled: bool | None = Field(
+        description="Whether `evaluation.pii_replay_enabled` was on, or null when the evaluation had no configuration."
+    )
     training_total_records: int = Field(description="Training rows checked.")
     synthetic_total_records: int = Field(description="Synthetic rows checked.")
     entries: list[PIIReplayEntry] = Field(description="Replay counts per column and PII type.")

@@ -260,7 +260,7 @@ def _attribute_inference_metric(component: AttributeInferenceProtection) -> dict
 def _pii_replay_metric(component: PIIReplay, config: SafeSynthesizerParameters | None) -> dict[str, Any]:
     return {
         **_metric(component),
-        "enabled": bool(config is not None and config.get("pii_replay_enabled")),
+        "enabled": bool(config.get("pii_replay_enabled")) if config is not None else None,
         "training_total_records": component.training_total_records,
         "synthetic_total_records": component.synthetic_total_records,
         "entries": [datum.model_dump() for datum in component.pii_replay_data],

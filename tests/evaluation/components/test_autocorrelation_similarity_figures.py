@@ -62,6 +62,15 @@ def test_summary_figure_groups_traces_by_column_with_lowest_scoring_column_visib
     assert not figure.layout.updatemenus
 
 
+def test_summary_figure_draws_a_column_whose_synthetic_sequences_are_all_constant():
+    profiles = [_profile("a", "flat", [0.9, 0.8], [None, None], 0.0)]
+
+    figure = generate_autocorrelation_summary_figure(profiles)
+
+    synthetic_median = next(trace for trace in figure.data if trace.name == "Synthetic median ACF")
+    assert list(synthetic_median.y) == []
+
+
 def test_lag_error_figure_averages_only_paired_finite_lags():
     figure = generate_autocorrelation_lag_error_figure(_SUMMARY_PROFILES)
 

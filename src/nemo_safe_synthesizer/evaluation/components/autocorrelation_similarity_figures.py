@@ -279,5 +279,8 @@ def _profile_quantiles(rows: Sequence[Sequence[float | None]]) -> tuple[np.ndarr
     matrix = _profile_matrix(rows)
     valid = np.any(np.isfinite(matrix), axis=0)
     lags = np.arange(1, matrix.shape[1] + 1)[valid]
+    if not valid.any():
+        empty = np.array([], dtype=float)
+        return lags, empty, empty, empty
     lower, median, upper = np.nanpercentile(matrix[:, valid], [25, 50, 75], axis=0)
     return lags, lower, median, upper

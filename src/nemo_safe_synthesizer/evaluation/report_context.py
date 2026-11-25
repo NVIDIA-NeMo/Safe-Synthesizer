@@ -304,7 +304,7 @@ def _pii_replay_note(replay: PIIReplayMetric | None) -> str | None:
         if replay.entries:
             return f"Only the columns in evaluation.pii_replay_columns were checked: {reason}."
         return f"PII replay was not run: {reason}."
-    if not replay.enabled:
+    if replay.enabled is False:
         return "PII replay was turned off with evaluation.pii_replay_enabled."
     return None
 
