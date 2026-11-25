@@ -4,14 +4,12 @@
 """Build ``EvaluationReportData`` from a completed evaluation report.
 
 Each value is copied from an explicit list of fields, so values a component keeps for computation
-never reach the export. Charts are the components' ``report_figures``, the same objects the HTML
-report embeds.
+never reach the export. Chart values come from the same helpers the HTML report charts them with.
 """
 
 from __future__ import annotations
 
 import datetime
-import json
 import math
 import os
 from collections.abc import Callable, Mapping
@@ -21,15 +19,15 @@ from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 from pydantic import BaseModel
 
 from ..artifacts.base.fields import FieldFeatures
 from ..config.evaluation_report_data import REPORT_DATA_SCHEMA_VERSION, EvaluationReportData
 from ..package_info import __version__
 from ..pii_replacer.transform_result import ColumnStatistics
+from .components import multi_modal_figures as figures
 from .components.attribute_inference_protection import AttributeInferenceProtection
-from .components.column_distribution import ColumnDistribution
+from .components.column_distribution import ColumnDistribution, ColumnDistributionPlotRow
 from .components.component import Component
 from .components.correlation import Correlation
 from .components.data_privacy_score import DataPrivacyScore
@@ -40,8 +38,9 @@ from .components.pii_replay import PIIReplay
 from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
+from .data_model.evaluation_datasets import EvaluationDatasets
 from .data_model.evaluation_report import EvaluationReport
-from .data_model.evaluation_score import EvaluationScore
+from .data_model.evaluation_score import EvaluationScore, PrivacyGrade
 from .reports.multimodal.multimodal_report import MultimodalReport
 
 _ComponentT = TypeVar("_ComponentT", bound=Component)
@@ -57,6 +56,7 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
     config = report.config
     dp_enabled = bool(config is not None and config.get("dp_enabled"))
     distribution = _find(report, ColumnDistribution)
+    datasets = report.evaluation_datasets
     payload = {
         "schema_version": REPORT_DATA_SCHEMA_VERSION,
         "library_version": __version__,
@@ -66,19 +66,21 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
             "data_privacy": _maybe(_component_score, _find(report, DataPrivacyScore)),
         },
         "metrics": {
-            "column_correlation_stability": _maybe(_metric, _find(report, Correlation)),
-            "deep_structure_stability": _maybe(_metric, _find(report, DeepStructure)),
+            "column_correlation_stability": _maybe(_correlation_metric, _find(report, Correlation)),
+            "deep_structure_stability": _maybe(_deep_structure_metric, _find(report, DeepStructure)),
             "column_distribution_stability": _maybe(_metric, distribution),
-            "text_semantic_similarity": _maybe(_metric, _find(report, TextSemanticSimilarity)),
-            "text_structure_similarity": _maybe(_metric, _find(report, TextStructureSimilarity)),
+            "text_semantic_similarity": _maybe(_text_semantic_metric, _find(report, TextSemanticSimilarity)),
+            "text_structure_similarity": _maybe(_text_structure_metric, _find(report, TextStructureSimilarity)),
             "membership_inference_protection": _maybe(
                 _membership_inference_metric, _find(report, MembershipInferenceProtection)
             ),
-            "attribute_inference_protection": _maybe(_metric, _find(report, AttributeInferenceProtection)),
+            "attribute_inference_protection": _maybe(
+                _attribute_inference_metric, _find(report, AttributeInferenceProtection)
+            ),
             "pii_replay": _maybe(_pii_replay_metric, _find(report, PIIReplay)),
         },
         "dataset": _maybe(_dataset_counts, _find(report, DatasetStatistics)),
-        "columns": _columns(distribution) if distribution is not None else [],
+        "columns": _columns(distribution, datasets) if distribution is not None else [],
         "differential_privacy": {
             "enabled": dp_enabled,
             "epsilon": config.get("epsilon") if dp_enabled and config is not None else None,
@@ -86,15 +88,6 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
         },
     }
     return EvaluationReportData.model_validate(to_json_safe(payload))
-
-
-def figure_to_json(figure: go.Figure) -> dict[str, Any]:
-    """Serialize a figure with Plotly's encoder, without the theme template frontends supply themselves."""
-    data: dict[str, Any] = json.loads(figure.to_json(validate=False))
-    layout = data.get("layout")
-    if isinstance(layout, dict):
-        layout.pop("template", None)
-    return data
 
 
 def to_json_safe(value: Any) -> Any:
@@ -155,12 +148,96 @@ def _component_score(component: Component) -> dict[str, Any]:
 
 
 def _metric(component: Component) -> dict[str, Any]:
-    figures = [{"title": title, "figure": figure_to_json(figure)} for title, figure in component.report_figures.items()]
-    return {"score": _score(component.score), "figures": figures}
+    return {"score": _score(component.score)}
+
+
+def _points(df: pd.DataFrame) -> dict[str, Any]:
+    return {"x": df.iloc[:, 0].tolist(), "y": df.iloc[:, 1].tolist()}
+
+
+def _projection(training: pd.DataFrame, synthetic: pd.DataFrame) -> dict[str, Any] | None:
+    if training.shape[1] < 2 or synthetic.shape[1] < 2:
+        return None
+    return {"training": _points(training), "synthetic": _points(synthetic)}
+
+
+def _correlation_metric(component: Correlation) -> dict[str, Any]:
+    matrices = [
+        m
+        for m in (component.training_correlation, component.synthetic_correlation, component.correlation_difference)
+        if m is not None
+    ]
+    correlations = None
+    if len(matrices) == 3 and not any(m.empty for m in matrices):
+        columns = list(matrices[0].columns)
+        training, synthetic, difference = (m.reindex(index=columns, columns=columns).to_numpy() for m in matrices)
+        correlations = {"columns": columns, "training": training, "synthetic": synthetic, "difference": difference}
+    return {**_metric(component), "correlations": correlations}
+
+
+def _deep_structure_metric(component: DeepStructure) -> dict[str, Any]:
+    training, synthetic = component.training_pca, component.synthetic_pca
+    projection = None
+    if training is not None and synthetic is not None and Component.is_nonempty([training, synthetic]):
+        projection = _projection(
+            figures.sample_points(training[["pc1", "pc2"]]), figures.sample_points(synthetic[["pc1", "pc2"]])
+        )
+    return {**_metric(component), "projection": projection}
+
+
+def _text_semantic_metric(component: TextSemanticSimilarity) -> dict[str, Any]:
+    projections = {
+        column: _projection(datum.training_pca, datum.synthetic_pca)
+        for column, datum in component.text_semantic_similarity_dict.items()
+    }
+    return {**_metric(component), "projections": {k: v for k, v in projections.items() if v is not None}}
+
+
+_TEXT_STATISTICS = {
+    "sentence_count": "sentence_count",
+    "words_per_sentence": "average_words_per_sentence",
+    "characters_per_word": "average_characters_per_word",
+}
+
+
+def _text_structure_metric(component: TextStructureSimilarity) -> dict[str, Any]:
+    columns = {}
+    for column, training in component.training_statistics.items():
+        training_records = training.per_record_statistics
+        synthetic_records = component.synthetic_statistics[column].per_record_statistics
+        if training_records.empty or synthetic_records.empty:
+            continue
+        columns[column] = {
+            name: figures.numeric_distribution(training_records[key], synthetic_records[key])
+            for name, key in _TEXT_STATISTICS.items()
+        }
+    return {**_metric(component), "columns": columns}
 
 
 def _membership_inference_metric(component: MembershipInferenceProtection) -> dict[str, Any]:
-    return {**_metric(component), "excluded_columns": list(component.excluded_columns)}
+    outcomes = []
+    df = component.attack_sum_df
+    if df is not None and not df.empty:
+        rows = {row["Protection"]: row for row in df.to_dict("records")}
+        for grade in reversed(PrivacyGrade):
+            row = rows.get(grade.value)
+            if grade is PrivacyGrade.UNAVAILABLE or row is None:
+                continue
+            outcomes.append(
+                {"grade": grade.value, "count": row.get("Attack Count"), "percentage": row.get("Attack Percentage")}
+            )
+    return {**_metric(component), "outcomes": outcomes, "excluded_columns": list(component.excluded_columns)}
+
+
+def _attribute_inference_metric(component: AttributeInferenceProtection) -> dict[str, Any]:
+    df = component.col_accuracy_df
+    columns = []
+    if df is not None and not df.empty:
+        columns = [
+            {"column": row["Column"], "risk": row["Risk"], "grade": row["Protection"]}
+            for row in df.sort_values(by="Risk").to_dict("records")
+        ]
+    return {**_metric(component), "columns": columns}
 
 
 def _pii_replay_metric(component: PIIReplay) -> dict[str, Any]:
@@ -211,7 +288,8 @@ def _column_pii(statistics: ColumnStatistics | None) -> dict[str, Any] | None:
     }
 
 
-def _columns(component: ColumnDistribution) -> list[dict[str, Any]]:
+def _columns(component: ColumnDistribution, datasets: EvaluationDatasets) -> list[dict[str, Any]]:
+    tabular_columns = set(datasets.get_tabular_columns())
     return [
         {
             "name": field.name,
@@ -220,6 +298,13 @@ def _columns(component: ColumnDistribution) -> list[dict[str, Any]]:
             "distribution_distance": field.distribution_distance,
             "distribution_stability": (
                 _score(field.distribution_stability) if field.distribution_stability is not None else None
+            ),
+            "distribution": (
+                ColumnDistributionPlotRow.distribution_for_field(
+                    field, datasets.training[field.name], datasets.synthetic[field.name]
+                )
+                if field.name in tabular_columns
+                else None
             ),
             "pii": _column_pii(field.column_statistics),
         }

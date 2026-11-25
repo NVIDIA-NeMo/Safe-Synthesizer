@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 REPORT_DATA_SCHEMA_VERSION = 1
@@ -30,29 +28,112 @@ class MetricScore(ReportDataModel):
     notes: str | None = Field(description="Warning or error about the score, or null.")
 
 
-class MetricFigure(ReportDataModel):
-    """One chart of a metric."""
+class Distribution(ReportDataModel):
+    """Percentage of training and synthetic values in each category or bin."""
 
-    title: str = Field(description="Chart title: the column name for per-column charts, else the metric name.")
-    figure: dict[str, Any] = Field(
+    labels: list[str] = Field(
         description=(
-            "Plotly figure JSON with `data` and `layout`, without `layout.template`. Arrays may be base64 typed "
-            "arrays (`{dtype, bdata}`), which need plotly.js 2.28 or later."
+            "Category names, with categories under 5 training records folded into one 'Other (N categories)' label, "
+            "or bin labels such as '[0, 10)', or '3' for a one-value bin."
         )
     )
+    bin_edges: list[float] | None = Field(
+        description="For numeric values, the increasing bin edges, one more than the labels; null for categories."
+    )
+    training_percent: list[float] = Field(description="Percentage of training values per label.")
+    synthetic_percent: list[float] = Field(description="Percentage of synthetic values per label.")
+
+
+class Points(ReportDataModel):
+    """Points on the first two principal components."""
+
+    x: list[float] = Field(description="First principal component of each point.")
+    y: list[float] = Field(description="Second principal component of each point.")
+
+
+class Projection(ReportDataModel):
+    """Training and synthetic records projected onto the same two principal components."""
+
+    training: Points = Field(description="Training records.")
+    synthetic: Points = Field(description="Synthetic records.")
 
 
 class Metric(ReportDataModel):
-    """A metric's score and charts."""
+    """A metric's score."""
 
     score: MetricScore = Field(description="The metric's score.")
-    figures: list[MetricFigure] = Field(description="Charts in order; empty when the metric has none.")
+
+
+class CorrelationMatrices(ReportDataModel):
+    """Pairwise column correlations, with rows and columns in the order of ``columns``."""
+
+    columns: list[str] = Field(description="Column names.")
+    training: list[list[float | None]] = Field(description="Training correlations, or null where undefined.")
+    synthetic: list[list[float | None]] = Field(description="Synthetic correlations, or null where undefined.")
+    difference: list[list[float | None]] = Field(description="Absolute difference of the two, or null where undefined.")
+
+
+class CorrelationMetric(Metric):
+    """Column correlation stability, with the correlations it compares."""
+
+    correlations: CorrelationMatrices | None = Field(description="Correlation matrices, or null if not computed.")
+
+
+class DeepStructureMetric(Metric):
+    """Deep structure stability, with the principal component projection it compares."""
+
+    projection: Projection | None = Field(
+        description="Projected records, sampled to at most 5000 per dataset, or null if not computed."
+    )
+
+
+class TextSemanticMetric(Metric):
+    """Text semantic similarity, with each text column's embeddings projected onto two principal components."""
+
+    projections: dict[str, Projection] = Field(description="Projected embeddings by text column.")
+
+
+class TextStructureDistributions(ReportDataModel):
+    """Distributions of per-record text statistics in one column."""
+
+    sentence_count: Distribution | None = Field(description="Sentences per record.")
+    words_per_sentence: Distribution | None = Field(description="Average words per sentence.")
+    characters_per_word: Distribution | None = Field(description="Average characters per word.")
+
+
+class TextStructureMetric(Metric):
+    """Text structure similarity, with the statistics it compares."""
+
+    columns: dict[str, TextStructureDistributions] = Field(description="Text statistics by text column.")
+
+
+class AttackOutcome(ReportDataModel):
+    """How many membership inference attack evaluations got one grade."""
+
+    grade: str = Field(description="Protection grade, such as 'Poor' or 'Excellent'.")
+    count: int | None = Field(description="Attack evaluations with this grade, or null if only percentages exist.")
+    percentage: float | None = Field(description="Share of attack evaluations with this grade.")
 
 
 class MembershipInferenceMetric(Metric):
-    """Membership inference protection, with the columns left out of the attack."""
+    """Membership inference protection, with its attack outcomes and the columns left out of the attack."""
 
+    outcomes: list[AttackOutcome] = Field(description="Outcomes from the best grade to the worst.")
     excluded_columns: list[str] = Field(description="Columns left out via `evaluation.mia_excluded_columns`.")
+
+
+class ColumnRisk(ReportDataModel):
+    """Attribute inference risk of one column."""
+
+    column: str = Field(description="Column name.")
+    risk: float | None = Field(description="Protection from 0 to 10; higher is better.")
+    grade: str = Field(description="Protection grade.")
+
+
+class AttributeInferenceMetric(Metric):
+    """Attribute inference protection, with the protection of each column."""
+
+    columns: list[ColumnRisk] = Field(description="Columns from least to most protected.")
 
 
 class PIIReplayEntry(ReportDataModel):
@@ -82,17 +163,19 @@ class Metrics(ReportDataModel):
     could not run is present with an 'Unavailable' grade.
     """
 
-    column_correlation_stability: Metric | None = Field(description="Column Correlation Stability.")
-    deep_structure_stability: Metric | None = Field(description="Deep Structure Stability.")
+    column_correlation_stability: CorrelationMetric | None = Field(description="Column Correlation Stability.")
+    deep_structure_stability: DeepStructureMetric | None = Field(description="Deep Structure Stability.")
     column_distribution_stability: Metric | None = Field(
-        description="Column Distribution Stability, with a chart per tabular column."
+        description="Column Distribution Stability; each column's distributions are in `columns`."
     )
-    text_semantic_similarity: Metric | None = Field(description="Text Semantic Similarity.")
-    text_structure_similarity: Metric | None = Field(description="Text Structure Similarity.")
+    text_semantic_similarity: TextSemanticMetric | None = Field(description="Text Semantic Similarity.")
+    text_structure_similarity: TextStructureMetric | None = Field(description="Text Structure Similarity.")
     membership_inference_protection: MembershipInferenceMetric | None = Field(
         description="Membership Inference Protection."
     )
-    attribute_inference_protection: Metric | None = Field(description="Attribute Inference Protection.")
+    attribute_inference_protection: AttributeInferenceMetric | None = Field(
+        description="Attribute Inference Protection."
+    )
     pii_replay: PIIReplayMetric | None = Field(description="PII Replay.")
 
 
@@ -145,6 +228,9 @@ class ColumnResult(ReportDataModel):
     synthetic: ColumnProfile = Field(description="Synthetic column statistics.")
     distribution_distance: float | None = Field(description="Jensen-Shannon distance between the distributions.")
     distribution_stability: MetricScore | None = Field(description="Distribution stability of the column.")
+    distribution: Distribution | None = Field(
+        description="Training and synthetic distributions, or null for columns that are not charted, such as text."
+    )
     pii: ColumnPIIStatistics | None = Field(description="PII statistics, or null without PII detection.")
 
 

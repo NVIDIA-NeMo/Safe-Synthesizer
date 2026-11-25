@@ -1180,7 +1180,7 @@ Key outputs:
 
 - `generate/synthetic_data.csv`: the synthetic dataset
 - `generate/evaluation_report.html`: quality and privacy report
-- `generate/evaluation_report_data.json`: scores, per-metric results and charts, and column statistics as JSON, for presenting them elsewhere
+- `generate/evaluation_report_data.json`: scores, per-metric results and chart values, and column statistics as JSON, for presenting them elsewhere
 - `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
 - `train/safe-synthesizer-config.json`: resolved config snapshot

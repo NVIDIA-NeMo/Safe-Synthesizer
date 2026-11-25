@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import plotly.graph_objects as go
 from numpy.linalg import norm
 from pydantic import BaseModel, ConfigDict, Field
 from scipy.stats import ks_2samp
@@ -99,22 +98,25 @@ class TextSemanticSimilarity(Component):
     )
 
     @cached_property
-    def report_figures(self) -> dict[str, go.Figure]:
-        """Per-column PCA scatter plots of the text embeddings, keyed by column name."""
-        maybe_figs = {
-            col: figures.generate_text_semantic_similarity_figures(
-                datum.training_pca.iloc[:, :2], datum.synthetic_pca.iloc[:, :2]
-            )
-            for col, datum in self.text_semantic_similarity_dict.items()
-        }
-        return {col: fig for col, fig in maybe_figs.items() if fig is not None}
-
-    @cached_property
     def jinja_context(self) -> dict:
         """Template context with per-column PCA scatter figures."""
         ctx = super().jinja_context
         ctx["anchor_link"] = "#semantic-similarity"
-        ctx["figures"] = [{"title": col, "html": self.figure_html(fig)} for col, fig in self.report_figures.items()]
+        ctx["figures"] = []
+        if self.text_semantic_similarity_dict:
+            maybe_figs = {
+                col: figures.generate_text_semantic_similarity_figures(
+                    self.text_semantic_similarity_dict[col].training_pca.iloc[:, :2],
+                    self.text_semantic_similarity_dict[col].synthetic_pca.iloc[:, :2],
+                )
+                for col in self.text_semantic_similarity_dict.keys()
+            }
+            ctx["figures"] = [
+                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
+                for col, fig in maybe_figs.items()
+                if fig is not None
+            ]
+
         return ctx
 
     @staticmethod

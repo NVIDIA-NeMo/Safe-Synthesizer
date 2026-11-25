@@ -8,7 +8,6 @@ from functools import cached_property
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...artifacts.analyzers.field_features import FieldType
@@ -73,22 +72,24 @@ class TextStructureSimilarity(Component):
     )
 
     @cached_property
-    def report_figures(self) -> dict[str, go.Figure]:
-        """Per-column sentence, word, and character count histograms, keyed by column name."""
-        maybe_figs = {
-            col: figures.generate_text_structure_similarity_figures(
-                self.training_statistics[col], self.synthetic_statistics[col]
-            )
-            for col in self.training_statistics
-        }
-        return {col: fig for col, fig in maybe_figs.items() if fig is not None}
-
-    @cached_property
     def jinja_context(self) -> dict:
         """Template context with per-column text structure histogram figures."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-similarity"
-        d["figures"] = [{"title": col, "html": self.figure_html(fig)} for col, fig in self.report_figures.items()]
+        d["figures"] = []
+        if self.training_statistics:
+            maybe_figs = {
+                col: figures.generate_text_structure_similarity_figures(
+                    self.training_statistics[col], self.synthetic_statistics[col]
+                )
+                for col in self.training_statistics
+            }
+            d["figures"] = [
+                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
+                for col, fig in maybe_figs.items()
+                if fig is not None
+            ]
+
         return d
 
     @staticmethod

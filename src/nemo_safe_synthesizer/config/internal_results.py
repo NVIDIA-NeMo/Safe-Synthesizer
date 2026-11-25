@@ -31,7 +31,7 @@ class SafeSynthesizerResults(NSSBaseModel):
     evaluation_report_data: EvaluationReportData | None = Field(
         default=None,
         description=(
-            "Evaluation scores, per-metric results and charts, and column statistics as structured data, or "
+            "Evaluation scores, per-metric results and chart values, and column statistics as structured data, or "
             "``None`` if evaluation was not run or the data could not be built."
         ),
     )

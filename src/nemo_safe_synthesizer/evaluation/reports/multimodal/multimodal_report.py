@@ -18,7 +18,10 @@ from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
-from ....evaluation.components.column_distribution import ColumnDistribution
+from ....evaluation.components.column_distribution import (
+    ColumnDistribution,
+    ColumnDistributionPlotRow,
+)
 from ....evaluation.components.component import Component
 from ....evaluation.components.correlation import (
     Correlation,
@@ -235,6 +238,12 @@ class MultimodalReport(EvaluationReport):
                 replay_note = _pii_replay_note(config, replay)
                 pii.update(groups=groups, replay_note=replay_note, headline=_pii_headline(rows, groups, replay_note))
             ctx["pii_replacement"] = pii
+
+            # Numeric per-column figures require access to the original data, a little hacky.
+            if "column_distribution_stability" in ctx:
+                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_datasets(
+                    self.evaluation_datasets
+                )
 
             time_series_components = [c for c in self.components if isinstance(c, TimeSeriesComponent)]
             ctx["time_series_cards"] = [

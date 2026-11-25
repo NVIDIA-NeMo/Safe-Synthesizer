@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from numpy import cos, pi, sin
 from plotly.subplots import make_subplots
 
+from ...config.evaluation_report_data import Distribution
 from ...evaluation.data_model.evaluation_score import (
     EvaluationScore,
     PrivacyGrade,
@@ -248,6 +249,56 @@ def _bin_labels(edges: np.ndarray) -> list[str]:
     return [f"[{formatted[i]}, {formatted[i + 1]})" for i in range(len(edges) - 1)]
 
 
+def _bin_percent(values: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """Return the percentage of ``values`` in each bin, rounded to 4 decimals."""
+    counts, _ = np.histogram(values, bins=edges)
+    percent = counts / values.size * 100 if values.size else np.zeros(len(counts))
+    return np.round(percent, 4)
+
+
+def numeric_distribution(training: pd.Series | np.ndarray, synthetic: pd.Series | np.ndarray) -> Distribution | None:
+    """Return binned training and synthetic percentages, as charted, or ``None`` without finite training values."""
+    training_values = _finite_values(training)
+    synthetic_values = _finite_values(synthetic)
+    if training_values.size == 0:
+        return None
+    edges = safe_bin_edges(training_values, synthetic_values)
+    return Distribution(
+        labels=_bin_labels(edges),
+        bin_edges=edges.tolist(),
+        training_percent=_bin_percent(training_values, edges).tolist(),
+        synthetic_percent=_bin_percent(synthetic_values, edges).tolist(),
+    )
+
+
+def categorical_distribution(
+    training_distribution: dict, synthetic_distribution: dict, training_count: int
+) -> Distribution:
+    """Return category percentages, as charted, with rare training categories folded into one "Other" label.
+
+    Categories held by fewer than ``_MIN_CATEGORY_COUNT`` training records are folded on both sides, so rare
+    training values are not named.
+    """
+    rare = {
+        category
+        for category, percent in training_distribution.items()
+        if round(percent * training_count / 100) < _MIN_CATEGORY_COUNT
+    }
+    labels = sorted((set(training_distribution) | set(synthetic_distribution)) - rare)
+    training_values = [training_distribution.get(label, 0.0) for label in labels]
+    synthetic_values = [synthetic_distribution.get(label, 0.0) for label in labels]
+    if rare:
+        labels.append(f"Other ({len(rare)} categories)")
+        training_values.append(sum(training_distribution[category] for category in rare))
+        synthetic_values.append(sum(synthetic_distribution.get(category, 0.0) for category in rare))
+    return Distribution(
+        labels=labels,
+        bin_edges=None,
+        training_percent=training_values,
+        synthetic_percent=synthetic_values,
+    )
+
+
 def binned_percent_bars(training: np.ndarray, synthetic: np.ndarray, edges: np.ndarray) -> list[go.Bar]:
     """Return training and synthetic percentage bars over shared bins.
 
@@ -271,12 +322,10 @@ def binned_percent_bars(training: np.ndarray, synthetic: np.ndarray, edges: np.n
         (training, "Training", _REPORT_PALETTE[0]),
         (synthetic, "Synthetic", _REPORT_PALETTE[1]),
     ):
-        counts, _ = np.histogram(values, bins=edges)
-        percent = counts / values.size * 100 if values.size else np.zeros(len(counts))
         traces.append(
             go.Bar(
                 x=centers,
-                y=np.round(percent, 4),
+                y=_bin_percent(values, edges),
                 width=widths,
                 name=name,
                 meta="binned",
@@ -615,8 +664,15 @@ def scatter_plot(x: pd.Series, y: pd.Series, color: str = _REPORT_PALETTE[0], ma
     return fig
 
 
+def sample_points(df: pd.DataFrame, maximum_points: int = 5000) -> pd.DataFrame:
+    """Return at most ``maximum_points`` rows of ``df``, the same rows ``scatter_plot`` keeps."""
+    return df.sample(n=maximum_points, random_state=777) if len(df) > maximum_points else df
+
+
 def structure_stability_figure(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> go.Figure:
     """Generate side-by-side PCA scatter plots for training and synthetic data."""
+    training_df = sample_points(training_df)
+    synthetic_df = sample_points(synthetic_df)
     training_scatter = scatter_plot(x=training_df["pc1"], y=training_df["pc2"])
     synthetic_scatter = scatter_plot(x=synthetic_df["pc1"], y=synthetic_df["pc2"], color=_REPORT_PALETTE[1])
     fig = combine_subplots(
@@ -705,18 +761,10 @@ def bar_chart(training_distribution: dict, synthetic_distribution: dict, trainin
     Returns:
         A Plotly ``Figure`` with grouped bars for training and synthetic.
     """
-    rare = {
-        category
-        for category, percent in training_distribution.items()
-        if round(percent * training_count / 100) < _MIN_CATEGORY_COUNT
-    }
-    columns = sorted((set(training_distribution) | set(synthetic_distribution)) - rare)
-    training_values = [training_distribution.get(column, 0.0) for column in columns]
-    synthetic_values = [synthetic_distribution.get(column, 0.0) for column in columns]
-    if rare:
-        columns.append(f"Other ({len(rare)} categories)")
-        training_values.append(sum(training_distribution[category] for category in rare))
-        synthetic_values.append(sum(synthetic_distribution.get(category, 0.0) for category in rare))
+    distribution = categorical_distribution(training_distribution, synthetic_distribution, training_count)
+    columns = distribution.labels
+    training_values = distribution.training_percent
+    synthetic_values = distribution.synthetic_percent
 
     fig = go.Figure()
     fig.add_trace(

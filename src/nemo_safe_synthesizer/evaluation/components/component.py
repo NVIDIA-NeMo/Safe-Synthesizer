@@ -8,7 +8,6 @@ from functools import cached_property
 from typing import Any
 
 import pandas as pd
-import plotly.graph_objects as go
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -21,9 +20,8 @@ class Component(ABC, BaseModel):
     """Abstract base for all evaluation components.
 
     Each component computes one quality or privacy metric from an
-    ``EvaluationDatasets``, exposes its charts as ``report_figures``, and
-    a ``jinja_context`` property for HTML report rendering that embeds
-    those same figures.
+    ``EvaluationDatasets`` and exposes a ``jinja_context`` property
+    for HTML report rendering.
 
     Subclasses should override ``from_evaluation_datasets`` to perform
     their metric-specific computation.
@@ -54,19 +52,6 @@ class Component(ABC, BaseModel):
     def get_json(self) -> str:
         """Serialize the component score to a JSON string."""
         return self.score.model_dump_json()
-
-    @cached_property
-    def report_figures(self) -> dict[str, go.Figure]:
-        """The component's report charts by title, built once and shared by the HTML report and its data export.
-
-        Score gauges are not included. Callers must not modify the returned figures.
-        """
-        return {}
-
-    @staticmethod
-    def figure_html(figure: go.Figure) -> str:
-        """Render a figure as the ``<div>`` the HTML report embeds, without the Plotly.js bundle."""
-        return figure.to_html(full_html=False, include_plotlyjs=False)
 
     @cached_property
     def jinja_context(self) -> dict[str, Any]:

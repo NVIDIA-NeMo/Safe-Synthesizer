@@ -16,7 +16,6 @@ from typing import cast
 import category_encoders as ce
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import torch
 from pandas.api.types import is_float_dtype
 from pydantic import ConfigDict, Field
@@ -56,19 +55,16 @@ class AttributeInferenceProtection(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def report_figures(self) -> dict[str, go.Figure]:
-        """The per-column attribute-inference risk bar chart, keyed by the component name."""
-        if self.col_accuracy_df is None or self.col_accuracy_df.empty:
-            return {}
-        return {self.name: figures.generate_aia_figure(self.col_accuracy_df)}
-
-    @cached_property
     def jinja_context(self) -> dict[str, str]:
         """Template context with the attribute-inference bar chart figure."""
         d = super().jinja_context
         d["anchor_link"] = "#aia"
-        figure = self.report_figures.get(self.name)
-        d["figure"] = self.figure_html(figure) if figure is not None else None
+        if self.col_accuracy_df is not None and not self.col_accuracy_df.empty:
+            d["figure"] = figures.generate_aia_figure(self.col_accuracy_df).to_html(
+                full_html=False, include_plotlyjs=False
+            )
+        else:
+            d["figure"] = None
         return d
 
     @staticmethod
