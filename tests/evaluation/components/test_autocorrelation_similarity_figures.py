@@ -35,8 +35,6 @@ def _profile(
         reason=None,
         training_acf=training_acf,
         synthetic_acf=synthetic_acf,
-        training_pair_support=[10] * lags,
-        synthetic_pair_support=[10] * lags,
     )
 
 
