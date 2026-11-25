@@ -35,7 +35,7 @@
                 <span class="nav-icon">{{ icon("lock") }}</span>Data Privacy
             </a>
             {% endif %}
-            {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
+            {% if ctx.column_distribution_stability.columns %}
             <a href="#training-columns" data-report-nav="training-columns">
                 <span class="nav-icon">{{ icon("columns") }}</span>Training Data
             </a>
@@ -53,7 +53,7 @@
             </p>
             {% if ctx.job_id %}<div class="job-id"><span>Job ID</span>{{ ctx.job_id }}</div>{% endif %}
             {% if ctx.with_synthesizer %}{% include "jinja/components/score_overview.j2" %}{% endif %}
-            {% include "jinja/components/dataset_statistics.j2" %}
+            {% if ctx.dataset_statistics %}{% include "jinja/components/dataset_statistics.j2" %}{% endif %}
         </section>
 
         {% if ctx.with_synthesizer %}
@@ -258,7 +258,7 @@
         </section>
         {% endif %}
 
-        {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
+        {% if ctx.column_distribution_stability.columns %}
         <section class="report-view" id="training-columns" data-report-view="training-columns">
             {% include "jinja/components/training_columns.j2" %}
         </section>

@@ -503,7 +503,7 @@ Shared pieces every time-series metric uses:
 ### Adding a time-series metric
 
 1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
-2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, including `report_section` when the card belongs under Data Privacy, and build its figures in `jinja_context` with `figure_rows`.
+2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, including `report_section` when the card belongs under Data Privacy, set `metric_key`, add the metric to `Metrics` in `config/evaluation_report_data.py` with a `None` default so data saved before it existed still loads, export it from `build_report_data` in `evaluation/report_data.py`, and build its figures in `report_context` with `figure_rows` from the exported `details`.
 3. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
 4. Add the component class to `TIME_SERIES_COMPONENTS`.
 5. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.

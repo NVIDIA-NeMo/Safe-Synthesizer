@@ -4,7 +4,7 @@
 """Jinja2 report rendering for evaluation results.
 
 Loads HTML/Jinja templates from the ``assets/`` directory and renders
-an ``EvaluationReport`` into a self-contained HTML file.
+``EvaluationReportData`` into a self-contained HTML file.
 """
 
 from __future__ import annotations
@@ -16,8 +16,11 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FunctionLoader, select_autoescape
 
+from ..config.evaluation_report_data import EvaluationReportData
 from ..observability import get_logger
-from .data_model.evaluation_report import EvaluationReport
+from .report_context import report_context
+from .report_data import build_report_data
+from .reports.multimodal.multimodal_report import MultimodalReport
 
 if TYPE_CHECKING:
     from ..cli.artifact_structure import Workdir
@@ -56,7 +59,7 @@ def _get_template(name: str) -> str | None:
 
 
 def maybe_render_report(
-    evaluation_report: EvaluationReport | None,
+    evaluation_report: MultimodalReport | EvaluationReportData | None,
     template_name: str = "multi_modal_report.j2",
     output_path: str | Path | None = None,
     workdir: "Workdir | None" = None,
@@ -68,7 +71,7 @@ def maybe_render_report(
 
 
 def render_report(
-    evaluation_report: EvaluationReport,
+    evaluation_report: MultimodalReport | EvaluationReportData,
     template_name: str = "multi_modal_report.j2",
     output_path: str | Path | None = None,
     workdir: "Workdir | None" = None,
@@ -76,7 +79,7 @@ def render_report(
     """Render an evaluation report to HTML using a Jinja2 template.
 
     Args:
-        evaluation_report: The completed evaluation report to render.
+        evaluation_report: The report data to render, or a completed report to build it from.
         template_name: Jinja2 template filename relative to ``assets/jinja/reports/``.
         output_path: File path to write the rendered HTML. If ``None`` and
             ``workdir`` is provided, falls back to ``workdir.evaluation_report``.
@@ -98,10 +101,14 @@ def render_report(
 
     output = None
     try:
-        ctx = evaluation_report.jinja_context
-        output = template.render(ctx=ctx)
+        data = (
+            evaluation_report
+            if isinstance(evaluation_report, EvaluationReportData)
+            else build_report_data(evaluation_report)
+        )
+        output = template.render(ctx=report_context(data))
         if output_path:
-            with open(output_path, "w") as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 f.write(output)
         else:
             return output

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from functools import cached_property
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -29,6 +28,7 @@ from ...config.evaluate import (
     WINDOW_GROUP_MIA_MIN_WINDOWS,
     WindowGroupMIAParameters,
 )
+from ...config.evaluation_report_data import TimeSeriesMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
@@ -178,6 +178,7 @@ class WindowGroupMIA(TimeSeriesComponent):
         details: Flag rates, copy diagnostics, window counts, distances, and per-group summaries.
     """
 
+    metric_key: ClassVar[str] = "window_membership_inference_protection"
     card_id: ClassVar[str] = "window-group-mia"
     description: ClassVar[str] = (
         "Protection against attacks that determine whether a sequence was in training data, "
@@ -196,11 +197,11 @@ class WindowGroupMIA(TimeSeriesComponent):
         description="Flag rates, copy diagnostics, window counts, distances, and per-group summaries.",
     )
 
-    @cached_property
-    def jinja_context(self) -> dict[str, Any]:
+    @classmethod
+    def report_context(cls, metric: TimeSeriesMetric) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
-        context = super().jinja_context
-        details = self.details
+        context = super().report_context(metric)
+        details = metric.details
         figures: list[FigureSpec] = []
         if details.get("distances", {}).get("training"):
             figures.append(
@@ -231,7 +232,7 @@ class WindowGroupMIA(TimeSeriesComponent):
                     "window_group_mia_closest_info",
                 )
             )
-        context["figures"] = self.figure_rows(figures)
+        context["figures"] = cls.figure_rows(figures)
         match = details.get("closest_match") or {}
         context["summary_columns"] = details.get("columns", [])
         context["summary_traces_per_column"] = 2 if "training_values" in match else 1

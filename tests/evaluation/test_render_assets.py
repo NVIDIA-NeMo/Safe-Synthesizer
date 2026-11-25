@@ -14,11 +14,13 @@ from nemo_safe_synthesizer.config.evaluate import (
     TimeSeriesEvaluationParameters,
     WindowGroupMIAParameters,
 )
+from nemo_safe_synthesizer.config.evaluation_report_data import TimeSeriesMetric
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.render import _get_template
+from nemo_safe_synthesizer.evaluation.report_data import to_json_safe
 
 
 def _render_template(name: str, **context: object) -> str:
@@ -106,7 +108,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "{{ tooltip | trim }}" in metric_card
     assert "white-space: normal" in stylesheet
     assert "white-space: pre-line" not in stylesheet
-    assert "column.training_field_features.type" in training_columns
+    assert "column.training.type" in training_columns
     assert "column.synthetic_field_features.type" not in training_columns
     assert "columns-table--with-transform" in training_columns
     assert 'class="entity-tags"' in training_columns
@@ -134,17 +136,17 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
         "with_synthesizer": True,
         "with_transform": True,
         "column_distribution_stability": {
-            "evaluation_fields": [
+            "columns": [
                 {
                     "name": "Review Text",
-                    "training_field_features": {
+                    "training": {
                         "unique_count": 1_234,
                         "missing_count": 0,
                         "avg_str_length": 42.25,
                         "type": "text",
                     },
                     "distribution_stability": {"grade": "Very Good"},
-                    "column_statistics": {
+                    "pii": {
                         "detected_entity_counts": {"PERSON": 12},
                         "is_transformed": True,
                         "transform_functions": ["fake_name"],
@@ -171,41 +173,39 @@ def _autocorrelation_context(
 ) -> dict[str, object]:
     columns = [f"column_{index}" for index in range(column_count)]
     return {
-        "autocorrelation_similarity": {
-            "score": {"notes": None},
-            "score_colored_traces": score_colored_traces,
-            "details": {},
-            "evaluated_profile_count": column_count,
-            "evaluated_group_count": 1,
-            "evaluated_column_count": column_count,
-            "constant_synthetic_profile_count": constant_synthetic_profile_count,
-            "pair_score_column_count": pair_score_column_count,
-            "summary_columns": columns,
-            "summary_traces_per_column": 4,
-            "figures": [
-                {
-                    "title": "Typical autocorrelation",
-                    "html": "<div>summary</div>",
-                    "column_select": True,
-                    "tooltip_id": "autocorrelation-typical-info",
-                    "tooltip": "Lines should overlap.",
-                },
-                {
-                    "title": "Pair scores",
-                    "html": "<div>pairs</div>",
-                    "column_select": False,
-                    "tooltip_id": "autocorrelation-pair-scores-info",
-                    "tooltip": "Dots should be near 10.",
-                },
-            ],
-        }
+        "score": {"notes": None},
+        "score_colored_traces": score_colored_traces,
+        "details": {},
+        "evaluated_profile_count": column_count,
+        "evaluated_group_count": 1,
+        "evaluated_column_count": column_count,
+        "constant_synthetic_profile_count": constant_synthetic_profile_count,
+        "pair_score_column_count": pair_score_column_count,
+        "summary_columns": columns,
+        "summary_traces_per_column": 4,
+        "figures": [
+            {
+                "title": "Typical autocorrelation",
+                "html": "<div>summary</div>",
+                "column_select": True,
+                "tooltip_id": "autocorrelation-typical-info",
+                "tooltip": "Lines should overlap.",
+            },
+            {
+                "title": "Pair scores",
+                "html": "<div>pairs</div>",
+                "column_select": False,
+                "tooltip_id": "autocorrelation-pair-scores-info",
+                "tooltip": "Dots should be near 10.",
+            },
+        ],
     }
 
 
 def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(column_count=10, pair_score_column_count=8),
+        card=_autocorrelation_context(column_count=10, pair_score_column_count=8),
     )
 
     assert rendered.count("data-time-series-column-select") == 1
@@ -219,7 +219,7 @@ def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> No
 def test_autocorrelation_renders_info_tooltip_for_each_chart() -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(column_count=2, pair_score_column_count=2),
+        card=_autocorrelation_context(column_count=2, pair_score_column_count=2),
     )
 
     assert rendered.count("data-tooltip-toggle") == 2
@@ -231,7 +231,7 @@ def test_autocorrelation_renders_info_tooltip_for_each_chart() -> None:
 def test_autocorrelation_omits_column_select_and_note_for_single_column() -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(column_count=1, pair_score_column_count=1),
+        card=_autocorrelation_context(column_count=1, pair_score_column_count=1),
     )
 
     assert "data-time-series-column-select" not in rendered
@@ -243,7 +243,7 @@ def test_autocorrelation_omits_column_select_and_note_for_single_column() -> Non
 def test_time_series_chart_grid_marks_score_colored_traces(score_colored_traces: bool) -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(
+        card=_autocorrelation_context(
             column_count=2, pair_score_column_count=2, score_colored_traces=score_colored_traces
         ),
     )
@@ -263,7 +263,7 @@ def test_autocorrelation_notes_constant_synthetic_pairs_missing_from_profile_cha
 ) -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(
+        card=_autocorrelation_context(
             column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=constant_count
         ),
     )
@@ -303,7 +303,7 @@ def test_evaluation_report_uses_reference_icon_geometry() -> None:
     assert 'd="M5 5a3 3 0 0 1 6 0v2h1v7H4V7h1z' in icons  # LockClosed
 
 
-def _window_group_mia_card(*, with_holdout: bool, columns: int) -> tuple[WindowGroupMIA, str]:
+def _window_group_mia_card(*, with_holdout: bool, columns: int) -> tuple[WindowGroupMIA, dict, str]:
     rng = np.random.default_rng(31)
     names = [f"column_{index}" for index in range(columns)]
 
@@ -332,14 +332,14 @@ def _window_group_mia_card(*, with_holdout: bool, columns: int) -> tuple[WindowG
         ),
     )
     component = WindowGroupMIA.from_evaluation_datasets(datasets, config)
-    rendered = _render_template(
-        "jinja/components/window_group_mia.j2", ctx={"window_membership_inference_protection": component.jinja_context}
+    card = WindowGroupMIA.report_context(
+        TimeSeriesMetric.model_validate(to_json_safe({"score": component.score, "details": component.details}))
     )
-    return component, rendered
+    return component, card, _render_template("jinja/components/window_group_mia.j2", card=card)
 
 
 def test_window_group_mia_card_summarizes_the_attack_and_switches_columns() -> None:
-    component, rendered = _window_group_mia_card(with_holdout=True, columns=2)
+    component, card, rendered = _window_group_mia_card(with_holdout=True, columns=2)
     text = " ".join(rendered.split())
     counts = component.details["counts"]
 
@@ -352,13 +352,13 @@ def test_window_group_mia_card_summarizes_the_attack_and_switches_columns() -> N
     assert "of holdout windows are flagged as close to a synthetic window." in text
     assert "100.0% of training windows have an exact copy in the synthetic data." in text
     assert "Holdout Data" in rendered
-    assert rendered.count("data-tooltip-toggle") == len(component.jinja_context["figures"]) == 3
+    assert rendered.count("data-tooltip-toggle") == len(card["figures"]) == 3
     assert rendered.count("data-time-series-column-select") == 1
     assert '<option value="1">column_1</option>' in rendered
 
 
 def test_window_group_mia_copy_diagnostics_card_leaves_out_the_holdout() -> None:
-    component, rendered = _window_group_mia_card(with_holdout=False, columns=1)
+    component, _, rendered = _window_group_mia_card(with_holdout=False, columns=1)
     text = " ".join(rendered.split())
     summary = text[text.index("Compared") : text.index('class="chart-legend"')]
 

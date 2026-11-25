@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from functools import cached_property
-from typing import Any
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -13,15 +11,14 @@ from pydantic import BaseModel, Field
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
-from . import multi_modal_figures as figures
 
 
 class Component(ABC, BaseModel):
     """Abstract base for all evaluation components.
 
     Each component computes one quality or privacy metric from an
-    ``EvaluationDatasets`` and exposes a ``jinja_context`` property
-    for HTML report rendering.
+    ``EvaluationDatasets``. ``build_report_data`` exports its results, and
+    the HTML report is rendered from that export.
 
     Subclasses should override ``from_evaluation_datasets`` to perform
     their metric-specific computation.
@@ -52,19 +49,6 @@ class Component(ABC, BaseModel):
     def get_json(self) -> str:
         """Serialize the component score to a JSON string."""
         return self.score.model_dump_json()
-
-    @cached_property
-    def jinja_context(self) -> dict[str, Any]:
-        """Template context dict for Jinja2 rendering, keyed by name, score, and figure HTML."""
-        # Dict values are typed as "Any" but err on the side of primitives (html strings, not plotly.Figure e.g.).
-        # Prepping up front saves formatting logic inlined in templates.
-        d = dict()
-        d["name"] = self.name
-        d["score"] = self.score.model_dump(mode="json")
-        d["score"]["figure"] = figures.gauge_chart(self.score, min=True).to_html(
-            full_html=False, include_plotlyjs=False
-        )
-        return d
 
     @staticmethod
     def is_nonempty(dfs: None | pd.DataFrame | list[pd.DataFrame | None]) -> bool:

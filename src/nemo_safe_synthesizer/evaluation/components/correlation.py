@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import numpy as np
 import pandas as pd
 from pydantic import ConfigDict, Field
@@ -17,7 +15,6 @@ from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
 from ...observability import get_logger
-from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 
@@ -42,25 +39,6 @@ class Correlation(Component):
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with combined correlation heatmap figure."""
-        d = super().jinja_context
-        d["anchor_link"] = "#correlation-stability"
-        d["figure"] = None
-
-        if Component.is_nonempty([self.training_correlation, self.synthetic_correlation, self.correlation_difference]):
-            training_corr = self.training_correlation
-            synthetic_corr = self.synthetic_correlation
-            diff_corr = self.correlation_difference
-            if training_corr is not None and synthetic_corr is not None and diff_corr is not None:
-                d["figure"] = figures.generate_combined_correlation_figure(
-                    training_correlation_df=training_corr,
-                    synthetic_correlation_df=synthetic_corr,
-                    correlation_difference=diff_corr,
-                ).to_html(full_html=False, include_plotlyjs=False)
-        return d
 
     @staticmethod
     def from_evaluation_datasets(
