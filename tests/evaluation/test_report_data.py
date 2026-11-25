@@ -197,6 +197,7 @@ def test_export_of_a_time_series_report_has_typed_details_without_training_only_
     window = metrics.window_membership_inference_protection.details
 
     assert autocorrelation.profiles
+    assert "pair_support" not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
     assert autocorrelation.groups_only_in_training_count == 2
     assert '"g0"' not in json.dumps(payload["metrics"]["autocorrelation_similarity"])
     assert window.attack is not None

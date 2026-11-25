@@ -289,8 +289,6 @@ class AutocorrelationProfile(ReportDataModel):
     reason: str | None = Field(description="Why the pair scores 0, such as a constant synthetic sequence, or null.")
     training_acf: list[float | None] = Field(description="Training autocorrelation per lag, or null where undefined.")
     synthetic_acf: list[float | None] = Field(description="Synthetic autocorrelation per lag, or null where undefined.")
-    training_pair_support: list[int] = Field(description="Training value pairs behind each lag.")
-    synthetic_pair_support: list[int] = Field(description="Synthetic value pairs behind each lag.")
 
 
 class AutocorrelationCounts(ReportDataModel):
