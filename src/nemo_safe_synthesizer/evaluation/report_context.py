@@ -9,7 +9,8 @@ from the data's values.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -43,6 +44,8 @@ from .components.sqs_score import SQSScore
 from .components.text_semantic_similarity import TextSemanticSimilarity
 from .components.text_structure_similarity import TextStructureSimilarity
 from .reports.multimodal.multimodal_report import TIME_SERIES_COMPONENTS
+
+MetricT = TypeVar("MetricT", bound=Metric)
 
 
 def report_context(data: EvaluationReportData) -> dict[str, Any]:
@@ -123,7 +126,11 @@ def _score_context(component: type[Component], score: MetricScore | None) -> dic
     return {"name": _display_name(component), "score": score or _unavailable()}
 
 
-def _metric_context(component: type[Component], metric: Metric | None, figure: Any = None) -> dict[str, Any]:
+def _metric_context(
+    component: type[Component],
+    metric: MetricT | None,
+    figure: Callable[[MetricT], go.Figure | None] | None = None,
+) -> dict[str, Any]:
     chart = figure(metric) if figure is not None and metric is not None else None
     return {
         "name": _display_name(component),
@@ -216,7 +223,7 @@ def _aia_figure(metric: AttributeInferenceMetric) -> go.Figure | None:
         pd.DataFrame(
             {
                 "Column": [column.column for column in metric.columns],
-                "Risk": [column.risk for column in metric.columns],
+                "Risk": [column.protection for column in metric.columns],
                 "Protection": [column.grade for column in metric.columns],
             }
         )

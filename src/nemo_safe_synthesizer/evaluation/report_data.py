@@ -102,7 +102,7 @@ def build_report_data(report: MultimodalReport) -> EvaluationReportData:
     return EvaluationReportData.model_validate(to_json_safe(payload))
 
 
-def to_json_safe(value: Any) -> Any:
+def to_json_safe(value: object) -> Any:
     """Convert ``value`` to plain JSON types.
 
     NaN and infinities, ``NaT``, and ``None`` become ``None``; numpy scalars and arrays become Python numbers and
@@ -123,7 +123,7 @@ def to_json_safe(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [to_json_safe(item) for item in value]
     if isinstance(value, np.ndarray):
-        return to_json_safe(value.tolist())
+        return to_json_safe(np.asarray(value).tolist())
     if isinstance(value, np.datetime64 | np.timedelta64):
         return to_json_safe(pd.Timestamp(value) if isinstance(value, np.datetime64) else pd.Timedelta(value))
     if isinstance(value, datetime.timedelta):
@@ -250,7 +250,7 @@ def _attribute_inference_metric(component: AttributeInferenceProtection) -> dict
     columns = []
     if df is not None and not df.empty:
         columns = [
-            {"column": row["Column"], "risk": row["Risk"], "grade": row["Protection"]}
+            {"column": row["Column"], "protection": row["Risk"], "grade": row["Protection"]}
             for row in df.sort_values(by="Risk").to_dict("records")
         ]
     return {**_metric(component), "columns": columns}
@@ -268,17 +268,15 @@ def _pii_replay_metric(component: PIIReplay, config: SafeSynthesizerParameters |
 
 
 def _dataset_counts(component: DatasetStatistics) -> dict[str, Any]:
-    return component.model_dump(
-        include={
-            "training_rows",
-            "training_cols",
-            "training_missing",
-            "synthetic_rows",
-            "synthetic_cols",
-            "synthetic_missing",
-            "memorized_lines",
-        }
-    )
+    return {
+        "training_rows": component.training_rows,
+        "training_cols": component.training_cols,
+        "training_missing_percent": component.training_missing,
+        "synthetic_rows": component.synthetic_rows,
+        "synthetic_cols": component.synthetic_cols,
+        "synthetic_missing_percent": component.synthetic_missing,
+        "memorized_lines": component.memorized_lines,
+    }
 
 
 def _column_profile(features: FieldFeatures) -> dict[str, Any]:

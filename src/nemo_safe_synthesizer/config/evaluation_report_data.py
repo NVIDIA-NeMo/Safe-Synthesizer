@@ -15,6 +15,41 @@ from pydantic import BaseModel, ConfigDict, Field
 
 REPORT_DATA_SCHEMA_VERSION = 1
 
+__all__ = [
+    "AttackOutcome",
+    "AttributeInferenceMetric",
+    "ColumnPIIStatistics",
+    "ColumnProfile",
+    "ColumnProtection",
+    "ColumnResult",
+    "CorrelationMatrices",
+    "CorrelationMetric",
+    "DatasetCounts",
+    "DeepStructureMetric",
+    "DifferentialPrivacySettings",
+    "Distribution",
+    "EvaluationReportData",
+    "MembershipInferenceMetric",
+    "Metric",
+    "MetricScore",
+    "Metrics",
+    "PIIDependency",
+    "PIIReplacement",
+    "PIIReplacementColumn",
+    "PIIReplayEntry",
+    "PIIReplayMetric",
+    "PatternSymbol",
+    "Points",
+    "Projection",
+    "REPORT_DATA_SCHEMA_VERSION",
+    "ReportDataModel",
+    "Scores",
+    "TextSemanticMetric",
+    "TextStructureDistributions",
+    "TextStructureMetric",
+    "TimeSeriesMetric",
+]
+
 
 class ReportDataModel(BaseModel):
     """Base of the report data models: ignores unknown fields so older readers accept newer data."""
@@ -43,15 +78,19 @@ class Distribution(ReportDataModel):
     bin_edges: list[float] | None = Field(
         description="For numeric values, the increasing bin edges, one more than the labels; null for categories."
     )
-    training_percent: list[float] = Field(description="Percentage of training values per label.")
-    synthetic_percent: list[float] = Field(description="Percentage of synthetic values per label.")
+    training_percent: list[float | None] = Field(
+        description="Percentage of training values per label, or null where undefined."
+    )
+    synthetic_percent: list[float | None] = Field(
+        description="Percentage of synthetic values per label, or null where undefined."
+    )
 
 
 class Points(ReportDataModel):
     """Points on the first two principal components."""
 
-    x: list[float] = Field(description="First principal component of each point.")
-    y: list[float] = Field(description="Second principal component of each point.")
+    x: list[float | None] = Field(description="First principal component of each point, or null where undefined.")
+    y: list[float | None] = Field(description="Second principal component of each point, or null where undefined.")
 
 
 class Projection(ReportDataModel):
@@ -126,18 +165,18 @@ class MembershipInferenceMetric(Metric):
     excluded_columns: list[str] = Field(description="Columns left out via `evaluation.mia_excluded_columns`.")
 
 
-class ColumnRisk(ReportDataModel):
-    """Attribute inference risk of one column."""
+class ColumnProtection(ReportDataModel):
+    """Attribute inference protection of one column."""
 
     column: str = Field(description="Column name.")
-    risk: float | None = Field(description="Protection from 0 to 10; higher is better.")
+    protection: float | None = Field(description="Protection from 0 to 10; higher is better.")
     grade: str = Field(description="Protection grade.")
 
 
 class AttributeInferenceMetric(Metric):
     """Attribute inference protection, with the protection of each column."""
 
-    columns: list[ColumnRisk] = Field(description="Columns from least to most protected.")
+    columns: list[ColumnProtection] = Field(description="Columns from least to most protected.")
 
 
 class PIIReplayEntry(ReportDataModel):
@@ -213,10 +252,10 @@ class DatasetCounts(ReportDataModel):
 
     training_rows: int = Field(description="Training rows evaluated.")
     training_cols: int = Field(description="Training columns evaluated.")
-    training_missing: int = Field(description="Percentage of missing training values.")
+    training_missing_percent: float = Field(description="Percentage of missing training values.")
     synthetic_rows: int = Field(description="Synthetic rows evaluated.")
     synthetic_cols: int = Field(description="Synthetic columns evaluated.")
-    synthetic_missing: int = Field(description="Percentage of missing synthetic values.")
+    synthetic_missing_percent: float = Field(description="Percentage of missing synthetic values.")
     memorized_lines: int = Field(description="Training rows duplicated in the synthetic data.")
 
 
@@ -308,7 +347,10 @@ class DifferentialPrivacySettings(ReportDataModel):
 
 
 class EvaluationReportData(ReportDataModel):
-    """Evaluation results, including everything the HTML report shows. Metric keys match the scores in ``SafeSynthesizerSummary``."""
+    """Evaluation results, including everything the HTML report shows.
+
+    Metric keys match the scores in ``SafeSynthesizerSummary``.
+    """
 
     schema_version: int = Field(description="Schema version; readers accept higher versions.")
     library_version: str = Field(description="nemo-safe-synthesizer version that built the data.")
@@ -317,7 +359,10 @@ class EvaluationReportData(ReportDataModel):
     metrics: Metrics = Field(description="Per-metric results.")
     dataset: DatasetCounts | None = Field(description="Dataset counts, or null when they were not computed.")
     columns: list[ColumnResult] = Field(
-        description="Evaluated training columns, in training order: those also in the synthetic data, sampled down to `evaluation.sqs_report_columns`."
+        description=(
+            "Evaluated training columns, in training order: those also in the synthetic data, "
+            "sampled down to `evaluation.sqs_report_columns`."
+        )
     )
     any_column_transformed: bool = Field(
         description="Whether PII replacement transformed any training column, including ones not in `columns`."
