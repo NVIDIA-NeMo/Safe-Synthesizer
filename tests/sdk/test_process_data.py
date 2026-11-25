@@ -44,6 +44,7 @@ from nemo_safe_synthesizer.preflight import (
     run_preflight as run_actual_preflight,
 )
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.telemetry import RunStageEnum
 
 _EMPTY_PREFLIGHT = PreflightReport(checks=[])
 
@@ -187,6 +188,86 @@ def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixtu
         builder.process_data()
 
     assert preflight_issue_codes == [[], []]
+
+
+class TestProcessDataRunStage:
+    """``process_data`` records the stage it is in, which telemetry reports when a run fails."""
+
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_preflight_errors_leave_the_preflight_stage(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
+        failed = MagicMock(errors=[MagicMock(code="E1", message="bad column")])
+
+        with (
+            patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=failed),
+            pytest.raises(ParameterError, match="Pre-flight check failed"),
+        ):
+            builder.process_data()
+
+        assert builder._stage == RunStageEnum.PREFLIGHT
+
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_training_model_metadata_errors_leave_the_preflight_stage(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
+        mock_metadata_cls.from_config.side_effect = OSError("model not found")
+
+        with pytest.raises(OSError, match="model not found"):
+            builder.process_data()
+
+        assert builder._stage == RunStageEnum.PREFLIGHT
+
+    def test_data_source_errors_leave_the_data_loading_stage(self, fixture_workdir):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(replace_pii=None), workdir=fixture_workdir)
+        builder._data_source = str(fixture_workdir.base_path / "missing.csv")
+
+        with pytest.raises(FileNotFoundError):
+            builder.process_data()
+
+        assert builder._stage == RunStageEnum.DATA_LOADING
+
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_holdout_errors_leave_the_data_processing_stage(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, *_ = fixture_process_data_setup_without_pii
+        mock_holdout_cls.return_value.train_test_split.side_effect = ValueError("split failed")
+
+        with pytest.raises(ValueError, match="split failed"):
+            builder.process_data()
+
+        assert builder._stage == RunStageEnum.DATA_PROCESSING
 
 
 class TestProcessDataPiiSeparation:

@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import re
 import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -39,6 +40,14 @@ DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
 LOCAL_MODEL_LABEL = "local_path"
+OTHER_LABEL = "other"
+# These two patterns match the piiLocale and piiPlanningLlmModel patterns in the shared
+# NeMo telemetry schema. The collector rejects a whole event when one field does
+# not match its pattern, so values are checked here and reported as "other".
+# The model pattern is applied to the pretrained model too, so both model fields
+# use one sanitizer.
+_LOCALE_PATTERN = re.compile(r"[a-z]{2,3}(_[A-Z]{2})?")
+_MODEL_PATTERN = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9._-]{0,126}")
 logger = get_logger(__name__)
 
 
@@ -62,6 +71,20 @@ class TaskStatusEnum(str, Enum):
     ERROR = "error"
     CANCELED = "canceled"
     UNDEFINED = "undefined"
+
+
+class RunStageEnum(str, Enum):
+    """Pipeline stage a Safe Synthesizer run is in, reported as ``failedStage`` when it stops early."""
+
+    DATA_LOADING = "data_loading"
+    PREFLIGHT = "preflight"
+    DATA_PROCESSING = "data_processing"
+    PII_PLANNING = "pii_planning"
+    PII_REPLACEMENT = "pii_replacement"
+    TRAINING = "training"
+    GENERATION = "generation"
+    EVALUATION = "evaluation"
+    SAVING = "saving"
 
 
 def _telemetry_enabled() -> bool:
@@ -91,11 +114,18 @@ def _deployment_type() -> DeploymentTypeEnum:
 
 
 def sanitize_model_for_telemetry(model: str | None) -> str:
-    """Return a telemetry-safe pretrained model label.
+    """Return a telemetry-safe label for the pretrained or PII planning model.
 
     Hugging Face repo IDs are safe to report, but local model paths may embed
     user or machine details. Prefer the coarse local label when the value looks
-    path-like or does not satisfy Hugging Face repo ID syntax.
+    path-like or does not satisfy Hugging Face repo ID syntax. A repo ID the
+    telemetry schema's piiPlanningLlmModel pattern does not accept, such as one with an
+    organization longer than 64 characters, is reported as ``"other"``.
+
+    A name with non-ASCII letters is never sent as is, but its label depends on
+    the installed ``huggingface_hub``: versions whose repo ID check rejects it
+    report ``"local_path"`` and older versions that accept it report
+    ``"other"``.
     """
     if model is None:
         return "undefined"
@@ -125,7 +155,24 @@ def sanitize_model_for_telemetry(model: str | None) -> str:
     except HFValidationError:
         return LOCAL_MODEL_LABEL
 
+    if _MODEL_PATTERN.fullmatch(model) is None:
+        return OTHER_LABEL
     return model
+
+
+def sanitize_locale_for_telemetry(locale: str | None) -> str:
+    """Return a telemetry-safe PII replacement locale label.
+
+    The configured locale is free-form text. Values shaped like Faker and
+    Nemotron Personas locale codes (``en_US``, ``fil_PH``, ``de``) are reported
+    as-is; anything else is reported as ``"other"`` so arbitrary user text is
+    never transmitted.
+    """
+    if locale is None:
+        return "undefined"
+    if _LOCALE_PATTERN.fullmatch(locale) is None:
+        return OTHER_LABEL
+    return locale
 
 
 def _session_prefix() -> str | None:
@@ -153,6 +200,8 @@ def bucket_columns(n: int) -> str:
 
     Used to avoid transmitting exact column counts in telemetry.
     """
+    if n <= 0:
+        return "0"
     if n <= 5:
         return "1-5"
     if n <= 10:
@@ -166,7 +215,7 @@ def bucket_columns(n: int) -> str:
 
 class NSSTrainingAndGenerationEvent(BaseModel):
     _event_name: ClassVar[str] = "train_and_generation_event"
-    _schema_version: ClassVar[str] = "1.9"
+    _schema_version: ClassVar[str] = "1.13"
 
     nemo_source: NemoSourceEnum = Field(
         default=NemoSourceEnum.SAFE_SYNTHESIZER,
@@ -175,12 +224,21 @@ class NSSTrainingAndGenerationEvent(BaseModel):
     )
     task: str = Field(
         ...,
-        description="The type of task that was performed (e.g. train, generate, evaluate, run).",
+        description="The type of task that was performed (e.g. train, generate, evaluate, run, replace_pii).",
     )
     task_status: TaskStatusEnum = Field(
         ...,
         serialization_alias="taskStatus",
         description="The final status of the task.",
+    )
+    failed_stage: str = Field(
+        default="undefined",
+        serialization_alias="failedStage",
+        description=(
+            "Pipeline stage the task was in when it failed or was canceled: a RunStageEnum value such as "
+            "'pii_planning' or 'training'. 'none' when the task completed; 'undefined' when it stopped before "
+            "any stage started."
+        ),
     )
     deployment_type: DeploymentTypeEnum = Field(
         default_factory=_deployment_type,
@@ -212,6 +270,63 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default=False,
         serialization_alias="replacePiiEnabled",
         description="Whether PII replacement was enabled for this run.",
+    )
+    pii_sampler_backend: str = Field(
+        default="undefined",
+        serialization_alias="piiSamplerBackend",
+        description=(
+            "PII replacement sampler backend ('nemotron-personas' or 'faker'). 'undefined' when PII replacement "
+            "is disabled. After planning, this includes NSS switching an unset sampler to Faker when the "
+            "Nemotron-Personas data for the locale is missing."
+        ),
+    )
+    pii_plan_source: str = Field(
+        default="undefined",
+        serialization_alias="piiPlanSource",
+        description=(
+            "How the PII replacement plan was supplied: 'auto_discovery', or 'provided' for an inline plan or "
+            "plan file. 'undefined' when PII replacement is disabled, or when the run loaded a saved config "
+            "(such as 'run generate') and did not plan."
+        ),
+    )
+    pii_replaced_columns_bucket: str = Field(
+        default="undefined",
+        serialization_alias="piiReplacedColumnsBucket",
+        description=(
+            "Bucketed count of columns in the PII replacement plan, including free-text columns scanned for "
+            "PII spans (e.g. '0', '1-5'). Use bucket_columns(). 'undefined' when PII replacement is disabled "
+            "or the plan was not resolved."
+        ),
+    )
+    pii_planning_llm_mode: str = Field(
+        default="undefined",
+        serialization_alias="piiPlanningLlmMode",
+        description=(
+            "Where LLM-assisted PII plan discovery is configured to run: 'none' (a user-supplied plan, which "
+            "needs no LLM), 'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' "
+            "when the inference settings could not be resolved. Reported from the configuration, so a run that "
+            "fails before planning starts still reports it. 'undefined' when PII replacement is disabled or "
+            "piiPlanSource is 'undefined'. The endpoint URL is never reported."
+        ),
+    )
+    pii_planning_llm_model: str = Field(
+        default="undefined",
+        serialization_alias="piiPlanningLlmModel",
+        description=(
+            "Planning model: the local profile's model_id or the endpoint's model ID, sanitized like the "
+            "pretrained model, so local model paths are reported as 'local_path'. 'other' when the repo ID does "
+            "not fit the telemetry schema. 'undefined' when no LLM planning is configured. Like piiPlanningLlmMode, it "
+            "is reported from the configuration, so a run that fails before planning starts still reports it. "
+            "Use sanitize_model_for_telemetry()."
+        ),
+    )
+    pii_locale: str = Field(
+        default="undefined",
+        serialization_alias="piiLocale",
+        description=(
+            "PII replacement locale (e.g. 'en_US'). 'other' when the value is not a locale code; "
+            "'undefined' when PII replacement is disabled. Use sanitize_locale_for_telemetry()."
+        ),
     )
     differential_privacy_enabled: bool = Field(
         default=False,
@@ -256,7 +371,11 @@ class NSSTrainingAndGenerationEvent(BaseModel):
     # Model and hardware
     model: str = Field(
         default="undefined",
-        description="The pretrained model used for training/generation.",
+        description=(
+            "The pretrained model used for training/generation: a Hugging Face model ID, 'local_path' for a "
+            "local path, or 'other' when the repo ID does not fit the piiPlanningLlmModel pattern. Use "
+            "sanitize_model_for_telemetry()."
+        ),
     )
     gpu: str = Field(
         default="undefined",
