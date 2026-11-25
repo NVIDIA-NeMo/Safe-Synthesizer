@@ -975,7 +975,8 @@ class SafeSynthesizer(ConfigBuilder):
         """Save synthetic data, evaluation report, and metrics to the workdir.
 
         Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when
-        available), and ``evaluation_metrics.json`` into the generate
+        available, else a previous run's report is removed), and
+        ``evaluation_metrics.json`` (when evaluation ran) into the generate
         directory.  Called automatically by ``run()``.  Call explicitly
         after stepwise execution
         (``process_data().train().generate().evaluate()``).
@@ -1001,13 +1002,15 @@ class SafeSynthesizer(ConfigBuilder):
         self.results.synthetic_data.to_csv(str(output_file), index=False)
         logger.info(f"Saved synthetic data to {output_file}")
 
+        report_path = self._workdir.evaluation_report
         if self.results.evaluation_report_html:
-            report_path = self._workdir.evaluation_report
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(self.results.evaluation_report_html)
             logger.info(f"Saved evaluation report to {report_path}")
+        else:
+            report_path.unlink(missing_ok=True)
 
-            # we only get non-empty results summary when evaluation is run
+        if self.results.summary.timing.evaluation_time_sec is not None:
             metrics_path = self._workdir.evaluation_metrics
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
             metrics_path.write_text(self.results.summary.model_dump_json(indent=2))

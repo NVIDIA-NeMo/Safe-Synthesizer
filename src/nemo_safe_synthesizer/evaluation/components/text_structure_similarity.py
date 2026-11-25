@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-from functools import cached_property
 
 import numpy as np
 import pandas as pd
@@ -17,7 +16,6 @@ from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
-from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 
@@ -70,27 +68,6 @@ class TextStructureSimilarity(Component):
     synthetic_statistics: dict[str, TextDataSetStatistics] = Field(
         default=dict(), description="Per-column text structure statistics for the synthetic data."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with per-column text structure histogram figures."""
-        d = super().jinja_context
-        d["anchor_link"] = "#structure-similarity"
-        d["figures"] = []
-        if self.training_statistics:
-            maybe_figs = {
-                col: figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col], self.synthetic_statistics[col]
-                )
-                for col in self.training_statistics
-            }
-            d["figures"] = [
-                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
-                for col, fig in maybe_figs.items()
-                if fig is not None
-            ]
-
-        return d
 
     @staticmethod
     def from_evaluation_datasets(

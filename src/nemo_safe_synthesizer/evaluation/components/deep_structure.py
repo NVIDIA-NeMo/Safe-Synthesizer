@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import numpy as np
 import pandas as pd
 from category_encoders.count import CountEncoder
@@ -21,7 +19,6 @@ from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
 from ...observability import get_logger
-from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 
@@ -38,22 +35,6 @@ class DeepStructure(Component):
     synthetic_pca: pd.DataFrame | None = Field(default=None, description="PCA-projected synthetic dataframe.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with PCA scatter plot figure."""
-        d = super().jinja_context
-        d["anchor_link"] = "#structure-stability"
-        d["figure"] = None
-        if Component.is_nonempty([self.training_pca, self.synthetic_pca]):
-            training_pca = self.training_pca
-            synthetic_pca = self.synthetic_pca
-            if training_pca is not None and synthetic_pca is not None:
-                d["figure"] = figures.structure_stability_figure(
-                    training_df=training_pca,
-                    synthetic_df=synthetic_pca,
-                ).to_html(full_html=False, include_plotlyjs=False)
-        return d
 
     @staticmethod
     def from_evaluation_datasets(

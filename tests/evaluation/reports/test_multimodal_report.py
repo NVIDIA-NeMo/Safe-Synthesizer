@@ -25,6 +25,8 @@ from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowG
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
 from nemo_safe_synthesizer.evaluation.render import _get_template, render_report
+from nemo_safe_synthesizer.evaluation.report_context import report_context
+from nemo_safe_synthesizer.evaluation.report_data import build_report_data
 from nemo_safe_synthesizer.evaluation.reports.multimodal import multimodal_report as multimodal_report_module
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.pii_replacer import ColumnStatistics
@@ -53,6 +55,15 @@ def _minimal_multimodal_report() -> MultimodalReport:
     return MultimodalReport(evaluation_datasets=datasets, components=[])
 
 
+def _context(report: MultimodalReport) -> dict[str, Any]:
+    return report_context(build_report_data(report))
+
+
+def _card(context: dict[str, Any], card_id: str) -> dict[str, Any]:
+    cards = context["time_series_cards"] + context["data_privacy_time_series_cards"]
+    return next(card for card in cards if card["card_id"] == card_id)
+
+
 def _time_series_config(
     *,
     report_rows: int = 5000,
@@ -72,17 +83,17 @@ def _time_series_config(
     )
 
 
-def test_jinja_context_job_id_none_when_nemo_job_id_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_report_context_job_id_none_when_nemo_job_id_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NEMO_JOB_ID", raising=False)
     report = _minimal_multimodal_report()
-    ctx = report.jinja_context
+    ctx = _context(report)
     assert ctx["job_id"] is None
 
 
-def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_report_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NEMO_JOB_ID", "cluster-job-abc123")
     report = _minimal_multimodal_report()
-    ctx = report.jinja_context
+    ctx = _context(report)
     assert ctx["job_id"] == "cluster-job-abc123"
 
 
@@ -188,7 +199,7 @@ def test_time_series_metric_is_absent_when_feature_gate_is_disabled() -> None:
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=SafeSynthesizerParameters())
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
-    assert report.jinja_context["with_time_series"] is False
+    assert _context(report)["with_time_series"] is False
 
 
 def test_time_series_metric_can_be_disabled_in_time_series_mode() -> None:
@@ -201,7 +212,7 @@ def test_time_series_metric_can_be_disabled_in_time_series_mode() -> None:
     )
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
-    assert report.jinja_context["with_time_series"] is False
+    assert _context(report)["with_time_series"] is False
 
 
 def test_global_evaluation_gate_overrides_time_series_evaluation_gate() -> None:
@@ -231,7 +242,7 @@ def test_time_series_metric_uses_unsampled_ordered_data_and_renders_profiles() -
     component = next(item for item in report.components if isinstance(item, AutocorrelationSimilarity))
     assert component.score.score == 10
     assert report.evaluation_datasets.training_rows == 100
-    assert report.jinja_context["autocorrelation_similarity"]["evaluated_profile_count"] == 1
+    assert _card(_context(report), "autocorrelation-similarity")["evaluated_profile_count"] == 1
     output = render_report(report)
     assert output is not None
     assert "Time-Series Metrics" in output
@@ -274,7 +285,7 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
         )
     ]
 
-    context = report.jinja_context["autocorrelation_similarity"]
+    context = _card(_context(report), "autocorrelation-similarity")
 
     assert context["evaluated_profile_count"] == 26
     assert context["evaluated_group_count"] == 13
@@ -302,12 +313,13 @@ def test_time_series_components_drive_the_rendered_time_series_panel() -> None:
 
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
-    cards = report.jinja_context["time_series_cards"]
-    assert cards == [report.jinja_context["autocorrelation_similarity"]]
+    context = _context(report)
+    cards = context["time_series_cards"]
+    assert cards == [_card(context, "autocorrelation-similarity")]
     assert cards[0]["card_id"] == "autocorrelation-similarity"
     assert cards[0]["template"] == "jinja/components/autocorrelation_similarity.j2"
     assert cards[0]["score_colored_traces"] is True
-    assert report.jinja_context["with_time_series"] is True
+    assert _context(report)["with_time_series"] is True
     output = render_report(report)
     assert output is not None
     assert 'id="autocorrelation-similarity"' in output
@@ -320,8 +332,8 @@ def test_time_series_cards_are_split_by_report_section() -> None:
 
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
-    context = report.jinja_context
-    window_group_mia = context["window_membership_inference_protection"]
+    context = _context(report)
+    window_group_mia = _card(context, "window-group-mia")
     assert window_group_mia in context["data_privacy_time_series_cards"]
     assert window_group_mia not in context["time_series_cards"]
 
@@ -333,9 +345,9 @@ def test_time_series_report_runs_only_listed_components(monkeypatch: pytest.Monk
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
-    assert report.jinja_context["time_series_cards"] == []
-    assert report.jinja_context["data_privacy_time_series_cards"] == []
-    assert report.jinja_context["with_time_series"] is False
+    assert _context(report)["time_series_cards"] == []
+    assert _context(report)["data_privacy_time_series_cards"] == []
+    assert _context(report)["with_time_series"] is False
 
 
 def _rendered_numbers(html: str) -> set[float]:
@@ -370,13 +382,11 @@ def test_window_group_mia_metric_renders_in_the_data_privacy_section() -> None:
     config.data.group_training_examples_by = "entity"
 
     report = MultimodalReport.from_dataframes(training, training.copy(), test=holdout, config=config)
-    report.components.append(
-        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0, is_privacy=True))
-    )
+    _replace_data_privacy_score(report, score=5.0)
 
     component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
     assert component.score.score == 0.0
-    context = report.jinja_context["window_membership_inference_protection"]
+    context = _card(_context(report), "window-group-mia")
     assert component.details["closest_match"]["exact_copy"] is True
     closest = next(figure for figure in context["figures"] if figure["title"] == "Closest match")
     assert "Training window" in closest["html"]
@@ -410,15 +420,13 @@ def test_window_group_mia_report_hides_a_closest_training_window_that_is_not_an_
     config.data.group_training_examples_by = "entity"
 
     report = MultimodalReport.from_dataframes(training, synthetic, test=holdout, config=config)
-    report.components.append(
-        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0, is_privacy=True))
-    )
+    _replace_data_privacy_score(report, score=5.0)
 
     component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
     match = component.details["closest_match"]
     assert match["exact_copy"] is False
     assert "training_values" not in match
-    context = report.jinja_context["window_membership_inference_protection"]
+    context = _card(_context(report), "window-group-mia")
     assert context["summary_traces_per_column"] == 1
     output = render_report(report)
     assert output is not None
@@ -429,6 +437,13 @@ def test_window_group_mia_report_hides_a_closest_training_window_that_is_not_an_
     rendered_numbers = _rendered_numbers(card)
     assert set(np.ravel(match["synthetic_values"])) <= rendered_numbers
     assert not set(training[component.details["columns"]].to_numpy().ravel()) & rendered_numbers
+
+
+def _replace_data_privacy_score(report: MultimodalReport, score: float) -> None:
+    report.components = [c for c in report.components if not isinstance(c, DataPrivacyScore)]
+    report.components.append(
+        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=score / 10, score=score, is_privacy=True))
+    )
 
 
 def _replacement_off_report(
@@ -444,7 +459,7 @@ def _replacement_off_report(
 def _render_pii_card(report: MultimodalReport) -> str:
     """Render only the PII card, since the full report template needs every other component too."""
     env = Environment(loader=FunctionLoader(_get_template), autoescape=select_autoescape(["html", "xml"]))
-    return env.get_template("jinja/components/pii_replacement.j2").render(ctx=report.jinja_context)
+    return env.get_template("jinja/components/pii_replacement.j2").render(ctx=_context(report))
 
 
 def test_pii_card_lists_detected_columns_as_not_replaced_when_replacement_was_off() -> None:
@@ -471,13 +486,13 @@ def test_pii_card_lists_detected_columns_as_not_replaced_when_replacement_was_of
     )
     report = _replacement_off_report(statistics, replay)
 
-    pii = report.jinja_context["pii_replacement"]
+    pii = _context(report)["pii_replacement"]
     html = _render_pii_card(report)
 
     assert pii["replacement_off"] is True
     assert [group["replaced_with"] for group in pii["groups"]] == [None]
     assert pii["headline"] == "PII in 1 column, not replaced"
-    assert report.jinja_context["with_transform"] is False
+    assert _context(report)["with_transform"] is False
     assert 'id="pii-replay-details" hidden' in html
     assert "Not replaced" in html
     assert "PII replacement was off, so the model was trained on the original values" in html
@@ -486,7 +501,7 @@ def test_pii_card_lists_detected_columns_as_not_replaced_when_replacement_was_of
 def test_pii_card_says_why_replay_was_not_run() -> None:
     report = _replacement_off_report(None, PIIReplay(skipped_reason="PII could not be detected (no GPU)"))
 
-    pii = report.jinja_context["pii_replacement"]
+    pii = _context(report)["pii_replacement"]
     html = _render_pii_card(report)
 
     assert pii["headline"] == "Replay not run"
@@ -512,7 +527,7 @@ def test_pii_card_keeps_the_detection_failure_with_configured_replay_columns(
         pii_replay_skipped_reason="PII could not be detected (no GPU)",
     )
 
-    pii = report.jinja_context["pii_replacement"]
+    pii = _context(report)["pii_replacement"]
     assert pii["groups"]
     assert pii["replay_note"] == (
         "Only the columns in evaluation.pii_replay_columns were checked: PII could not be detected (no GPU)."
@@ -524,14 +539,14 @@ def test_pii_card_says_no_pii_was_found_when_detection_found_none() -> None:
 
     html = _render_pii_card(report)
 
-    assert report.jinja_context["pii_replacement"]["headline"] == "No PII found"
+    assert _context(report)["pii_replacement"]["headline"] == "No PII found"
     assert "No PII was found in the training data." in html
 
 
 def test_no_pii_card_without_replacement_detection_or_a_skip_reason() -> None:
     report = _replacement_off_report(None, PIIReplay())
 
-    assert report.jinja_context["pii_replacement"] is None
+    assert _context(report)["pii_replacement"] is None
 
 
 _PRIVACY_WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet"]
@@ -635,11 +650,6 @@ def test_report_charts_carry_no_training_values_or_rare_categories() -> None:
     assert html is not None
     _assert_no_training_values(html, training, ["amount", "balance"])
     assert _RARE_CATEGORY not in html
-    for field in report.jinja_context["column_distribution_stability"]["evaluation_fields"]:
-        assert "training_distribution" not in field
-        assert "synthetic_distribution" not in field
-        assert "unique_values_list" not in field["training_field_features"]
-        assert "unique_values_list" not in field["synthetic_field_features"]
     scores = {component.name: component.score.score for component in report.components}
     assert scores["Column Distribution Stability"] == 9.0
     assert scores["Column Correlation Stability"] == 8.3

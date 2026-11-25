@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 from pydantic import Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -43,15 +41,6 @@ class DatasetStatistics(Component):
     memorized_lines: int = Field(
         default=0, ge=0, description="Number of exact row matches between training and synthetic."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context merging all dataset summary fields into the base context."""
-        d = super().jinja_context
-        stats = self.model_dump()
-        # Dump all the other fields, but don't overwrite pre-prepped stuff in d
-        stats.update(d)
-        return stats
 
     @staticmethod
     def from_evaluation_datasets(

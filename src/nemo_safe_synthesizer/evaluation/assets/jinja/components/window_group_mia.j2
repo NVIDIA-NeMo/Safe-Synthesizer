@@ -1,5 +1,5 @@
 {% from "jinja/components/time_series_charts.j2" import chart_figures, comparison_notes %}
-{% set window_group_mia = ctx.window_membership_inference_protection %}
+{% set window_group_mia = card %}
 {% set window_group_mia_details = window_group_mia.details %}
 {{ comparison_notes(window_group_mia) }}
 {% if window_group_mia_details.counts %}

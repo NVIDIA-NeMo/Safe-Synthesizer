@@ -398,9 +398,10 @@ class TestSaveResults:
         assert nss._workdir.evaluation_report.exists()
         assert nss._workdir.evaluation_report.read_text() == _REPORT_HTML
 
-    def test_skips_report_when_html_is_none(self, tmp_path: Path):
+    def test_skips_report_when_evaluation_is_skipped(self, tmp_path: Path):
         nss = _builder_with_mock_results(tmp_path)
         nss.results.evaluation_report_html = None
+        nss.results.summary.timing.evaluation_time_sec = None
 
         nss.save_results()
         assert nss._workdir is not None
@@ -408,3 +409,16 @@ class TestSaveResults:
         assert nss._workdir.output_file.exists()
         assert not nss._workdir.evaluation_report.exists()
         assert not nss._workdir.evaluation_metrics.exists()
+
+    def test_keeps_metrics_and_removes_stale_report_when_the_report_could_not_be_built(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        assert nss._workdir is not None
+        report_path = nss._workdir.evaluation_report
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text("<html>previous run</html>")
+        nss.results.evaluation_report_html = None
+
+        nss.save_results()
+
+        assert not report_path.exists()
+        assert nss._workdir.evaluation_metrics.read_text() == _METRICS_JSON

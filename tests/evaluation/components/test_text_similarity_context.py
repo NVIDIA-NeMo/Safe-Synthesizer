@@ -3,59 +3,59 @@
 
 from __future__ import annotations
 
+import json
 import warnings
 
-import pandas as pd
-import plotly.graph_objects as go
-import pytest
-
-from nemo_safe_synthesizer.evaluation.components import multi_modal_figures
-from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import (
-    TextSemanticSimilarity,
-    TextSemanticSimilarityDatum,
-    _suppress_ks_exact_fallback,
+from nemo_safe_synthesizer.config.evaluation_report_data import (
+    DifferentialPrivacySettings,
+    EvaluationReportData,
+    Metrics,
+    Scores,
 )
-from nemo_safe_synthesizer.evaluation.components.text_structure_similarity import (
-    TextDataSetStatistics,
-    TextStructureSimilarity,
+from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import _suppress_ks_exact_fallback
+from nemo_safe_synthesizer.evaluation.report_context import report_context
+
+
+def _report_data(**metrics: object) -> EvaluationReportData:
+    payload = json.loads(_EMPTY_REPORT.model_dump_json())
+    payload["metrics"].update(metrics)
+    return EvaluationReportData.model_validate(payload)
+
+
+_UNAVAILABLE = {"raw_score": None, "score": None, "grade": "Unavailable", "notes": None}
+_EMPTY_REPORT = EvaluationReportData(
+    schema_version=1,
+    library_version="test",
+    job_id=None,
+    scores=Scores(synthetic_quality=None, data_privacy=None),
+    metrics=Metrics(**dict.fromkeys(Metrics.model_fields)),
+    dataset=None,
+    columns=[],
+    differential_privacy=DifferentialPrivacySettings(enabled=False, epsilon=None, delta=None),
+    pii_replacement=None,
 )
 
 
-def _figure() -> go.Figure:
-    return go.Figure(data=[go.Bar(x=[1], y=[2])])
+def test_text_semantic_similarity_figures_have_a_column_heading() -> None:
+    points = {"x": [0.1, 0.3, 0.2], "y": [0.2, 0.1, 0.4]}
+    projection = {"axes": ["pc1", "pc2"], "training": points, "synthetic": points}
+    data = _report_data(text_semantic_similarity={"score": _UNAVAILABLE, "projections": {"review": projection}})
+
+    figures = report_context(data)["text_semantic_similarity"]["figures"]
+
+    assert [figure["title"] for figure in figures] == ["review"]
+    assert "plotly-graph-div" in figures[0]["html"]
 
 
-def test_text_semantic_similarity_jinja_context_includes_column_heading(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(multi_modal_figures, "generate_text_semantic_similarity_figures", lambda *_: _figure())
-    pca = pd.DataFrame({"pc1": [0.1], "pc2": [0.2]})
-    component = TextSemanticSimilarity(
-        text_semantic_similarity_dict={
-            "review": TextSemanticSimilarityDatum(training_pca=pca, synthetic_pca=pca),
-        }
-    )
+def test_text_structure_similarity_figures_have_a_column_heading() -> None:
+    distribution = {"labels": ["1"], "bin_edges": [0.5, 1.5], "training_percent": [100.0], "synthetic_percent": [100.0]}
+    statistics = dict.fromkeys(["sentence_count", "words_per_sentence", "characters_per_word"], distribution)
+    data = _report_data(text_structure_similarity={"score": _UNAVAILABLE, "columns": {"review": statistics}})
 
-    context = component.jinja_context
+    figures = report_context(data)["text_structure_similarity"]["figures"]
 
-    assert context["figures"][0]["title"] == "review"
-    assert "plotly-graph-div" in context["figures"][0]["html"]
-
-
-def test_text_structure_similarity_jinja_context_includes_column_heading(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(multi_modal_figures, "generate_text_structure_similarity_figures", lambda *_: _figure())
-    statistics = TextDataSetStatistics()
-    component = TextStructureSimilarity(
-        training_statistics={"review": statistics},
-        synthetic_statistics={"review": statistics},
-    )
-
-    context = component.jinja_context
-
-    assert context["figures"][0]["title"] == "review"
-    assert "plotly-graph-div" in context["figures"][0]["html"]
+    assert [figure["title"] for figure in figures] == ["review"]
+    assert "plotly-graph-div" in figures[0]["html"]
 
 
 def test_suppress_ks_exact_fallback_is_scoped_to_the_scipy_notice():

@@ -9,7 +9,6 @@ import re
 from collections.abc import Hashable
 from datetime import datetime
 from decimal import Decimal
-from functools import cached_property
 from math import e
 from typing import cast
 
@@ -29,7 +28,6 @@ from ..components.component import Component
 from ..data_model.evaluation_datasets import EvaluationDatasets
 from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
 from ..nearest_neighbors import NearestNeighborSearch
-from . import multi_modal_figures as figures
 from .privacy_metric_utils import divide_tabular_text, embed_text, find_text_fields
 
 logger = get_logger(__name__)
@@ -53,19 +51,6 @@ class AttributeInferenceProtection(Component):
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @cached_property
-    def jinja_context(self) -> dict[str, str]:
-        """Template context with the attribute-inference bar chart figure."""
-        d = super().jinja_context
-        d["anchor_link"] = "#aia"
-        if self.col_accuracy_df is not None and not self.col_accuracy_df.empty:
-            d["figure"] = figures.generate_aia_figure(self.col_accuracy_df).to_html(
-                full_html=False, include_plotlyjs=False
-            )
-        else:
-            d["figure"] = None
-        return d
 
     @staticmethod
     def from_evaluation_datasets(
