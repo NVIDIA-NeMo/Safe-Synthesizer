@@ -289,7 +289,7 @@ def categorical_distribution(
     training_values = [training_distribution.get(label, 0.0) for label in labels]
     synthetic_values = [synthetic_distribution.get(label, 0.0) for label in labels]
     if rare:
-        labels.append(f"Other ({len(rare)} categories)")
+        labels.append(f"Other ({len(rare)} {'category' if len(rare) == 1 else 'categories'})")
         training_values.append(sum(training_distribution[category] for category in rare))
         synthetic_values.append(sum(synthetic_distribution.get(category, 0.0) for category in rare))
     return Distribution(

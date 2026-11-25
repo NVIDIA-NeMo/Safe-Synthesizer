@@ -657,6 +657,11 @@ class TestBarChart:
         assert list(fig.data[0].y) == [96.0, 0.0, 4.0]
         assert list(fig.data[1].y) == [90.0, 6.0, 4.0]
 
+    def test_bar_chart_names_a_single_folded_category_in_the_singular(self):
+        fig = bar_chart({"common": 99.0, "rare": 1.0}, {"common": 100.0}, training_count=100)
+
+        assert list(fig.data[0].x) == ["common", "Other (1 category)"]
+
 
 class TestHistogramFigure:
     """Tests for histogram_figure function."""
