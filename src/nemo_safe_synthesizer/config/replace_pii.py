@@ -38,7 +38,7 @@ from ..configurator.parameters import CONFIG_DIR_CONTEXT_KEY, Parameters
 from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
-from .unknown_fields import normalize_unknown_fields, raise_if_removed_legacy_fields
+from .unknown_fields import normalize_unknown_fields
 from .validation import format_pydantic_validation_error
 
 __all__ = [
@@ -1113,13 +1113,6 @@ class ReplacePiiConfig(Parameters):
         default_factory=FreeTextDetectionConfig,
         description="GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns.",
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _reject_v2_fields(cls, value: object) -> object:
-        if isinstance(value, Mapping):
-            raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
-        return value
 
     @model_validator(mode="before")
     @classmethod

@@ -661,21 +661,21 @@ Based on testing, some trade-offs identified compared to SmolLM3 on average:
 ### Quantization
 
 Enabling quantization reduces VRAM consumption at the cost of some numerical
-precision. Set `training.quantize_model` to `true` and choose a bit width with
-`training.quantization_bits`.
+precision. Set `training.quantize_model` to `true` and choose a scheme with
+`training.quantization_scheme` (default `bnb-8bit`).
 
 | Setting | VRAM | Precision | Speed | Notes |
 |---------|------|-----------|-------|-------|
 | No quantization | Highest | Full | Baseline | Use when VRAM is not a constraint |
-| 8-bit | ~50% reduction | Near-full | Slightly slower | Good balance for most cases |
-| 4-bit | ~75% reduction | Reduced | Faster | Use when VRAM is tight; may affect output quality |
+| 8-bit (`bnb-8bit`) | ~50% reduction | Near-full | Slightly slower | Good balance for most cases |
+| 4-bit (`bnb-4bit`) | ~75% reduction | Reduced | Faster | Use when VRAM is tight; may affect output quality |
 
 === "CLI"
 
     ```bash
     safe-synthesizer run \
       --training__quantize_model true \
-      --training__quantization_bits 4 \
+      --training__quantization_scheme bnb-4bit \
       --data-source data.csv
     ```
 
@@ -687,7 +687,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     synthesizer = (
         SafeSynthesizer()
         .with_data_source("data.csv")
-        .with_train(quantize_model=True, quantization_bits=4)
+        .with_train(quantize_model=True, quantization_scheme="bnb-4bit")
     )
     ```
 
@@ -696,7 +696,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     ```yaml
     training:
       quantize_model: true
-      quantization_bits: 4
+      quantization_scheme: bnb-4bit
     ```
 
 ### Attention Backends
@@ -1053,6 +1053,10 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 In time-series mode, the HTML report also includes
 [Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md).
 Set `evaluation.time_series.enabled: false` to skip it.
+The same setting also controls
+[Window Membership Inference Protection](time-series-metrics/window-membership-inference-protection.md),
+which appears in the report's Data Privacy section and needs grouped data and at least two holdout groups for a score
+([when the score is available](time-series-metrics/window-membership-inference-protection.md#when-the-score-is-available)).
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in
@@ -1161,6 +1165,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 │   ├── info.json                    # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
+│   ├── evaluation_report_data.json  # evaluation results as JSON
 │   └── evaluation_metrics.json      # machine-readable metrics
 ├── dataset/
 │   ├── training.csv
@@ -1175,6 +1180,7 @@ Key outputs:
 
 - `generate/synthetic_data.csv`: the synthetic dataset
 - `generate/evaluation_report.html`: quality and privacy report
+- `generate/evaluation_report_data.json`: scores, per-metric results and chart values, and column statistics as JSON, for presenting them elsewhere
 - `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
 - `train/safe-synthesizer-config.json`: resolved config snapshot
@@ -1188,14 +1194,15 @@ Key outputs:
 ### SDK Results Access
 
 `run()` automatically saves `synthetic_data.csv`, `evaluation_report.html`,
-and `evaluation_metrics.json` to the artifacts directory unless an
-`output_file` override is provided. For stepwise execution, call
+`evaluation_report_data.json`, and `evaluation_metrics.json` to the artifacts directory; an
+`output_file` override changes only where the CSV goes. For stepwise execution, call
 `save_results()` explicitly after `evaluate()`.
 
 ```python
 results = synthesizer.results
 df = results.synthetic_data
 summary = results.summary
+report_data = results.evaluation_report_data  # None when evaluation was skipped
 # synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically
 ```
 

@@ -18,6 +18,7 @@ from ..cli.artifact_structure import Workdir
 from ..config import (
     SafeSynthesizerParameters,
 )
+from ..config.evaluation_report_data import EvaluationReportData
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
 from ..defaults import PII_REPLACEMENT_PLAN_FILENAME, RESOLVED_CONFIG_FILENAME
@@ -974,11 +975,15 @@ class SafeSynthesizer(ConfigBuilder):
     def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:
         """Save synthetic data, evaluation report, and metrics to the workdir.
 
-        Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when
-        available), and ``evaluation_metrics.json`` into the generate
-        directory.  Called automatically by ``run()``.  Call explicitly
-        after stepwise execution
-        (``process_data().train().generate().evaluate()``).
+        Writes ``synthetic_data.csv``, ``evaluation_report.html`` and
+        ``evaluation_report_data.json`` (when available), and
+        ``evaluation_metrics.json`` (when evaluation ran) into the generate
+        directory, removing a previous run's report and metrics files when
+        there are none.
+        A failure to write the report data is logged and does not fail the run,
+        but a failure to remove a previous run's report data does.
+        Called automatically by ``run()``.  Call explicitly after stepwise
+        execution (``process_data().train().generate().evaluate()``).
 
         Args:
             output_file: Explicit output path for the CSV.  Falls back
@@ -988,29 +993,53 @@ class SafeSynthesizer(ConfigBuilder):
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
 
-        assert self._workdir is not None
+        workdir = self._workdir
+        if workdir is None:
+            raise InternalError("SafeSynthesizer workdir is unavailable")
         match output_file:
             case Path() as p:
                 output_file = p
             case str() as s:
                 output_file = Path(s)
             case _:
-                output_file = self._workdir.output_file
+                output_file = workdir.output_file
 
         output_file.parent.mkdir(parents=True, exist_ok=True)
         self.results.synthetic_data.to_csv(str(output_file), index=False)
         logger.info(f"Saved synthetic data to {output_file}")
 
+        report_path = workdir.evaluation_report
         if self.results.evaluation_report_html:
-            report_path = self._workdir.evaluation_report
             report_path.parent.mkdir(parents=True, exist_ok=True)
-            report_path.write_text(self.results.evaluation_report_html)
+            report_path.write_text(self.results.evaluation_report_html, encoding="utf-8")
             logger.info(f"Saved evaluation report to {report_path}")
+        else:
+            report_path.unlink(missing_ok=True)
 
-            # we only get non-empty results summary when evaluation is run
-            metrics_path = self._workdir.evaluation_metrics
+        metrics_path = workdir.evaluation_metrics
+        if self.results.summary.timing.evaluation_time_sec is not None:
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
             metrics_path.write_text(self.results.summary.model_dump_json(indent=2))
             logger.info(f"Saved evaluation metrics and runtimes to {metrics_path}")
+        else:
+            metrics_path.unlink(missing_ok=True)
 
+        self._save_report_data(workdir.evaluation_report_data, self.results.evaluation_report_data)
         return self
+
+    @staticmethod
+    def _save_report_data(data_path: Path, report_data: EvaluationReportData | None) -> None:
+        """Write the evaluation report data, or remove a previous run's file when there is none or writing fails.
+
+        Raises:
+            OSError: If a previous run's file cannot be removed, so stale results are never left in place.
+        """
+        if report_data is not None:
+            try:
+                data_path.parent.mkdir(parents=True, exist_ok=True)
+                data_path.write_text(report_data.model_dump_json(), encoding="utf-8")
+                logger.info(f"Saved evaluation report data to {data_path}")
+                return
+            except Exception:
+                logger.exception(f"Failed to save evaluation report data to {data_path}; continuing without it.")
+        data_path.unlink(missing_ok=True)

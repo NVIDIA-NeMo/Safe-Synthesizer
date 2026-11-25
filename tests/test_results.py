@@ -8,9 +8,11 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerTiming
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -68,10 +70,30 @@ def _report_with_autocorrelation(score: float | None) -> MultimodalReport:
 class TestMakeNssSummaryTimeSeriesScores:
     """Verify time-series metric scores reach the saved evaluation metrics."""
 
-    def test_exports_autocorrelation_score(self):
-        summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(7.5))
+    @pytest.mark.parametrize(
+        ("component_cls", "field"),
+        [
+            (AutocorrelationSimilarity, "autocorrelation_similarity_score"),
+            (WindowGroupMIA, "window_membership_inference_protection_score"),
+        ],
+    )
+    def test_exports_time_series_score(self, component_cls, field):
+        frame = pd.DataFrame({"value": [1, 2]})
+        component = component_cls(score=EvaluationScore.finalize_grade(raw_score=0.75, score=7.5))
+        report = MultimodalReport(
+            evaluation_datasets=EvaluationDatasets(training=frame, synthetic=frame.copy()), components=[component]
+        )
 
-        assert json.loads(summary.model_dump_json())["autocorrelation_similarity_score"] == 7.5
+        summary = make_nss_summary(SafeSynthesizerTiming(), None, report)
+
+        exported = json.loads(summary.model_dump_json())
+        assert exported[field] == 7.5
+        assert exported["data_privacy_score"] is None
+        mock_wandb = MagicMock()
+        mock_wandb.run = MagicMock()
+        with patch.dict(sys.modules, {"wandb": mock_wandb}):
+            summary.log_wandb()
+        assert mock_wandb.run.summary.update.call_args.args[0][f"eval/{field}"] == 7.5
 
     def test_autocorrelation_score_is_none_without_the_component(self):
         summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(None))

@@ -3,13 +3,11 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import pandas as pd
-from plotly.graph_objects import Figure
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
+from ...config.evaluation_report_data import Distribution
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
@@ -22,71 +20,17 @@ from . import multi_modal_figures as figures
 logger = get_logger(__name__)
 
 
-class ColumnDistributionPlotRow(BaseModel):
-    """A pair of side-by-side column distribution plots for the HTML report."""
+def distribution_for_field(f: EvaluationField, training: pd.Series, synthetic: pd.Series) -> Distribution | None:
+    """Return the values charted for one tabular column, or ``None`` if it has no chart or no numeric training values.
 
-    name1: str = Field(description="Name of the first column in the plot row.")
-    name2: str | None = Field(description="Name of the second column in the plot row, if present.")
-    figure: str = Field(description="Rendered HTML of the side-by-side distribution plot.")
-
-    @staticmethod
-    def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
-        if f is None:
-            return None
-        if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
-            if f.training_distribution is not None and f.synthetic_distribution is not None:
-                figure = figures.bar_chart(f.training_distribution, f.synthetic_distribution)
-            else:
-                figure = None
-        else:
-            figure = figures.histogram_figure(training, synthetic)
-        return figure
-
-    @staticmethod
-    def _from_fields(
-        field1: EvaluationField, figure1: Figure, field2: EvaluationField | None, figure2: Figure | None
-    ) -> ColumnDistributionPlotRow:
-        figs = [figure1]
-        titles = [field1.name]
-        if figure2 is not None and field2 is not None:
-            figs.append(figure2)
-            titles.append(field2.name)
-        fig = figures.combine_subplots(
-            figures=figs,
-            titles=titles,
-            shared_xaxes=False,
-            shared_yaxes=False,
-            height=500,
-            margin={"t": 36, "b": 0, "l": 0, "r": 0},
-        )
-        fig.update_xaxes(showticklabels=False, visible=False).to_html(full_html=False, include_plotlyjs=False)
-        fig = fig.to_html(full_html=False, include_plotlyjs=False)
-
-        return ColumnDistributionPlotRow(name1=field1.name, name2=field2.name if field2 else None, figure=fig)
-
-    @staticmethod
-    def from_evaluation_datasets(evaluation_datasets: EvaluationDatasets) -> list[dict[str, str]]:
-        tups = []
-        result_rows = []
-
-        tabular_columns = set(evaluation_datasets.get_tabular_columns())
-        tabular_fields = [f for f in evaluation_datasets.evaluation_fields if f.name in tabular_columns]
-
-        for f in tabular_fields:
-            figure = ColumnDistributionPlotRow._get_figure_for_field(
-                f, evaluation_datasets.training[f.name], evaluation_datasets.synthetic[f.name]
-            )
-            if figure is not None:
-                tups.append((f, figure))
-
-        for i in range(0, len(tups), 2):
-            field1, figure1 = tups[i]
-            if i + 1 < len(tups):
-                field2, figure2 = tups[i + 1]
-            else:
-                field2, figure2 = None, None
-            result_rows.append(ColumnDistributionPlotRow._from_fields(field1, figure1, field2, figure2))
-        return [r.model_dump() for r in result_rows]
+    A numeric training column always gets binned values: a bar per distinct numeric value would name individual
+    training values.
+    """
+    if f.training_field_features.type == FieldType.NUMERIC:
+        return figures.numeric_distribution(training, synthetic)
+    if f.training_distribution is not None and f.synthetic_distribution is not None:
+        return figures.categorical_distribution(f.training_distribution, f.synthetic_distribution, len(training))
+    return None
 
 
 class ColumnDistribution(Component):
@@ -106,19 +50,6 @@ class ColumnDistribution(Component):
     evaluation_fields: list[EvaluationField] = Field(
         default=list(), description="Per-column evaluation metadata and distribution scores."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with evaluation fields and column statistics for the report."""
-        d = super().jinja_context
-        d["anchor_link"] = "#distribution-stability"
-        if self.evaluation_fields:
-            d["evaluation_fields"] = [f.model_dump(mode="json") for f in self.evaluation_fields]
-        if self.column_statistics:
-            d["column_statistics"] = {k: v.model_dump() for k, v in self.column_statistics.items()}
-        # Figures are set up with ColumnDistributionPlotRow. It requires an EvaluateDataset so needs
-        # to be done out of band as separate call from enclosing report class.
-        return d
 
     @staticmethod
     def from_evaluation_datasets(

@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import json
-import re
-from functools import cached_property
 
 from pydantic import BaseModel, Field
 
@@ -21,9 +19,8 @@ logger = get_logger(__name__)
 class EvaluationReport(BaseModel):
     """Container for a completed evaluation -- dataset, components, and scores.
 
-    Subclassed by ``MultimodalReport`` to add report-specific rendering
-    logic. Provides serialization helpers and a Jinja2 context property
-    consumed by the HTML report template.
+    Subclassed by ``MultimodalReport``, which assembles the components.
+    Provides score serialization helpers.
     """
 
     evaluation_datasets: EvaluationDatasets = Field(
@@ -47,13 +44,3 @@ class EvaluationReport(BaseModel):
             if c.name == name:
                 return c.score.score
         return None
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Jinja2 template context mapping snake-cased component names to their contexts."""
-        d = dict()
-        for c in self.components:
-            snake_name = re.sub(" ", "_", c.name).lower()
-            # Key on component name to prevent any collisions
-            d[snake_name] = c.jinja_context
-        return d

@@ -1,6 +1,6 @@
 <div class="training-columns-heading">
     <div>
-        <h1>Training Data <span>{{ ctx.column_distribution_stability.evaluation_fields | length }} columns</span></h1>
+        <h1>Training Data <span>{{ ctx.column_distribution_stability.columns | length }} columns</span></h1>
         <p>Column statistics and data types from the training dataset.</p>
     </div>
 </div>
@@ -24,7 +24,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for column in ctx.column_distribution_stability.evaluation_fields %}
+            {% for column in ctx.column_distribution_stability.columns %}
             <tr {% if loop.index > 10 %}class="additional-column" hidden{% endif %}>
                 <td>
                     {% if column.distribution_stability %}
@@ -33,10 +33,10 @@
                     {{ column.name }}
                     {% endif %}
                 </td>
-                <td>{{ "{:,}".format(column.training_field_features.unique_count) }}</td>
-                <td>{{ column.training_field_features.missing_count }}</td>
-                <td>{{ column.training_field_features.avg_str_length | round(2) }}</td>
-                <td><span class="type-tag">{{ column.training_field_features.type | capitalize }}</span></td>
+                <td>{{ "{:,}".format(column.training.unique_count) }}</td>
+                <td>{{ column.training.missing_count }}</td>
+                <td>{{ column.training.avg_str_length | round(2) }}</td>
+                <td><span class="type-tag">{{ column.training.type | capitalize }}</span></td>
                 {% if ctx.with_synthesizer %}
                 <td>
                     {% if column.distribution_stability %}
@@ -48,18 +48,18 @@
                 {% endif %}
                 {% if ctx.with_transform %}
                 <td class="entities-cell">
-                    {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
+                    {% if column.pii and column.pii.detected_entity_counts %}
                     <div class="entity-tags">
-                        {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
+                        {% for entity, count in column.pii.detected_entity_counts.items() %}
                         <span class="type-tag">{{ entity }} ({{ "{:,}".format(count) }})</span>
                         {% endfor %}
                     </div>
                     {% endif %}
                 </td>
-                <td>{{ column.column_statistics.is_transformed if column.column_statistics else False }}</td>
+                <td>{{ column.pii.is_transformed if column.pii else False }}</td>
                 <td class="transform-function-cell">
-                    {% if column.column_statistics %}
-                    {{ column.column_statistics.transform_functions | join(", ") }}
+                    {% if column.pii %}
+                    {{ column.pii.transform_functions | join(", ") }}
                     {% endif %}
                 </td>
                 {% endif %}
@@ -68,11 +68,11 @@
         </tbody>
     </table>
 </div>
-{% if ctx.column_distribution_stability.evaluation_fields | length > 10 %}
+{% if ctx.column_distribution_stability.columns | length > 10 %}
 <button class="show-columns" type="button" data-columns-toggle
-        data-columns-count="{{ ctx.column_distribution_stability.evaluation_fields | length }}"
+        data-columns-count="{{ ctx.column_distribution_stability.columns | length }}"
         aria-expanded="false">
-    <span data-columns-label>Show all {{ ctx.column_distribution_stability.evaluation_fields | length }} columns</span>
+    <span data-columns-label>Show all {{ ctx.column_distribution_stability.columns | length }} columns</span>
     <span class="columns-chevron" aria-hidden="true"></span>
 </button>
 {% endif %}

@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
-
 from pydantic import Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -28,7 +26,7 @@ class DatasetStatistics(Component):
     training_cols: int = Field(
         default=0, ge=0, description="Column count of the training dataframe used for evaluation."
     )
-    training_missing: int = Field(
+    training_missing: float = Field(
         default=0, ge=0, description="Percentage of missing values in the training dataframe."
     )
     synthetic_rows: int = Field(
@@ -37,21 +35,12 @@ class DatasetStatistics(Component):
     synthetic_cols: int = Field(
         default=0, ge=0, description="Column count of the synthetic dataframe used for evaluation."
     )
-    synthetic_missing: int = Field(
+    synthetic_missing: float = Field(
         default=0, ge=0, description="Percentage of missing values in the synthetic dataframe."
     )
     memorized_lines: int = Field(
         default=0, ge=0, description="Number of exact row matches between training and synthetic."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context merging all dataset summary fields into the base context."""
-        d = super().jinja_context
-        stats = self.model_dump()
-        # Dump all the other fields, but don't overwrite pre-prepped stuff in d
-        stats.update(d)
-        return stats
 
     @staticmethod
     def from_evaluation_datasets(
@@ -62,9 +51,9 @@ class DatasetStatistics(Component):
             score=EvaluationScore(),
             training_rows=evaluation_datasets.training_rows,
             training_cols=evaluation_datasets.training_cols,
-            training_missing=int(stats.percent_missing(evaluation_datasets.training)),
+            training_missing=stats.percent_missing(evaluation_datasets.training),
             synthetic_rows=evaluation_datasets.synthetic_rows,
             synthetic_cols=evaluation_datasets.synthetic_cols,
-            synthetic_missing=int(stats.percent_missing(evaluation_datasets.synthetic)),
+            synthetic_missing=stats.percent_missing(evaluation_datasets.synthetic),
             memorized_lines=evaluation_datasets.memorized_lines,
         )

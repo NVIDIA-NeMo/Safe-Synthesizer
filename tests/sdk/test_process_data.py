@@ -619,6 +619,33 @@ class TestLoadFromSavePath:
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
+    @pytest.mark.parametrize("unknown_fields", ["reject", "ignore"])
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    def test_load_rejects_saved_removed_fields(
+        self,
+        mock_metadata_cls,
+        unknown_fields,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Saved configs that still contain removed fields fail to load, whatever the unknown-field policy."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters().model_dump(mode="json")
+        saved_config["unknown_fields"] = unknown_fields
+        saved_config["training"]["quantization_bits"] = 8
+        workdir.config.write_text(json.dumps(saved_config))
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+
+        with pytest.raises((ParameterError, ValidationError), match=r"quantization_bits.*removed"):
+            builder.load_from_save_path()
+
     @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_rejects_unknown_legacy_saved_fields_by_default(
         self,

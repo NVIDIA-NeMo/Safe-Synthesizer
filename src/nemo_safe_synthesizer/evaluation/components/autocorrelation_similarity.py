@@ -12,7 +12,6 @@ score.
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Any, ClassVar
 
 import numpy as np
@@ -21,6 +20,7 @@ from numpy.typing import NDArray
 from pydantic import Field
 
 from ...config.evaluate import AutocorrelationSimilarityParameters
+from ...config.evaluation_report_data import AutocorrelationSimilarityMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
@@ -51,7 +51,7 @@ _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
 
 
-class AutocorrelationSimilarity(TimeSeriesComponent):
+class AutocorrelationSimilarity(TimeSeriesComponent[AutocorrelationSimilarityMetric]):
     """Measure fidelity of lagged self-dependence in numeric time-series data.
 
     The component compares training and synthetic autocorrelation profiles
@@ -65,6 +65,7 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
         details: Per-group/column profiles, skipped comparisons, and summaries.
     """
 
+    metric_key: ClassVar[str] = "autocorrelation_similarity"
     card_id: ClassVar[str] = "autocorrelation-similarity"
     description: ClassVar[str] = "Measures whether numeric columns change over time like the training data"
     tooltip_key: ClassVar[str] = "autocorrelation_similarity_info"
@@ -80,11 +81,11 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
         description="Per-group/column autocorrelation profiles, skipped comparisons, and summaries.",
     )
 
-    @cached_property
-    def jinja_context(self) -> dict[str, Any]:
+    @classmethod
+    def report_context(cls, metric: AutocorrelationSimilarityMetric) -> dict[str, Any]:
         """Return score, details, card attributes, and chart figures for report rendering."""
-        context = super().jinja_context
-        profiles = self.details.get("profiles", [])
+        context = super().report_context(metric)
+        profiles = metric.details.profiles
         figures: list[FigureSpec] = []
         summary_columns: list[str] = []
         if profiles:
@@ -103,20 +104,20 @@ class AutocorrelationSimilarity(TimeSeriesComponent):
                 ),
                 (
                     "Pair scores",
-                    generate_autocorrelation_pair_score_figure(profiles, self.score.score),
+                    generate_autocorrelation_pair_score_figure(profiles, metric.score.score),
                     False,
                     "autocorrelation_pair_scores_info",
                 ),
             ]
             summary_columns = order_autocorrelation_columns(profiles)
-        context["figures"] = self.figure_rows(figures)
+        context["figures"] = cls.figure_rows(figures)
         context["summary_columns"] = summary_columns
         context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
         context["pair_score_column_count"] = min(len(summary_columns), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)
         context["evaluated_profile_count"] = len(profiles)
-        context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
-        context["evaluated_column_count"] = len({item["column"] for item in profiles})
-        context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item["evaluated_lags"] == 0)
+        context["evaluated_group_count"] = len({str(item.group) for item in profiles})
+        context["evaluated_column_count"] = len({item.column for item in profiles})
+        context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item.evaluated_lags == 0)
         return context
 
     @staticmethod

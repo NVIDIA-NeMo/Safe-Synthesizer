@@ -5,8 +5,8 @@
 
 Every time-series metric resolves the same grouping column, selects the same
 numeric value columns, walks the same shared groups in the same order, and
-renders as one card in the report's Time-Series Metrics panel. Keeping that
-logic here means a fix applies to every metric at once.
+renders as one card in the report section it names. Keeping that logic here
+means a fix applies to every metric at once.
 """
 
 from __future__ import annotations
@@ -14,8 +14,7 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 from collections.abc import Sequence
-from functools import cached_property
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -23,6 +22,7 @@ import plotly.graph_objects as go
 from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
+from ...config.evaluation_report_data import TimeSeriesMetric
 from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.assets.text.multi_modal_tooltips import tooltips
@@ -32,42 +32,55 @@ from .component import Component
 FigureSpec = tuple[str, go.Figure, bool, str]
 """Chart title, figure, whether it gets the column select, and its tooltip key."""
 
+MetricT = TypeVar("MetricT", bound=TimeSeriesMetric)
 
-class TimeSeriesComponent(Component):
-    """Base for components shown in the report's Time-Series Metrics panel.
+
+class TimeSeriesComponent(Component, Generic[MetricT]):
+    """Base for components run with time-series evaluation and shown as report cards.
 
     The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
-    each as a metric card from the class attributes below. Subclasses extend
-    ``jinja_context`` with their figures, built with ``figure_rows``.
+    each as a metric card from the class attributes below, in the section
+    named by ``report_section``. Subclasses are parametrized by their exported
+    metric type and extend ``report_context`` with their
+    figures, built with ``figure_rows`` from the exported metric.
 
     Attributes:
+        metric_key: Key of the metric in ``EvaluationReportData.metrics``.
         card_id: HTML id of the metric card.
         description: One-line description shown on the card.
         tooltip_key: Key of the card's info tooltip in ``tooltips``.
         template: Jinja template rendered inside the card.
         score_colored_traces: Whether chart traces are colored by score, so
             the report keeps their colors instead of applying dataset colors.
+        report_section: Report section the card is shown in: the Time-Series
+            Metrics panel (``"time_series"``) or the Protection Metrics panel
+            of the Data Privacy section (``"data_privacy"``).
     """
 
+    metric_key: ClassVar[str]
     card_id: ClassVar[str]
     description: ClassVar[str]
     tooltip_key: ClassVar[str]
     template: ClassVar[str]
     score_colored_traces: ClassVar[bool] = False
+    report_section: ClassVar[Literal["time_series", "data_privacy"]] = "time_series"
 
     details: dict[str, Any] = Field(default_factory=dict, description="Metric-specific diagnostic details.")
 
-    @cached_property
-    def jinja_context(self) -> dict[str, Any]:
-        """Return score, details, and card attributes for report rendering."""
-        context = super().jinja_context
-        context["details"] = self.details
-        context["card_id"] = self.card_id
-        context["description"] = self.description
-        context["tooltip_key"] = self.tooltip_key
-        context["template"] = self.template
-        context["score_colored_traces"] = self.score_colored_traces
-        return context
+    @classmethod
+    def report_context(cls, metric: MetricT) -> dict[str, Any]:
+        """Return the metric's score and card attributes for report rendering."""
+        return {
+            "name": cls.model_fields["name"].default,
+            "score": metric.score,
+            "details": metric.details,
+            "card_id": cls.card_id,
+            "description": cls.description,
+            "tooltip_key": cls.tooltip_key,
+            "template": cls.template,
+            "score_colored_traces": cls.score_colored_traces,
+            "report_section": cls.report_section,
+        }
 
     @staticmethod
     def figure_rows(figures: Sequence[FigureSpec]) -> list[dict[str, Any]]:

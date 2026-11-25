@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+from nemo_safe_synthesizer.config.evaluation_report_data import AutocorrelationProfile
 from nemo_safe_synthesizer.errors import DataError
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figures import (
     generate_autocorrelation_lag_error_figure,
@@ -15,15 +16,26 @@ from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figu
 )
 
 
-def _profile(group, column, training_acf, synthetic_acf, similarity):
-    return {
-        "group": group,
-        "column": column,
-        "lags": list(range(1, len(training_acf) + 1)),
-        "training_acf": training_acf,
-        "synthetic_acf": synthetic_acf,
-        "similarity": similarity,
-    }
+def _profile(
+    group: str | None,
+    column: str,
+    training_acf: list[float | None],
+    synthetic_acf: list[float | None],
+    similarity: float,
+) -> AutocorrelationProfile:
+    lags = len(training_acf)
+    return AutocorrelationProfile(
+        group=group,
+        column=column,
+        lags=list(range(1, lags + 1)),
+        effective_max_lag=lags,
+        evaluated_lags=lags,
+        error=1.0 - similarity,
+        similarity=similarity,
+        reason=None,
+        training_acf=training_acf,
+        synthetic_acf=synthetic_acf,
+    )
 
 
 _SUMMARY_PROFILES = [
@@ -46,6 +58,15 @@ def test_summary_figure_groups_traces_by_column_with_lowest_scoring_column_visib
     synthetic_median = next(trace for trace in figure.data if trace.name == "Synthetic median ACF")
     assert list(synthetic_median.y) == pytest.approx([0.2, 0.1, 0.1])
     assert not figure.layout.updatemenus
+
+
+def test_summary_figure_draws_a_column_whose_synthetic_sequences_are_all_constant():
+    profiles = [_profile("a", "flat", [0.9, 0.8], [None, None], 0.0)]
+
+    figure = generate_autocorrelation_summary_figure(profiles)
+
+    synthetic_median = next(trace for trace in figure.data if trace.name == "Synthetic median ACF")
+    assert list(synthetic_median.y) == []
 
 
 def test_lag_error_figure_averages_only_paired_finite_lags():

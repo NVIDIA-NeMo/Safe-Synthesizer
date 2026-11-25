@@ -8,6 +8,7 @@ from __future__ import annotations
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
+from .evaluation_report_data import EvaluationReportData
 from .external_results import SafeSynthesizerSummary, SafeSynthesizerTiming
 from .generate import GenerateParameters, StructuredGenerationParameters
 from .internal_results import SafeSynthesizerResults
@@ -22,6 +23,7 @@ __all__ = [
     "DataParameters",
     "DifferentialPrivacyHyperparams",
     "EvaluationParameters",
+    "EvaluationReportData",
     "FreeTextDetectionConfig",
     "GenerateParameters",
     "ReplacePiiConfig",

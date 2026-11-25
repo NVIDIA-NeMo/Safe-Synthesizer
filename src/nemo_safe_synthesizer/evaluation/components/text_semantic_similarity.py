@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import warnings
 from contextlib import contextmanager
-from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -35,7 +34,6 @@ from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
 from ...observability import get_logger
-from . import multi_modal_figures as figures
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -96,28 +94,6 @@ class TextSemanticSimilarity(Component):
     text_semantic_similarity_dict: dict[str, TextSemanticSimilarityDatum] = Field(
         default=dict(), description="Per-column semantic similarity scores and PCA projections."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with per-column PCA scatter figures."""
-        ctx = super().jinja_context
-        ctx["anchor_link"] = "#semantic-similarity"
-        ctx["figures"] = []
-        if self.text_semantic_similarity_dict:
-            maybe_figs = {
-                col: figures.generate_text_semantic_similarity_figures(
-                    self.text_semantic_similarity_dict[col].training_pca.iloc[:, :2],
-                    self.text_semantic_similarity_dict[col].synthetic_pca.iloc[:, :2],
-                )
-                for col in self.text_semantic_similarity_dict.keys()
-            }
-            ctx["figures"] = [
-                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
-                for col, fig in maybe_figs.items()
-                if fig is not None
-            ]
-
-        return ctx
 
     @staticmethod
     def from_evaluation_datasets(

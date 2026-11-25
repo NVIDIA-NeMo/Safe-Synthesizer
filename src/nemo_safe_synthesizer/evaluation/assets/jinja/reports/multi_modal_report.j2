@@ -35,7 +35,7 @@
                 <span class="nav-icon">{{ icon("lock") }}</span>Data Privacy
             </a>
             {% endif %}
-            {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
+            {% if ctx.column_distribution_stability.columns %}
             <a href="#training-columns" data-report-nav="training-columns">
                 <span class="nav-icon">{{ icon("columns") }}</span>Training Data
             </a>
@@ -53,7 +53,7 @@
             </p>
             {% if ctx.job_id %}<div class="job-id"><span>Job ID</span>{{ ctx.job_id }}</div>{% endif %}
             {% if ctx.with_synthesizer %}{% include "jinja/components/score_overview.j2" %}{% endif %}
-            {% include "jinja/components/dataset_statistics.j2" %}
+            {% if ctx.dataset_statistics %}{% include "jinja/components/dataset_statistics.j2" %}{% endif %}
         </section>
 
         {% if ctx.with_synthesizer %}
@@ -231,6 +231,15 @@
                             expandable=ctx.membership_inference_protection.figure) %}
                         {% include "jinja/components/membership_inference_protection.j2" %}
                     {% endcall %}
+                    {% for card in ctx.data_privacy_time_series_cards %}
+                    {% call metric_card(card.card_id, card.name,
+                            card.score,
+                            card.description,
+                            ctx.tooltips[card.tooltip_key],
+                            expandable=true) %}
+                        {% include card.template %}
+                    {% endcall %}
+                    {% endfor %}
                     {% call metric_card("aia", ctx.attribute_inference_protection.name,
                             ctx.attribute_inference_protection.score,
                             "Protection against attacks that infer sensitive attributes",
@@ -249,7 +258,7 @@
         </section>
         {% endif %}
 
-        {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
+        {% if ctx.column_distribution_stability.columns %}
         <section class="report-view" id="training-columns" data-report-view="training-columns">
             {% include "jinja/components/training_columns.j2" %}
         </section>

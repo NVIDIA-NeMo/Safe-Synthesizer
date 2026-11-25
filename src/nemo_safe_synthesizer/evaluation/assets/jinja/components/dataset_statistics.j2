@@ -9,7 +9,7 @@
             <dl>
                 <div><dt>Rows</dt><dd>{{ "{:,}".format(ctx.dataset_statistics.training_rows) }}</dd></div>
                 <div><dt>Columns</dt><dd>{{ ctx.dataset_statistics.training_cols }}</dd></div>
-                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.training_missing }}%</dd></div>
+                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.training_missing_percent | int }}%</dd></div>
             </dl>
         </div>
         <span class="dataset-arrow">{{ icon("arrow-right") }}</span>
@@ -18,7 +18,7 @@
             <dl>
                 <div><dt>Rows</dt><dd>{{ "{:,}".format(ctx.dataset_statistics.synthetic_rows) }}</dd></div>
                 <div><dt>Columns</dt><dd>{{ ctx.dataset_statistics.synthetic_cols }}</dd></div>
-                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.synthetic_missing }}%</dd></div>
+                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.synthetic_missing_percent | int }}%</dd></div>
             </dl>
         </div>
     </div>

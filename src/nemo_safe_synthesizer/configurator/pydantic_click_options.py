@@ -39,14 +39,6 @@ __all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 _NEGATION_PREFIX = "no_"
 """Prefix marking a generated disable flag for a nullable sub-config field."""
 
-_LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
-    "generation.structured_generation.enabled": ("generation.use_structured_generation",),
-    "generation.structured_generation.backend": ("generation.structured_generation_backend",),
-    "generation.structured_generation.schema_method": ("generation.structured_generation_schema_method",),
-    "generation.structured_generation.use_single_sequence": ("generation.structured_generation_use_single_sequence",),
-}
-"""Hidden compatibility aliases for renamed generated CLI options."""
-
 
 def _unescape_list_token(token: str) -> str:
     """Unescape backslash-escaped commas and brackets in a CLI list token."""
@@ -469,7 +461,7 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
         A Click decorator that attaches the generated options to a command.
     """
 
-    def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
+    def apply_leaf_option(f, name: str, field: FieldInfo):
         """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
         item_type = _list_item_type(field.annotation)
@@ -481,13 +473,11 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
                 default=None,
                 callback=_make_list_callback(is_basemodel=_is_basemodel(item_type)),
                 help=field.description or "",
-                hidden=hidden,
             )(f)
         return click.option(
             *names,
             type=_click_type(field.annotation),
             help=field.description or "",
-            hidden=hidden,
         )(f)
 
     def decorator(f):
@@ -512,8 +502,6 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
                     )(f)
                 case LeafParam(field=field):
                     f = apply_leaf_option(f, param.name, field)
-                    for legacy_name in _LEGACY_CLI_OPTION_PATHS.get(param.name, ()):
-                        f = apply_leaf_option(f, legacy_name, field, hidden=True)
         return f
 
     return decorator

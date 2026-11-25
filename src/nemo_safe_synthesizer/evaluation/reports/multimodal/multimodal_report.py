@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import os
-from functools import cached_property
 from typing import Any
 
 import pandas as pd
@@ -15,12 +13,10 @@ from ....config.evaluate import (
     DEFAULT_SQS_REPORT_COLUMNS,
 )
 from ....config.parameters import SafeSynthesizerParameters
-from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
-    ColumnDistributionPlotRow,
 )
 from ....evaluation.components.component import Component
 from ....evaluation.components.correlation import (
@@ -41,6 +37,7 @@ from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
 from ....evaluation.components.time_series_common import TimeSeriesComponent
+from ....evaluation.components.window_group_mia import WindowGroupMIA
 from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -48,136 +45,12 @@ from ....evaluation.data_model.evaluation_score import (
     PrivacyGrade,
 )
 from ....observability import get_logger
-from ....pii_replacer.planning.patterns import describe_pattern
-from ....pii_replacer.replacement.descriptions import SAMPLER_LABELS, describe_replacement
-from ....pii_replacer.replacement.types import DetectionSource
 from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
 
-TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity,)
+TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity, WindowGroupMIA)
 """Components run when time-series evaluation is enabled, in report display order."""
-
-# Report names for the free-text detectors recorded in ``ColumnStatistics.transform_functions``, in report order.
-_DETECTION_LABELS = {
-    DetectionSource.GLINER: "GLiNER",
-    DetectionSource.REGEX: "validated patterns",
-    DetectionSource.STRUCTURED_VALUE: "values from replaced columns",
-    DetectionSource.DETECTED_VALUE: "values detected elsewhere in the same record or group",
-}
-
-
-def _pii_column_groups(rows: list[dict], replay_data: list[dict]) -> list[dict]:
-    """Join each planned column with its PII replay results, with one entry per PII type found in it.
-
-    A free-text column has an entry for every PII type found in its text, most frequent first, so the
-    report can show the column once beside all of them. Replay fields are ``None`` when PII replay did
-    not run. Replay results for columns outside the plan, such as every column when PII replacement was
-    off, get their own group with no replacement description.
-    """
-    replay_by_column: dict[str, list[dict]] = {}
-    for datum in replay_data:
-        replay_by_column.setdefault(datum["column_name"], []).append(datum)
-
-    groups = []
-    for row in rows:
-        replayed = {datum["pii_type"]: datum for datum in replay_by_column.pop(row["column_name"], [])}
-        counts = row["entity_counts"] or {row["entity_type"]: 0}
-        entities = [
-            _pii_entity(pii_type, found, replayed.get(pii_type, {}))
-            for pii_type, found in sorted(counts.items(), key=lambda item: -item[1])
-        ]
-        groups.append({**row, "entities": entities})
-    for column_name, data in replay_by_column.items():
-        entities = [_pii_entity(datum["pii_type"], datum["total_training_data"], datum) for datum in data]
-        groups.append({"column_name": column_name, "replaced_with": None, "entities": entities})
-    return groups
-
-
-def _pii_replay_note(config: SafeSynthesizerParameters | None, replay: dict) -> str | None:
-    """Return why PII replay results are missing or partial, or ``None`` when replay ran in full."""
-    if reason := replay.get("skipped_reason"):
-        if replay.get("pii_replay_data"):
-            return f"Only the columns in evaluation.pii_replay_columns were checked: {reason}."
-        return f"PII replay was not run: {reason}."
-    if config is not None and not config.get("pii_replay_enabled"):
-        return "PII replay was turned off with evaluation.pii_replay_enabled."
-    return None
-
-
-def _pii_headline(rows: list[dict], groups: list[dict], replay_note: str | None) -> str:
-    """Return the short summary shown on the collapsed PII card, such as ``9 columns replaced``.
-
-    With replacement on, it counts the planned columns; with replacement off, the columns PII was found in.
-    """
-    if rows:
-        return f"{len(rows)} column{'' if len(rows) == 1 else 's'} replaced"
-    if groups:
-        return f"PII in {len(groups)} column{'' if len(groups) == 1 else 's'}, not replaced"
-    return "Replay not run" if replay_note else "No PII found"
-
-
-def _pii_entity(pii_type: str, found: int, replay: dict) -> dict:
-    """Return one PII type's training count and replay counts, which are ``None`` without a replay result."""
-    return {
-        "pii_type": pii_type,
-        "found": found,
-        "unique": replay.get("unique_training_data"),
-        "synthetic": replay.get("total_synthetic_data"),
-        "replayed": replay.get("unique_synthetic_data"),
-        "replay_percentage": replay.get("unique_synthetic_data_percentage"),
-    }
-
-
-def _pii_replacement_context(
-    config: SafeSynthesizerParameters | None, evaluation_datasets: EvaluationDatasets | None
-) -> dict | None:
-    """Return the PII replacement plan as table rows, or ``None`` when no plan was applied.
-
-    Rows follow the training column order. Counts come from the replacement run's column
-    statistics, which describe the training split only; the test split is never replaced.
-    """
-    settings = config.replace_pii if config is not None else None
-    # A plan is applied only once it is resolved inline; a path or auto-discovery means none was.
-    if settings is None or settings.inline_plan is None or evaluation_datasets is None:
-        return None
-    plan = settings.inline_plan
-    statistics = evaluation_datasets.column_statistics or {}
-    planned = {column.column_name: column for column in plan.columns_to_replace}
-    training_columns = list(evaluation_datasets.training.columns)
-    order = {name: index for index, name in enumerate(training_columns)}
-
-    rows = []
-    for name, column in sorted(planned.items(), key=lambda item: order.get(item[0], len(order))):
-        column_statistics = statistics.get(name)
-        functions = column_statistics.transform_functions if column_statistics else set()
-        rows.append(
-            {
-                "column_name": name,
-                "entity_type": str(column.entity_type.value),
-                "replaced_with": describe_replacement(column, settings),
-                "pattern": column.pattern,
-                "pattern_symbols": describe_pattern(column.entity_type, column.pattern) if column.pattern else (),
-                "depends_on": [
-                    {
-                        "column_name": dependency.column_name,
-                        "entity_type": dependency.entity_type.value if dependency.entity_type else None,
-                    }
-                    for dependency in column.depends_on
-                ],
-                "found_by": [label for source, label in _DETECTION_LABELS.items() if source in functions],
-                "entity_counts": dict(column_statistics.detected_entity_counts) if column_statistics else {},
-            }
-        )
-    mapping = plan.data_to_sampler_value_mapping or {}
-    return {
-        "rows": rows,
-        "kept_columns": [name for name in training_columns if name not in planned],
-        "sampler": SAMPLER_LABELS.get(settings.sampler.backend, settings.sampler.backend.value),
-        "locale": settings.locale,
-        "seed": settings.seed,
-        "mappings": {column: dict(values) for column, values in mapping.items()},
-    }
 
 
 class MultimodalReport(EvaluationReport):
@@ -185,7 +58,7 @@ class MultimodalReport(EvaluationReport):
 
     Assembles all evaluation components (SQS sub-metrics for tabular and/or text columns,
     privacy scores, PII replay, dataset statistics) from paired training/synthetic
-    dataframes and renders them into an HTML report via Jinja2 templates.
+    dataframes. ``build_report_data`` exports the results, and the HTML report is rendered from that export.
 
     Use ``from_dataframes`` to construct a fully populated report.
     """
@@ -193,64 +66,6 @@ class MultimodalReport(EvaluationReport):
     config: SafeSynthesizerParameters | None = Field(
         default=None, description="Pipeline configuration parameters used for this evaluation."
     )
-
-    @cached_property
-    def jinja_context(self) -> dict:
-        """Template context with tooltips, flags, and per-column distribution figures."""
-        try:
-            ctx = super().jinja_context
-            ctx["tooltips"] = tooltips
-            # Job ID from the runtime environment (e.g. cluster); omit from HTML when unset.
-            raw_job_id = os.environ.get("NEMO_JOB_ID")
-            ctx["job_id"] = (raw_job_id or "").strip() or None
-
-            # Shorthands used in template
-            ctx["with_synthesizer"] = False
-            for c in self.components:
-                if c.name == "Synthetic Quality Score" and c.score and c.score.grade.value != "Unavailable":
-                    ctx["with_synthesizer"] = True
-
-            ctx["with_data_privacy"] = False
-            for c in self.components:
-                if c.name == "Data Privacy Score" and c.score and c.score.grade.value != "Unavailable":
-                    ctx["with_data_privacy"] = True
-
-            statistics = self.evaluation_datasets.column_statistics if self.evaluation_datasets is not None else None
-            # Statistics from detection alone, with replacement off, mark no column transformed and add no columns.
-            ctx["with_transform"] = bool(statistics) and any(s.is_transformed for s in statistics.values())
-
-            config = self.config
-            ctx["dp_enabled"] = config is not None and config.get("dp_enabled")
-            if ctx["dp_enabled"] and config is not None:
-                ctx["delta"] = config.get("delta")
-                ctx["epsilon"] = config.get("epsilon")
-
-            replay = ctx.get("pii_replay") or {}
-            replay_data = replay.get("pii_replay_data") or []
-            pii: dict | None = _pii_replacement_context(config, self.evaluation_datasets)
-            rows: list[dict] = pii["rows"] if pii is not None else []
-            # With replacement off, PII is detected only for replay; the table then comes from replay alone.
-            if pii is None and (replay_data or replay.get("skipped_reason") or statistics is not None):
-                pii = {"replacement_off": True, "kept_columns": [], "mappings": {}}
-            if pii is not None:
-                groups = _pii_column_groups(rows, replay_data)
-                replay_note = _pii_replay_note(config, replay)
-                pii.update(groups=groups, replay_note=replay_note, headline=_pii_headline(rows, groups, replay_note))
-            ctx["pii_replacement"] = pii
-
-            # Numeric per-column figures require access to the original data, a little hacky.
-            if "column_distribution_stability" in ctx:
-                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_datasets(
-                    self.evaluation_datasets
-                )
-
-            ctx["time_series_cards"] = [c.jinja_context for c in self.components if isinstance(c, TimeSeriesComponent)]
-            ctx["with_time_series"] = bool(ctx["time_series_cards"])
-
-            return ctx
-        except Exception:
-            logger.exception("Failed to get jinja context")
-            raise
 
     @staticmethod
     def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None) -> Any:
