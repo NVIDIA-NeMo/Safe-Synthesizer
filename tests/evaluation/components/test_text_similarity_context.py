@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config.evaluation_report_data import (
     Scores,
 )
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import _suppress_ks_exact_fallback
+from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.report_context import report_context
 
 
@@ -37,6 +38,13 @@ _EMPTY_REPORT = EvaluationReportData(
     differential_privacy=DifferentialPrivacySettings(enabled=False, epsilon=None, delta=None),
     pii_replacement=None,
 )
+
+
+def test_report_without_dataset_counts_renders_without_dataset_statistics() -> None:
+    html = render_report(_EMPTY_REPORT)
+
+    assert html is not None
+    assert 'id="dataset-statistics"' not in html
 
 
 def test_text_semantic_similarity_figures_have_a_column_heading() -> None:
