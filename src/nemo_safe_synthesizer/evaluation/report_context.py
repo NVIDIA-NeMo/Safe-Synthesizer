@@ -27,6 +27,7 @@ from ..config.evaluation_report_data import (
     MetricScore,
     PIIReplacement,
     PIIReplayMetric,
+    Points,
     Projection,
     TextSemanticMetric,
     TextStructureMetric,
@@ -158,15 +159,15 @@ def _correlation_figure(metric: CorrelationMetric) -> go.Figure | None:
     )
 
 
-def _narrowest_floats(values: list[float]) -> np.ndarray:
+def _narrowest_floats(values: list[float | None]) -> np.ndarray:
     # Plotly embeds float64 at twice the size, and float32 embeddings come back from the data as float64.
     wide = np.asarray(values, dtype=np.float64)
     narrow = wide.astype(np.float32)
-    return narrow if np.array_equal(narrow, wide) else wide
+    return narrow if np.array_equal(narrow, wide, equal_nan=True) else wide
 
 
 def _points(projection: Projection, which: str) -> pd.DataFrame:
-    points = getattr(projection, which)
+    points: Points = getattr(projection, which)
     return pd.DataFrame(
         {projection.axes[0]: _narrowest_floats(points.x), projection.axes[1]: _narrowest_floats(points.y)}
     )
