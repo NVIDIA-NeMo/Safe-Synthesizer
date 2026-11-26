@@ -389,6 +389,9 @@ about 66 GB of weights into the Hugging Face cache.
 
 To use a hosted or self-hosted endpoint instead, set `NSS_INFERENCE_ENDPOINT`;
 see [Environment Variables -- Where planning requests go](environment.md#where-planning-requests-go).
+An application that embeds the SDK can name the endpoint with
+`with_inference()` instead; see
+[Name the endpoint in code](environment.md#name-the-endpoint-in-code).
 
 ### Local inference server
 

@@ -182,8 +182,9 @@ planning model or your own serving profile, see
 Plan discovery sends the LLM column statistics, up to eight cell samples per
 column, up to three sample rows of the columns a dependency could link, and
 distinct values of dependency columns, such as sex or race, that need mapping
-to the sampler's values. Where they go depends only on
-`NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
+to the sampler's values. Unless the SDK
+[names an endpoint in code](#name-the-endpoint-in-code), where they go depends
+only on `NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
 
 - Unset: Safe Synthesizer starts its own vLLM server on this machine, and the
   data stays here. This is the default.
@@ -220,6 +221,31 @@ export NSS_INFERENCE_KEY=<your key>
 
 If vLLM or a suitable GPU is unavailable and no endpoint is set, planning fails
 with an error instead of falling back to a remote service.
+
+### Name the endpoint in code
+
+An application that embeds the SDK can name the endpoint and model in code
+with `with_inference()` instead of setting environment variables:
+
+```python title="PII inference endpoint in code"
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+synthesizer = (
+    SafeSynthesizer()
+    .with_data_source("data.csv")
+    .with_inference("http://127.0.0.1:8080/v1", "nvidia/nemotron-3-ultra-550b-a55b")
+)
+```
+
+- It replaces every `NSS_INFERENCE_*` variable and `replace_pii.llm.model_id`,
+  and Safe Synthesizer never starts its own vLLM server.
+- Requests carry no credentials, and `NSS_INFERENCE_KEY` is not sent. Point it
+  at a service that needs none, such as a local proxy that adds your
+  credentials.
+- Requests use a 60-second timeout and no extra request fields.
+- The endpoint and model are never stored in configuration or plan files.
+- Plan discovery sends this endpoint the same data, so only use a service that
+  is approved to receive the input data.
 
 ---
 
