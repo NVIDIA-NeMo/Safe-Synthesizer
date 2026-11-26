@@ -389,9 +389,6 @@ about 66 GB of weights into the Hugging Face cache.
 
 To use a hosted or self-hosted endpoint instead, set `NSS_INFERENCE_ENDPOINT`;
 see [Environment Variables -- Where planning requests go](environment.md#where-planning-requests-go).
-To forbid the local server entirely, for example in a platform job, set
-`NSS_INFERENCE_ALLOW_LOCAL=false`; see
-[Running embedded in a platform](environment.md#running-embedded-in-a-platform).
 
 ### Local inference server
 
