@@ -242,7 +242,8 @@ synthesizer = (
 - Requests carry no credentials, and `NSS_INFERENCE_KEY` is not sent. Point it
   at a service that needs none, such as a local proxy that adds your
   credentials.
-- Requests use a 60-second timeout and no extra request fields.
+- Requests use a 60-second timeout unless you pass `timeout_seconds`, and send
+  no extra request fields.
 - The endpoint and model are never stored in configuration or plan files.
 - Plan discovery sends this endpoint the same data, so only use a service that
   is approved to receive the input data.

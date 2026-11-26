@@ -253,27 +253,30 @@ class ConfigBuilder:
         self._replace_pii_config = self._overlay_section(ReplacePiiConfig, self._replace_pii_config, config, kwargs)
         return self
 
-    def with_inference(self, endpoint_url: str, model_id: str) -> Self:
+    def with_inference(self, endpoint_url: str, model_id: str, *, timeout_seconds: float | None = None) -> Self:
         """Send PII planning requests to ``endpoint_url`` instead of using ``NSS_INFERENCE_*`` or a local server.
 
         Overrides all ``NSS_INFERENCE_*`` variables and ``replace_pii.llm.model_id``, so requests
-        use the default 60-second timeout and no extra request options. They carry no credentials,
-        so the endpoint must accept them as they are; ``NSS_INFERENCE_KEY`` is not sent. Nothing
-        here is saved to config or artifacts.
+        send no extra request options. They carry no credentials, so the endpoint must accept
+        them as they are; ``NSS_INFERENCE_KEY`` is not sent. Nothing here is saved to config or
+        artifacts.
 
         Args:
             endpoint_url: OpenAI-compatible base URL, without credentials or a query string.
             model_id: Model the endpoint serves.
+            timeout_seconds: Per-request timeout; defaults to 60 seconds.
 
         Returns:
             This builder instance.
 
         Raises:
-            ParameterError: If the endpoint or model is invalid.
+            ParameterError: If the endpoint, model, or timeout is invalid.
         """
         from ..pii_replacer.llm_client import InferenceEndpoint
 
-        self._inference_endpoint = InferenceEndpoint(endpoint_url=endpoint_url, model_id=model_id)
+        self._inference_endpoint = InferenceEndpoint(
+            endpoint_url=endpoint_url, model_id=model_id, timeout_seconds=timeout_seconds
+        )
         return self
 
     def with_evaluate(self, config: EvaluationParameters | RawConfig | None = None, **kwargs: object) -> Self:

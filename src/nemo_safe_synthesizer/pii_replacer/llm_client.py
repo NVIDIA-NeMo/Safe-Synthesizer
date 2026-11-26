@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -245,12 +246,20 @@ class InferenceEndpoint:
     model_id: str
     """Model the endpoint serves."""
 
+    timeout_seconds: float | None = None
+    """Per-request timeout; ``None`` uses the default of 60 seconds."""
+
     def __post_init__(self) -> None:
         endpoint_url = self.endpoint_url.strip()
         _validate_endpoint(endpoint_url)
         model_id = nonblank(self.model_id)
         if model_id is None:
             raise ParameterError("The PII inference model ID must not be blank")
+        timeout = self.timeout_seconds
+        if timeout is not None and not (timeout > 0 and math.isfinite(timeout)):
+            raise InvalidRequestSettingsError(
+                f"The PII inference timeout must be a positive number of seconds, got {timeout!r}"
+            )
         object.__setattr__(self, "endpoint_url", endpoint_url.rstrip("/"))
         object.__setattr__(self, "model_id", model_id)
 
@@ -266,6 +275,9 @@ class InferenceEndpoint:
             endpoint_url=self.endpoint_url,
             model_id=self.model_id,
             max_workers=config.max_workers,
+            timeout_seconds=(
+                DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS if self.timeout_seconds is None else self.timeout_seconds
+            ),
         )
 
 
