@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
+    InferenceEndpoint,
     InferenceSettings,
     InvalidInferenceResponse,
     MissingInferenceModelError,
@@ -343,3 +344,47 @@ class TestOpenAICompatibleTransport:
             )
 
         assert exc_info.value.retry_after == expected_retry_after
+
+
+GATEWAY = "https://gateway.example/v1"
+
+
+@pytest.mark.unit
+class TestInferenceEndpoint:
+    def test_settings_use_the_endpoint_and_ignore_the_configured_model(self) -> None:
+        endpoint = InferenceEndpoint(f" {GATEWAY}/ ", " gateway-model ")
+
+        settings = endpoint.settings(LLMConfig(max_workers=3, model_id="openai/gpt-oss-120b"))
+
+        assert settings == InferenceSettings(endpoint_url=GATEWAY, model_id="gateway-model", max_workers=3)
+        assert settings.timeout_seconds == 60
+
+    def test_rejected_request_says_that_with_inference_sends_no_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: httpx.Response(401))
+        transport = OpenAICompatibleTransport(InferenceEndpoint(GATEWAY, "m").settings(LLMConfig()))
+
+        with pytest.raises(ParameterError, match="with_inference is sent no credentials"):
+            transport.complete(messages=[{"role": "user", "content": "request"}], response_model=_StructuredResponse)
+
+    def test_timeout_replaces_the_default(self) -> None:
+        settings = InferenceEndpoint(GATEWAY, "m", timeout_seconds=300).settings(LLMConfig())
+
+        assert settings.timeout_seconds == 300
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            pytest.param({"endpoint_url": "gateway.example/v1"}, "absolute HTTP", id="relative"),
+            pytest.param({"endpoint_url": f"{GATEWAY}?api_key=x"}, "query string", id="query"),
+            pytest.param({"model_id": "  "}, "must not be blank", id="blank-model"),
+            pytest.param({"timeout_seconds": 0}, "positive number of seconds", id="zero-timeout"),
+            pytest.param({"timeout_seconds": float("inf")}, "positive number of seconds", id="infinite-timeout"),
+        ],
+    )
+    def test_invalid_values_are_rejected_on_construction(self, kwargs: dict[str, object], message: str) -> None:
+        values: dict[str, object] = {"endpoint_url": GATEWAY, "model_id": "m", **kwargs}
+
+        with pytest.raises(ParameterError, match=message):
+            InferenceEndpoint(**values)  # ty: ignore[invalid-argument-type]

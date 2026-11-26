@@ -562,7 +562,8 @@ instead. Common failures:
   another process is listening on the planning port. Stop it, or follow the
   message to use that server or choose another port.
 - `PII inference authentication or authorization failed`: the hosted service
-  rejected `NSS_INFERENCE_KEY`.
+  rejected `NSS_INFERENCE_KEY`. An endpoint set with `with_inference()` is sent
+  no credentials, so it must accept requests without them.
 - `NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too`: set
   `NSS_INFERENCE_MODEL` or `replace_pii.llm.model_id` to the model the service
   serves.

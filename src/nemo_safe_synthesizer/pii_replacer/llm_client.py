@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -36,6 +37,7 @@ __all__ = [
     "REQUEST_OPTIONS_ENV",
     "RESERVED_REQUEST_FIELDS",
     "TIMEOUT_ENV",
+    "InferenceEndpoint",
     "InferenceSettings",
     "InvalidInferenceResponse",
     "InvalidRequestSettingsError",
@@ -142,7 +144,7 @@ def _validate_endpoint(endpoint_url: str) -> None:
     if parsed.query or parsed.fragment:
         raise ParameterError(
             "The PII inference endpoint URL must not contain a query string or fragment; "
-            "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
+            "credentials do not belong in the URL"
         )
 
 
@@ -232,6 +234,51 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
         ),
         request_options=merge_request_options(environment.request_options),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class InferenceEndpoint:
+    """PII planning inference configured in code; see ``SafeSynthesizer.with_inference``."""
+
+    endpoint_url: str
+    """OpenAI-compatible base URL that ``/chat/completions`` is appended to."""
+
+    model_id: str
+    """Model the endpoint serves."""
+
+    timeout_seconds: float | None = None
+    """Per-request timeout; ``None`` uses the default of 60 seconds."""
+
+    def __post_init__(self) -> None:
+        endpoint_url = self.endpoint_url.strip()
+        _validate_endpoint(endpoint_url)
+        model_id = nonblank(self.model_id)
+        if model_id is None:
+            raise ParameterError("The PII inference model ID must not be blank")
+        timeout = self.timeout_seconds
+        if timeout is not None and not (timeout > 0 and math.isfinite(timeout)):
+            raise InvalidRequestSettingsError(
+                f"The PII inference timeout must be a positive number of seconds, got {timeout!r}"
+            )
+        object.__setattr__(self, "endpoint_url", endpoint_url.rstrip("/"))
+        object.__setattr__(self, "model_id", model_id)
+
+    def settings(self, config: LLMConfig) -> InferenceSettings:
+        """Return the settings planning sends requests with.
+
+        Args:
+            config: Persisted LLM behavior from ``replace_pii.llm``. Only
+                ``max_workers`` is used; ``model_id`` is ignored in favor of this
+                endpoint's model.
+        """
+        return InferenceSettings(
+            endpoint_url=self.endpoint_url,
+            model_id=self.model_id,
+            max_workers=config.max_workers,
+            timeout_seconds=(
+                DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS if self.timeout_seconds is None else self.timeout_seconds
+            ),
+        )
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
@@ -353,7 +400,8 @@ class OpenAICompatibleTransport:
         if response.status_code in {401, 403}:
             raise ParameterError(
                 f"PII inference authentication or authorization failed (HTTP {response.status_code}); "
-                "check NSS_INFERENCE_KEY or --inference-api-key"
+                "check NSS_INFERENCE_KEY or --inference-api-key. An endpoint set with with_inference is sent "
+                "no credentials, so it must accept requests without them"
             )
         if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
             raise TransientInferenceError(

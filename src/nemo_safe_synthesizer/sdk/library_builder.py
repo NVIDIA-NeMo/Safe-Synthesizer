@@ -444,6 +444,7 @@ class SafeSynthesizer(ConfigBuilder):
             replace_pii,
             config.data,
             config.time_series,
+            inference_endpoint=self._inference_endpoint,
         )
         self._nss_config = config.model_copy(update={"replace_pii": resolved})
         self._replace_pii_config = resolved
@@ -580,6 +581,7 @@ class SafeSynthesizer(ConfigBuilder):
                 ReplacePiiConfig(),
                 data_config=self._nss_config.data,
                 time_series=self._nss_config.time_series,
+                inference_endpoint=self._inference_endpoint,
             ).detect(training_df, check_pattern_coverage=False)
         # PII replay is an optional evaluation check, so no detection failure may stop a run without replacement.
         except Exception as exc:
@@ -651,6 +653,7 @@ class SafeSynthesizer(ConfigBuilder):
             self._nss_config,
             ModelMetadata.stub(self._nss_config),
             stages=frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME}),
+            inference=self._inference_endpoint,
         )
         self.preflight_report = preflight
         if preflight.errors:
@@ -730,7 +733,9 @@ class SafeSynthesizer(ConfigBuilder):
             save_config(self._nss_config, config_path)
             self._preflight_config_path = config_path
 
-        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
+        preflight = run_preflight(
+            self._training_df, self._nss_config, metadata_for_preflight, inference=self._inference_endpoint
+        )
         self.preflight_report = preflight
         for issue in preflight.warnings:
             logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})

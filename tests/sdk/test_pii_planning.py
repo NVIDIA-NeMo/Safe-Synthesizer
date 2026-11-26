@@ -67,7 +67,7 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
     assert args[1] == config.replace_pii
     assert args[2] == config.data
     assert args[3] == config.time_series
-    assert resolve_config.call_args.kwargs == {}
+    assert resolve_config.call_args.kwargs == {"inference_endpoint": None}
     process_data.assert_not_called()
     train.assert_not_called()
     generate.assert_not_called()
@@ -301,3 +301,49 @@ def test_replace_pii_writes_parquet_output_with_its_column_types(tmp_path: Path)
     assert written["zip"].tolist() == ["02054", "10001"]
     assert str(written["visits"].dtype) == "Int64"
     assert not set(written["email"]) & {"ada@example.com", "grace@example.com"}
+
+
+def test_with_inference_reaches_planning_and_stays_out_of_saved_config(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": [f"person-{i}@example.com" for i in range(10)]})
+    expected = ReplacePiiConfig(replacement_plan=PiiReplacementPlan())
+    nss = (
+        SafeSynthesizer(config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()), save_path=tmp_path)
+        .with_data_source(dataframe)
+        .with_inference("https://gateway.example/v1", "gateway-model", timeout_seconds=300)
+    )
+    config_path = tmp_path / "config.yaml"
+
+    with patch(
+        "nemo_safe_synthesizer.pii_replacer.planning.resolve_replacement_config", return_value=expected
+    ) as resolve_config:
+        nss.plan_pii_replacement(output_path=config_path)
+
+    endpoint = resolve_config.call_args.kwargs["inference_endpoint"]
+    assert (endpoint.endpoint_url, endpoint.model_id, endpoint.timeout_seconds) == (
+        "https://gateway.example/v1",
+        "gateway-model",
+        300,
+    )
+    assert config_path.is_file()
+    saved = "".join(path.read_text() for path in tmp_path.iterdir() if path.is_file())
+    assert nss._nss_config is not None
+    dumped = nss._nss_config.model_dump_json()
+    for text in (saved, dumped):
+        assert "gateway.example" not in text
+
+
+def test_process_data_preflight_receives_with_inference_settings(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": [f"person-{i}@example.com" for i in range(200)]})
+    nss = (
+        SafeSynthesizer(config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()), save_path=tmp_path)
+        .with_data_source(dataframe)
+        .with_inference("https://gateway.example/v1", "gateway-model")
+    )
+
+    with (
+        patch("nemo_safe_synthesizer.preflight.run_preflight", side_effect=RuntimeError("stop")) as run_preflight,
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        nss.process_data(check_only=True)
+
+    assert run_preflight.call_args.kwargs["inference"] is nss._inference_endpoint

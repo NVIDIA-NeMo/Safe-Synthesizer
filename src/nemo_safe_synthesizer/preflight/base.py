@@ -272,7 +272,7 @@ class ConfigCheck(PreflightCheck[ConfigView]):
 
     @override
     def _narrow(self, ctx: PreflightContext) -> ConfigView:
-        return ConfigView(config=ctx.config)
+        return ConfigView(config=ctx.config, inference=ctx.inference)
 
 
 class DataFrameCheck(PreflightCheck[DataFrameView]):

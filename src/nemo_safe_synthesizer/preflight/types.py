@@ -61,6 +61,7 @@ import pandas as pd
 if TYPE_CHECKING:
     from ..config.parameters import SafeSynthesizerParameters
     from ..llm.metadata import ModelMetadata
+    from ..pii_replacer.llm_client import InferenceEndpoint
 
 __all__ = [
     "ConfigView",
@@ -186,6 +187,8 @@ class PreflightContext:
     data: pd.DataFrame
     config: SafeSynthesizerParameters
     metadata: ModelMetadata
+    inference: InferenceEndpoint | None = None
+    """PII planning inference configured in code, which replaces the ``NSS_INFERENCE_*`` settings."""
 
 
 @dataclass(frozen=True)
@@ -198,6 +201,8 @@ class ConfigView:
     """
 
     config: SafeSynthesizerParameters
+    inference: InferenceEndpoint | None = None
+    """PII planning inference configured in code, which replaces the ``NSS_INFERENCE_*`` settings."""
 
 
 @dataclass(frozen=True)

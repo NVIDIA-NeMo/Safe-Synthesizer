@@ -6,8 +6,8 @@
 These settings never live in a configuration file. SDK users set the environment
 variables; the CLI's ``--inference-*`` options validate their values with
 ``InferenceEnvironment`` and write them to the same variables, so planning reads
-them the same way either way. This module imports nothing heavy, so the CLI can
-use it at startup.
+them the same way either way. ``SafeSynthesizer.with_inference`` replaces them
+all. This module imports nothing heavy, so the CLI can use it at startup.
 """
 
 from __future__ import annotations
