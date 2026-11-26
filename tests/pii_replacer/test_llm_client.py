@@ -343,3 +343,132 @@ class TestOpenAICompatibleTransport:
             )
 
         assert exc_info.value.retry_after == expected_retry_after
+
+
+GATEWAY = "https://gateway.example/v1"
+
+
+class _HeaderAuth(httpx.Auth):
+    def __init__(self, name: str, value: str) -> None:
+        self.name = name
+        self.value = value
+
+    def auth_flow(self, request: httpx.Request):
+        request.headers[self.name] = self.value
+        yield request
+
+
+def _route_posts(monkeypatch: pytest.MonkeyPatch, status: int = 200) -> list[httpx.Request]:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(status, json={"choices": [{"message": {"content": "{}"}}]})
+
+    def post(
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, object],
+        timeout: float,
+        trust_env: bool,
+        auth: httpx.Auth | None,
+    ) -> httpx.Response:
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.post(url, headers=headers, json=json, timeout=timeout, auth=auth or httpx.USE_CLIENT_DEFAULT)
+
+    monkeypatch.setattr(httpx, "post", post)
+    return requests
+
+
+def _auth_settings(auth: httpx.Auth | None, *, api_key: str | None = None) -> InferenceSettings:
+    return InferenceSettings(endpoint_url=GATEWAY, model_id="m", max_workers=1, api_key=api_key, auth=auth)
+
+
+def _complete(settings: InferenceSettings) -> str:
+    return OpenAICompatibleTransport(settings).complete(
+        messages=[{"role": "user", "content": "request"}], response_model=_StructuredResponse
+    )
+
+
+@pytest.mark.unit
+class TestInferenceAuth:
+    def test_auth_flow_sets_the_request_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        requests = _route_posts(monkeypatch)
+
+        assert _complete(_auth_settings(_HeaderAuth("X-Principal", "svc-job"))) == "{}"
+
+        (request,) = requests
+        assert request.headers["X-Principal"] == "svc-job"
+        assert "Authorization" not in request.headers
+
+    def test_without_auth_the_static_key_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        requests = _route_posts(monkeypatch)
+
+        _complete(_local_settings(api_key="static-key"))  # pragma: allowlist secret
+
+        (request,) = requests
+        assert request.headers["Authorization"] == "Bearer static-key"
+
+    def test_settings_with_both_credentials_are_rejected(self) -> None:
+        settings = _auth_settings(
+            _HeaderAuth("Authorization", "Bearer token"),
+            api_key="static-key",  # pragma: allowlist secret
+        )
+
+        with pytest.raises(ParameterError, match="both an API key and an httpx.Auth"):
+            OpenAICompatibleTransport(settings)
+
+    def test_rejected_credentials_point_at_the_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _route_posts(monkeypatch, status=401)
+
+        with pytest.raises(ParameterError, match="check the PII inference httpx.Auth"):
+            _complete(_auth_settings(_HeaderAuth("Authorization", "Bearer expired")))
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.HTTPStatusError(
+                "token endpoint rejected",
+                request=httpx.Request("POST", "https://idp.example/token"),
+                response=httpx.Response(401),
+            ),
+            RuntimeError("refresh failed"),
+        ],
+        ids=["http-status", "other"],
+    )
+    def test_failing_auth_is_a_parameter_error_without_its_cause(
+        self, monkeypatch: pytest.MonkeyPatch, failure: Exception
+    ) -> None:
+        requests = _route_posts(monkeypatch)
+
+        class FailingAuth(httpx.Auth):
+            def auth_flow(self, request: httpx.Request):
+                raise failure
+                yield request
+
+        with pytest.raises(ParameterError, match="PII inference httpx.Auth failed") as exc_info:
+            _complete(_auth_settings(FailingAuth()))
+
+        assert not isinstance(exc_info.value, GenerationError)
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__
+        assert requests == []
+
+    def test_network_error_inside_auth_stays_retryable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _route_posts(monkeypatch)
+
+        class TimingOutAuth(httpx.Auth):
+            def auth_flow(self, request: httpx.Request):
+                raise httpx.ReadTimeout("token endpoint timed out", request=request)
+                yield request
+
+        with pytest.raises(TransientInferenceError):
+            _complete(_auth_settings(TimingOutAuth()))
+
+    def test_auth_is_left_out_of_repr_and_equality(self) -> None:
+        settings = _auth_settings(_HeaderAuth("Authorization", "Bearer secret-token"))
+
+        assert "secret-token" not in repr(settings)
+        assert "_HeaderAuth" not in repr(settings)
+        assert settings == _auth_settings(None)

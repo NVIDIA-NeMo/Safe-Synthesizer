@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 from urllib.parse import urlparse
@@ -83,6 +83,12 @@ class InferenceSettings:
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
 
+    auth: httpx.Auth | None = field(default=None, repr=False, compare=False)
+    """Applied to every request, including retries, in place of ``api_key``; excluded from ``repr`` and equality.
+
+    Planning calls it from several threads at once, so ``auth_flow`` must be thread-safe.
+    """
+
 
 class TransientInferenceError(GenerationError):
     """Retryable inference transport failure without response content.
@@ -104,6 +110,11 @@ class InvalidInferenceResponse(GenerationError):
 
 class MissingInferenceModelError(ParameterError):
     """An explicit endpoint is configured, but no model ID for it."""
+
+
+def _check_single_credential(api_key: str | None, auth: httpx.Auth | None) -> None:
+    if api_key is not None and auth is not None:
+        raise ParameterError("PII inference settings carry both an API key and an httpx.Auth; use only one")
 
 
 class LLMTransport(Protocol):
@@ -234,6 +245,39 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
     )
 
 
+class _AuthFlowError(Exception):
+    pass
+
+
+class _GuardedAuth(httpx.Auth):
+    def __init__(self, auth: httpx.Auth) -> None:
+        self._auth = auth
+        self.requires_request_body = auth.requires_request_body
+        self.requires_response_body = auth.requires_response_body
+
+    def sync_auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+        flow = self._auth.sync_auth_flow(request)
+        try:
+            outgoing = next(flow)
+        except StopIteration:
+            return
+        except httpx.TransportError:
+            raise
+        except Exception as exc:
+            raise _AuthFlowError from exc
+        while True:
+            response = yield outgoing
+            try:
+                outgoing = flow.send(response)
+            except StopIteration:
+                return
+            # Network and read errors, including reading the chat response for auths that need it, stay retryable.
+            except httpx.TransportError:
+                raise
+            except Exception as exc:
+                raise _AuthFlowError from exc
+
+
 def _retry_after_seconds(response: httpx.Response) -> float | None:
     """Return a numeric ``Retry-After`` delay; HTTP-date values are ignored."""
     try:
@@ -288,17 +332,20 @@ class OpenAICompatibleTransport:
 
     Raises:
         ParameterError: If the endpoint is malformed or embeds credentials, a query string, or a fragment.
+        ParameterError: If the settings carry both an API key and an ``httpx.Auth``.
     """
 
     def __init__(self, settings: InferenceSettings) -> None:
         # Settings built directly, not through ``resolve_inference_settings``,
         # must not send samples or the bearer key over an unsafe endpoint.
         _validate_endpoint(settings.endpoint_url)
+        _check_single_credential(settings.api_key, settings.auth)
         self._settings = settings
         # Loopback servers never need a proxy, and an environment proxy would
         # receive the bearer key and raw cell samples. Remote endpoints keep
         # the environment's proxy settings.
         self._trust_env = not is_loopback_host(urlparse(settings.endpoint_url).hostname)
+        self._auth = None if settings.auth is None else _GuardedAuth(settings.auth)
 
     def complete(
         self,
@@ -319,7 +366,8 @@ class OpenAICompatibleTransport:
             The assistant message content.
 
         Raises:
-            ParameterError: On authentication, authorization, or other permanent request rejection.
+            ParameterError: On authentication, authorization, or other permanent request rejection,
+                including any exception raised by the settings' ``httpx.Auth``.
             TransientInferenceError: On network failures, timeouts, or retryable HTTP statuses.
             InvalidInferenceResponse: If the response envelope is malformed.
         """
@@ -346,14 +394,24 @@ class OpenAICompatibleTransport:
                 json=payload,
                 timeout=self._settings.timeout_seconds,
                 trust_env=self._trust_env,
+                auth=self._auth,
             )
+        except _AuthFlowError as exc:
+            # The auth's own exception can carry token URLs or secrets, so only its type is reported.
+            raise ParameterError(
+                f"The PII inference httpx.Auth failed ({type(exc.__cause__).__name__}); check its credentials"
+            ) from None
         except httpx.HTTPError as exc:
             raise TransientInferenceError("PII inference transport failed") from exc
 
         if response.status_code in {401, 403}:
+            credential = (
+                "the PII inference httpx.Auth"
+                if self._settings.auth is not None
+                else f"{KEY_ENV} or --inference-api-key"
+            )
             raise ParameterError(
-                f"PII inference authentication or authorization failed (HTTP {response.status_code}); "
-                "check NSS_INFERENCE_KEY or --inference-api-key"
+                f"PII inference authentication or authorization failed (HTTP {response.status_code}); check {credential}"
             )
         if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
             raise TransientInferenceError(

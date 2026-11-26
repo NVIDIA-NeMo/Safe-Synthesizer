@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from threading import Lock
 
+import httpx
 import pandas as pd
 import pytest
 from pydantic import BaseModel
@@ -23,7 +24,11 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.llm_client import TransientInferenceError, resolve_inference_settings
+from nemo_safe_synthesizer.pii_replacer.llm_client import (
+    InferenceSettings,
+    TransientInferenceError,
+    resolve_inference_settings,
+)
 from nemo_safe_synthesizer.pii_replacer.planning import (
     LLMPlanEnhancer,
     PlanDiscoverer,
@@ -1333,3 +1338,51 @@ class TestLLMPlanEnhancer:
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 4
         assert "is not valid strftime" in transport.calls[1][0][1]["content"]
+
+
+class _RefreshingAuth(httpx.Auth):
+    def __init__(self) -> None:
+        self.issued = 0
+
+    def auth_flow(self, request: httpx.Request):
+        self.issued += 1
+        request.headers["Authorization"] = f"Bearer token-{self.issued}"
+        yield request
+
+
+@pytest.mark.unit
+def test_retries_reauthenticate_with_a_refreshed_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[httpx.Request] = []
+    statuses = [503]
+    content = _classifications({"notes": None}).response
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        status = statuses.pop(0) if statuses else 200
+        return httpx.Response(status, json={"choices": [{"message": {"content": content}}]})
+
+    def post(
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, object],
+        timeout: float,
+        trust_env: bool,
+        auth: httpx.Auth | None,
+    ) -> httpx.Response:
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.post(url, headers=headers, json=json, timeout=timeout, auth=auth or httpx.USE_CLIENT_DEFAULT)
+
+    monkeypatch.setattr(httpx, "post", post)
+    sleeps: list[float] = []
+    settings = InferenceSettings(
+        endpoint_url="https://gateway.example/v1", model_id="local-model", max_workers=1, auth=_RefreshingAuth()
+    )
+    enhancer = LLMPlanEnhancer(_local_config(), settings=settings, sleep=sleeps.append)
+
+    resolve_plan(
+        pd.DataFrame({"notes": ["hello"]}), ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer
+    )
+
+    assert [request.headers["Authorization"] for request in requests] == ["Bearer token-1", "Bearer token-2"]
+    assert len(sleeps) == 1
