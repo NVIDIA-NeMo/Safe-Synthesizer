@@ -400,7 +400,8 @@ class OpenAICompatibleTransport:
         if response.status_code in {401, 403}:
             raise ParameterError(
                 f"PII inference authentication or authorization failed (HTTP {response.status_code}); "
-                "check NSS_INFERENCE_KEY or --inference-api-key"
+                "check NSS_INFERENCE_KEY or --inference-api-key. An endpoint set with with_inference is sent "
+                "no credentials, so it must accept requests without them"
             )
         if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
             raise TransientInferenceError(

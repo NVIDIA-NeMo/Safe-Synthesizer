@@ -359,6 +359,15 @@ class TestInferenceEndpoint:
         assert settings == InferenceSettings(endpoint_url=GATEWAY, model_id="gateway-model", max_workers=3)
         assert settings.timeout_seconds == 60
 
+    def test_rejected_request_says_that_with_inference_sends_no_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: httpx.Response(401))
+        transport = OpenAICompatibleTransport(InferenceEndpoint(GATEWAY, "m").settings(LLMConfig()))
+
+        with pytest.raises(ParameterError, match="with_inference is sent no credentials"):
+            transport.complete(messages=[{"role": "user", "content": "request"}], response_model=_StructuredResponse)
+
     def test_timeout_replaces_the_default(self) -> None:
         settings = InferenceEndpoint(GATEWAY, "m", timeout_seconds=300).settings(LLMConfig())
 
