@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Generator, Iterable, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -245,6 +246,16 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
     )
 
 
+def _is_transient_status(status_code: int) -> bool:
+    return status_code in _TRANSIENT_STATUS_CODES or status_code >= 500
+
+
+def _is_retryable_auth_error(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return _is_transient_status(exc.response.status_code)
+    return isinstance(exc, httpx.RequestError)
+
+
 class _AuthFlowError(Exception):
     pass
 
@@ -257,25 +268,21 @@ class _GuardedAuth(httpx.Auth):
 
     def sync_auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
         flow = self._auth.sync_auth_flow(request)
-        try:
-            outgoing = next(flow)
-        except StopIteration:
-            return
-        except httpx.TransportError:
-            raise
-        except Exception as exc:
-            raise _AuthFlowError from exc
-        while True:
+        outgoing = _advance_auth_flow(partial(next, flow))
+        while outgoing is not None:
             response = yield outgoing
-            try:
-                outgoing = flow.send(response)
-            except StopIteration:
-                return
-            # Network and read errors, including reading the chat response for auths that need it, stay retryable.
-            except httpx.TransportError:
-                raise
-            except Exception as exc:
-                raise _AuthFlowError from exc
+            outgoing = _advance_auth_flow(partial(flow.send, response))
+
+
+def _advance_auth_flow(step: Callable[[], httpx.Request]) -> httpx.Request | None:
+    try:
+        return step()
+    except StopIteration:
+        return None
+    except Exception as exc:
+        if _is_retryable_auth_error(exc):
+            raise
+        raise _AuthFlowError from exc
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
@@ -401,6 +408,11 @@ class OpenAICompatibleTransport:
             raise ParameterError(
                 f"The PII inference httpx.Auth failed ({type(exc.__cause__).__name__}); check its credentials"
             ) from None
+        except httpx.HTTPStatusError as exc:
+            raise TransientInferenceError(
+                f"PII inference httpx.Auth token request returned HTTP {exc.response.status_code}",
+                retry_after=_retry_after_seconds(exc.response),
+            ) from None
         except httpx.HTTPError as exc:
             raise TransientInferenceError("PII inference transport failed") from exc
 
@@ -413,7 +425,7 @@ class OpenAICompatibleTransport:
             raise ParameterError(
                 f"PII inference authentication or authorization failed (HTTP {response.status_code}); check {credential}"
             )
-        if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
+        if _is_transient_status(response.status_code):
             raise TransientInferenceError(
                 f"PII inference service returned HTTP {response.status_code}",
                 retry_after=_retry_after_seconds(response),

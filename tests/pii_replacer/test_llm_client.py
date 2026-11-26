@@ -367,9 +367,17 @@ def _route_posts(monkeypatch: pytest.MonkeyPatch, status: int = 200) -> list[htt
         requests.append(request)
         return httpx.Response(status, json={"choices": [{"message": {"content": "{}"}}]})
 
-    def post(url: str, *, auth: httpx.Auth | None, trust_env: bool, **kwargs: object) -> httpx.Response:
+    def post(
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, object],
+        timeout: float,
+        trust_env: bool,
+        auth: httpx.Auth | None,
+    ) -> httpx.Response:
         with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-            return client.post(url, auth=auth or httpx.USE_CLIENT_DEFAULT, **kwargs)
+            return client.post(url, headers=headers, json=json, timeout=timeout, auth=auth or httpx.USE_CLIENT_DEFAULT)
 
     monkeypatch.setattr(httpx, "post", post)
     return requests
@@ -431,11 +439,40 @@ class TestInferenceAuth:
         assert exc_info.value.__suppress_context__
         assert requests == []
 
-    def test_network_error_inside_auth_stays_retryable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.ReadTimeout("token endpoint timed out"),
+            httpx.DecodingError("corrupt response body"),
+            httpx.HTTPStatusError(
+                "token endpoint unavailable",
+                request=httpx.Request("POST", "https://idp.example/token"),
+                response=httpx.Response(503),
+            ),
+        ],
+        ids=["timeout", "decoding", "token-service-503"],
+    )
+    def test_transient_failure_inside_auth_stays_retryable(
+        self, monkeypatch: pytest.MonkeyPatch, failure: Exception
+    ) -> None:
         _route_posts(monkeypatch)
 
         with pytest.raises(TransientInferenceError):
-            _complete(_RaisingAuth(httpx.ReadTimeout("token endpoint timed out")))
+            _complete(_RaisingAuth(failure))
+
+    def test_token_service_retry_after_is_honoured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _route_posts(monkeypatch)
+        unavailable = httpx.HTTPStatusError(
+            "token endpoint unavailable",
+            request=httpx.Request("POST", "https://idp.example/token"),
+            response=httpx.Response(429, headers={"Retry-After": "7"}),
+        )
+
+        with pytest.raises(TransientInferenceError) as exc_info:
+            _complete(_RaisingAuth(unavailable))
+
+        assert exc_info.value.retry_after == 7
+        assert exc_info.value.__suppress_context__
 
     def test_auth_is_left_out_of_repr_and_equality(self) -> None:
         settings = _auth_settings(_HeaderAuth())
