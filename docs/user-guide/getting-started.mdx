@@ -12,11 +12,13 @@ does at each stage.
 
 ## Installation
 
-<Card title="Skip installation entirely" href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17">
+<Tip title="Skip installation entirely">
+[![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
 Deploys a GPU instance with everything below already done, plus the tutorial
 notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
 instance bills continuously and cannot be paused -- delete it when you are finished.
-</Card>
+</Tip>
 
 ### Prerequisites
 
@@ -30,8 +32,7 @@ instance bills continuously and cannot be paused -- delete it when you are finis
   [inference endpoint](/user-guide/environment#where-planning-requests-go) or
   [supply your own replacement plan](/user-guide/customize-pii-replacement#plan-sources).
 
-<Warning>
-Linux only -- macOS, Windows, and Apple Silicon are not supported
+<Warning title="Linux only -- macOS, Windows, and Apple Silicon are not supported">
 NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.9+
 to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
 is for development and configuration validation only -- it cannot train models or
@@ -44,7 +45,7 @@ Download the installer from the latest stable GitHub
 release. Each released script pins the package version, constraints, and
 package indexes that were tested together.
 
-```bash title="Install Safe Synthesizer" hl_lines="4"
+```bash title="Install Safe Synthesizer" {4}
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
@@ -68,8 +69,7 @@ CUDA=cpu ./install_nss.sh    # CPU-only development and validation
 
 CUDA 13.0 requires an NVIDIA driver version 580.65.06 or newer.
 
-<Warning>
-CPU installation is for development use only
+<Warning title="CPU installation is for development use only">
 The CPU install does not support training or generation. Use it to
 validate configuration, explore the CLI, or import config classes in
 code. An A100 or larger GPU is required to run the full pipeline.
@@ -110,8 +110,7 @@ The bare package has no PyTorch or FlashInfer dependencies. To install it,
 generate a command with `DRY_RUN=1`, then remove the runtime extras and their
 package indexes before running the edited command.
 
-<Note>
-Limited use
+<Note title="Limited use">
 The bare package includes only the Pydantic configuration models -- no
 training, generation, or CLI engine. Use it in the NeMo Safe Synthesizer
 Service or any Python project that needs to construct or validate
@@ -269,8 +268,7 @@ The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested sup
 
 Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
 
-<Tip>
-Differential privacy
+<Tip title="Differential privacy">
 For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via `privacy.dp_enabled: true`. See [Configuration -- Differential Privacy](/user-guide/configuration#differential-privacy).
 </Tip>
 

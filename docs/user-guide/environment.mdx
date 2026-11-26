@@ -150,8 +150,7 @@ directly.
 safe-synthesizer run --disable-huggingface-remote ...
 ```
 
-<Warning>
-Models must be cached
+<Warning title="Models must be cached">
 Offline mode requires all models to already be present in `HF_HOME`.
 Loading fails if a required model is not cached.
 </Warning>
@@ -162,8 +161,7 @@ Run once with network access, then copy or mount the populated cache. Typical
 first-run downloads include training weights, evaluation embeddings, and the
 vLLM base model.
 
-<Warning>
-Silent downloads on first use
+<Warning title="Silent downloads on first use">
 Downloads happen on first use. In an air-gapped environment, the first
 missing asset fails at the stage that needs it.
 </Warning>
@@ -205,7 +203,7 @@ The run log states which case applies when planning starts. Planning also runs
 during evaluation when PII replacement is off and `evaluation.pii_replay_enabled`
 is true, to find the PII the replay check looks for.
 
-```bash title="PII inference environment" hl_lines="1 2 3"
+```bash title="PII inference environment" {1,2,3}
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 export NSS_INFERENCE_KEY=<your key>

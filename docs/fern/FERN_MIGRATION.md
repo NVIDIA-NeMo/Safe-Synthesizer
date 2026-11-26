@@ -14,6 +14,8 @@ for how to run and use Fern.
 4. PR to provide a way to reach old documentation versions at
    `nvidia-nemo.github.io` from the Fern site.
 5. PR to generate API reference pages and include them in the docs.
+   Include [SDGR-110](https://linear.app/nvidia/issue/SDGR-110/replace-sphinx-roles-in-docstrings-when-docs-move-to-fern)
+   to replace Sphinx roles in docstrings or convert them to links in the API generator.
 6. PR to improve notebook handling and rendering.
 7. PR to configure production publishing and release versioning.
 8. Make Fern docs public by requesting publication in `cdd-fern`.
@@ -30,10 +32,10 @@ and manual preview workflows are present in the repository. MkDocs and mike
 still serve the production site and release documentation.
 
 Fern currently configures only `nightly`, with the preview instance
-`nemo-safe-synthesizer.docs.buildwithfern.com`. Confirmation of the instance,
-official production URL, and token provisioning with the NVIDIA Fern team is
-still needed. Production publishing and frozen Fern release versions are not
-configured.
+`nvidia-nemo-safe-synthesizer.docs.buildwithfern.com/nemo/safe-synthesizer`
+and the custom domain `docs.nvidia.com/nemo/safe-synthesizer`. The NVIDIA Fern
+team has confirmed the URLs and provisioned the preview token. Production
+publishing and frozen Fern release versions are not configured.
 
 The API Reference entry is omitted pending generated API pages; inline Python
 symbol names currently have no API links. Tutorial notebooks have static MDX

@@ -12,8 +12,7 @@ Part 2 answers those questions with three experiments on the same dataset.
 
 {/* more */}
 
-<Note>
-TLDR
+<Note title="TLDR">
 - Prompting alone did not work: the best prompt-only setup kept 14.99% of real-data utility, while fine-tuning kept 90.4%.
 - The default settings gave the highest utility: none of the 12 alternative settings beat the baseline's 90.4% utility retention, the same downstream measure as in Part 1. Instead, they traded utility for less replay, down to 0.61% linked-dialogue replay at 73.7% utility.
 - Extra generated examples helped rare actions: targeted enrichment improved action-state tracking in all 12 settings and dialogue success in 11 of 12.
@@ -119,8 +118,7 @@ One-shot prompting replayed rare entities at more than four times the fine-tuned
 
 For workflow data like this, fine-tuning is what makes actions, values, and intents hold together.
 
-<Tip>
-Key takeaway
+<Tip title="Key takeaway">
 A base model with a few examples writes text that looks like a conversation but does not behave like one.
 </Tip>
 

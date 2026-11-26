@@ -9,6 +9,8 @@ published accidentally. Run from the repository root with ``uv run
 --no-project tools/docs/export_fern_notebooks.py`` after editing a notebook.
 """
 
+from __future__ import annotations
+
 import json
 import re
 from pathlib import Path

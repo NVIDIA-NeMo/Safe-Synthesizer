@@ -123,8 +123,7 @@ Grouped mode is for data where multiple records share a key -- for example,
 all transactions belonging to the same customer. Enable it by setting
 `data.group_training_examples_by` to the column name (e.g. `customer_id`).
 
-<Note>
-When to use grouped mode
+<Note title="When to use grouped mode">
 Grouped mode is recommended when there is a natural ordering within each
 group -- i.e., `data.order_training_examples_by` points to a valid
 ordering field (e.g. a date or sequence number). If your data has no
@@ -155,8 +154,7 @@ at inference time.
 3. A new example starts when the next group would exceed `max_seq_length` or
    `max_sequences_per_example` groups have been packed.
 
-<Note>
-Split before tokenize
+<Note title="Split before tokenize">
 The grouped assembler splits the dataset into train and test sets
 *before* tokenization, using group boundaries. This ensures the expensive
 grouping and tokenization steps run independently on each split and that no
@@ -351,8 +349,7 @@ Other tested model families (Mistral, TinyLlama) use the same BOS/EOS
 override pattern with model-specific token IDs resolved at runtime from
 `ModelMetadata` subclasses in `llm/metadata.py`.
 
-<Warning>
-Token IDs are model- and tokenizer-version dependent
+<Warning title="Token IDs are model- and tokenizer-version dependent">
 The IDs above are illustrative, not repo-guaranteed constants. BOS tokens
 are explicitly set in `ModelMetadata` subclasses, while EOS tokens are
 generally read from the loaded tokenizer via
@@ -449,8 +446,7 @@ When no BOS/EOS delimiters are found, behavior depends on
 
 ### Sequential (time-series) mode
 
-<Warning>
-Experimental
+<Warning title="Experimental">
 Time-series generation is experimental and its API may change.
 </Warning>
 
@@ -496,8 +492,7 @@ Enable them selectively to recover more data from imperfect model output.
 | `group_by_fix_non_unique_value`   | `false` | Override mismatched group-column values with the first record's value              | Model occasionally hallucinates a different group-column value mid-group |
 | `group_by_fix_unordered_records`  | `false` | Re-sort records instead of rejecting out-of-order groups                           | Model produces right records but scrambles their order                   |
 
-<Tip>
-Start strict, relax incrementally
+<Tip title="Start strict, relax incrementally">
 Run generation with all knobs at their defaults first. Check the
 invalid-record fraction in the generation logs. If a specific failure mode
 dominates, enable the corresponding knob and re-run.
@@ -614,8 +609,7 @@ total ≈ 100 + (1,600 × 5) = 8,100 tokens   ← still fits
 total ≈ 100 + (1,600 × 8) = 12,900 tokens  ← GenerationError
 ```
 
-<Warning>
-Large groups overflow fast
+<Warning title="Large groups overflow fast">
 Grouped mode with high `max_sequences_per_example` and groups that vary
 widely in size is the most common cause of context-overflow errors. If the
 largest group exceeds the available token budget, the assembler raises a

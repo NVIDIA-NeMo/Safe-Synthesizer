@@ -123,8 +123,7 @@ directory. A path given on the command line
 (`--replace_pii__replacement_plan`) or through the SDK is resolved against the
 working directory.
 
-<Note>
-Plans you write are checked less strictly
+<Note title="Plans you write are checked less strictly">
 Safe Synthesizer validates every plan against the data, but a plan you
 write is allowed to run where a discovered plan would not. For example, a
 pattern that fits fewer than 99% of a column's values is dropped from a
@@ -481,8 +480,7 @@ values in `os.environ` before planning starts.
 Replace PII in a complete dataset without holdout, training, generation, or
 evaluation:
 
-<Note>
-Use standalone replacement to check the plan
+<Note title="Use standalone replacement to check the plan">
 Standalone replacement is for reviewing and refining PII replacement
 before a full run, not a privacy step on its own. It replaces only the
 kinds of PII it knows and can miss PII in free text, so its output can

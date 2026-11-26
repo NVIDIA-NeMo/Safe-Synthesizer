@@ -13,6 +13,12 @@ if [[ "${pinned_version}" != "${configured_version}" ]]; then
   exit 1
 fi
 
+cd "${REPO_ROOT}"
+mise run docs:fern:notebooks
+for notebook in docs/tutorials/*.ipynb; do
+  git diff --exit-code -- "${notebook%.ipynb}.mdx"
+done
+
 cd "${REPO_ROOT}/docs/fern"
 # Local validation needs no publishing token. Avoid passing an inherited token
 # to the check process; only the hosted preview task needs it.

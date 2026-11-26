@@ -233,8 +233,7 @@ because the table has too many columns for the model's context window.
    heuristics (4 chars per token for text, 1 token per digit) -- this can
    underestimate for complex or multilingual data. `training.rope_scaling_factor` is not applicable when using `HuggingFaceTB/SmolLM3-3B` (default model) or `mistralai/Mistral-7B-Instruct-v0.3`.
 
-<Note>
-Error type clarification
+<Note title="Error type clarification">
 These errors are typed as `GenerationError` in the codebase even though
 they fire during data assembly, not during generation proper. They appear
 in the pipeline before any training or generation occurs.
@@ -394,8 +393,7 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
    datasets may still cause issues. Reduce `evaluation.sqs_report_columns` or
    `evaluation.sqs_report_rows` to limit the evaluation scope.
 
-<Tip>
-Evaluation and Data Quality
+<Tip title="Evaluation and Data Quality">
 SQS scores, UNAVAILABLE metrics, report limits, and low-quality
 diagnostics are covered in [Synthetic Data Quality](/user-guide/evaluating-data#evaluation).
 </Tip>
@@ -447,44 +445,43 @@ safe-synthesizer config validate --config config.yaml
 
 ### Common Validation Errors
 
-`order_training_examples_by` requires `group_training_examples_by`:
+#### `order_training_examples_by` requires `group_training_examples_by`
 
 If you set `data.order_training_examples_by` without also setting
-  `data.group_training_examples_by`, config validation will fail. Ordering only
-  makes sense within groups.
+`data.group_training_examples_by`, config validation will fail. Ordering only
+makes sense within groups.
 
-`group_training_examples_by` with comma-separated column names:
+#### `group_training_examples_by` with comma-separated column names
 
 Setting `data.group_training_examples_by: col1,col2` in YAML is parsed as the
-  single string `"col1,col2"`, not as two separate columns. The pipeline will
-  fail with a `ParameterError` when it tries to find a column literally named
-  `"col1,col2"` in your data:
+single string `"col1,col2"`, not as two separate columns. The pipeline will
+fail with a `ParameterError` when it tries to find a column literally named
+`"col1,col2"` in your data:
 
-    ```text
-    ParameterError: Group by column 'patient_id,event_id' not found in the input data.
-    The column name contains a comma -- multi-column grouping is not supported.
-    Use a single column name.
-    ```
+```text
+ParameterError: Group by column 'patient_id,event_id' not found in the input data.
+The column name contains a comma -- multi-column grouping is not supported.
+Use a single column name.
+```
 
-  Only a single column name is supported. Multi-column grouping is not
-  currently available. If you need to group by multiple columns, consider
-  creating a composite column in your data before running the pipeline
-  (e.g. concatenate `patient_id` and `event_id` into a new
-  `patient_event_id` column).
+Only a single column name is supported. Multi-column grouping is not
+currently available. If you need to group by multiple columns, consider
+creating a composite column in your data before running the pipeline
+(e.g. concatenate `patient_id` and `event_id` into a new
+`patient_event_id` column).
 
-Unsupported file extensions:
+#### Unsupported file extensions
 
 The `url` parameter accepts `.csv`, `.json`, `.jsonl`, `.parquet`, and `.txt`
-  files. Other formats raise a `ValueError`.
+files. Other formats raise a `ValueError`.
 
-Incompatible DP settings:
+#### Incompatible DP settings
 
 If `privacy.dp_enabled` is `true` but `data.max_sequences_per_example` is
-  not `1`, config validation will fail with a clear error message. Set it to
-  `"auto"` and it will resolve correctly.
+not `1`, config validation will fail with a clear error message. Set it to
+`"auto"` and it will resolve correctly.
 
-<Tip>
-Differential Privacy
+<Tip title="Differential Privacy">
 DP errors and privacy budget troubleshooting are covered in
 [Synthetic Data Quality](/user-guide/evaluating-data#differential-privacy).
 </Tip>
@@ -688,8 +685,7 @@ remove the argument to start a fresh WandB run.
 
 ## Time Series
 
-<Warning>
-Experimental
+<Warning title="Experimental">
 Time series synthesis is an experimental feature. APIs and behavior may
 change between releases.
 </Warning>
@@ -699,15 +695,15 @@ For configuration examples, see [Configuration -- Time Series](/user-guide/confi
 
 ### Common Issues
 
-Missing timestamp values:
+#### Missing timestamp values
 
 Any `NaN` or `null` values in the timestamp column raise a `DataError`.
-  Clean your data before running the pipeline:
+Clean your data before running the pipeline:
 
-    ```python
-    df = df.dropna(subset=["timestamp"])
-    df = df.sort_values(by=["group_column", "timestamp"])
-    ```
+```python
+df = df.dropna(subset=["timestamp"])
+df = df.sort_values(by=["group_column", "timestamp"])
+```
 
 #### Interval mismatch
 
@@ -719,32 +715,32 @@ input data to have regular intervals by fixing inconsistent timestamp values
 or removing the offending groups. Groups may still differ in length, start, or
 stop when the interval is set.
 
-Invalid timestamp data:
+#### Invalid timestamp data
 
 Null, non-finite, unparseable, or format-incompatible timestamps remain
-  errors. Differently shaped groups are handled automatically; malformed
-  timestamps are not repaired.
+errors. Differently shaped groups are handled automatically; malformed
+timestamps are not repaired.
 
-Conflicting timestamp and order columns:
+#### Conflicting timestamp and order columns
 
 In time-series mode, `time_series.timestamp_column` and
-  `data.order_training_examples_by` play the same role. Set either one, or
-  both with the same value; differing values are a configuration error.
-  `order_training_examples_by` also requires `data.group_training_examples_by`,
-  so use `timestamp_column` for a single ungrouped series.
+`data.order_training_examples_by` play the same role. Set either one, or
+both with the same value; differing values are a configuration error.
+`order_training_examples_by` also requires `data.group_training_examples_by`,
+so use `timestamp_column` for a single ungrouped series.
 
-Groups skipped during generation:
+#### Groups skipped during generation
 
 If a group consistently produces invalid records (exceeding
-  `generation.patience` consecutive batches above
-  `generation.invalid_fraction_threshold`), that group is skipped and its rows
-  are discarded. The generation status is then `incomplete`. Check your
-  training data quality for those groups.
+`generation.patience` consecutive batches above
+`generation.invalid_fraction_threshold`), that group is skipped and its rows
+are discarded. The generation status is then `incomplete`. Check your
+training data quality for those groups.
 
-Out-of-order records:
+#### Out-of-order records
 
 During generation, records are validated for chronological order. Records
-  that arrive out of order are marked invalid.
+that arrive out of order are marked invalid.
 
 #### Groups with different starts or lengths
 

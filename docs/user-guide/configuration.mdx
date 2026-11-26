@@ -191,8 +191,7 @@ using LoRA (Low-Rank Adaptation).
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
 | `training.max_vram_fraction` | `0.8` | Fraction of total GPU VRAM to allocate for training. Must be in [0, 1] | Lower if other GPU consumers are active on the same device |
 
-<Note>
-validation_ratio vs holdout
+<Note title="validation_ratio vs holdout">
 `training.validation_ratio` splits the training data to monitor
 validation loss during fine-tuning. `data.holdout` splits the full
 dataset to create a test set used by the evaluation stage. They serve
@@ -217,8 +216,7 @@ validated. To understand the trade-offs with model selection, see [Training](/us
 
 When `training.pretrained_model` is set to a Hugging Face Hub model ID, the model is downloaded from the Hub; if a local path or an offline cache is provided, no download is performed. See [Pre-Caching Models](/user-guide/environment#pre-caching-models) for details.
 
-<Warning>
-Security Note: Pretrained models from Hugging Face Hub
+<Warning title="Security Note: Pretrained models from Hugging Face Hub">
 Loading and using pretrained models from Hugging Face Hub (or any public source) can expose your environment to significant risks, including arbitrary code execution (ACE) or remote code execution (RCE) vulnerabilities. Only use models you have reviewed yourself or from organizations and authors you explicitly trust. Malicious or modified models may contain embedded code, backdoors, or privacy-leaking mechanisms.
 </Warning>
 
@@ -244,8 +242,7 @@ training:
   quantization_scheme: nvfp4   # or bnb-4bit / bnb-8bit / fp8 / mxfp4
 ```
 
-<Note>
-LoftQ + non-BNB schemes
+<Note title="LoftQ + non-BNB schemes">
 `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and
 `mxfp4` — LoftQ requires the bitsandbytes runtime. Setting both will
 raise a `ParameterError` at startup. Use `qlora` or `lora` with the
@@ -356,8 +353,7 @@ For DP error diagnostics, see
 
 ## Time Series
 
-<Warning>
-Experimental
+<Warning title="Experimental">
 Time series synthesis is an experimental feature. APIs and behavior may
 change between releases.
 </Warning>
@@ -478,8 +474,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
   --generation__num_records 5000
 ```
 
-<Note>
-Override precedence
+<Note title="Override precedence">
 CLI overrides &gt; dataset registry overrides &gt; YAML config file &gt; model
 defaults. See [Configuration Precedence](#configuration-precedence) for
 examples. Parameters that accept `"auto"` cannot be set to `"auto"` via
