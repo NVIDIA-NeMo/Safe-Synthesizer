@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+["check:docs:pairs"]
+description = "Check that paired docs/**/*.md (MkDocs) and .mdx (Fern) pages change together relative to the target branch."
+run = "uv run tools/codestyle/check_docs_pairs.py"
+
 ["docs:serve"]
 description = "Serve the MkDocs site locally with live reload at http://127.0.0.1:8000. Requires docs dependencies."
 alias = "docs-serve"
@@ -18,3 +22,17 @@ run = [
     "uv run --frozen --group docs mike deploy --push --update-aliases main latest",
     "uv run --frozen --group docs mike set-default --push latest",
 ]
+
+["docs:fern:preview"]
+description = "Generate a hosted Fern preview. Run docs:fern:check first; requires Fern authentication."
+dir = "docs/fern"
+run = "fern generate --docs --preview"
+
+["docs:fern:serve"]
+description = "Preview the staged Fern site locally."
+dir = "docs/fern"
+run = "fern docs dev"
+
+["docs:fern:notebooks"]
+description = "Regenerate Fern tutorial reading pages from notebooks without executing cells."
+run = "uv run --no-project tools/docs/export_fern_notebooks.py"

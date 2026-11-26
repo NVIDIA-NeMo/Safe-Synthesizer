@@ -757,10 +757,17 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 ## Markdown
 
+During the MkDocs / Fern migration, update paired `docs/**/*.md` and
+`docs/**/*.mdx` pages together in the same change; they do not synchronize
+automatically. Keep the content equivalent using the syntax for each renderer.
+Edit tutorial `.ipynb` files and regenerate their MDX with
+`mise run docs:fern:notebooks`. See [the contributor workflow](CONTRIBUTING.md#adding-or-editing-a-page)
+and [migration guide](docs/fern/FERN_MIGRATION.md#required-during-migration-update-both-formats).
+
 - No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold is acceptable in table header-like cells and MkDocs Material card grid titles (e.g., `docs/index.md`).
 - Use `--` (em-dash) for asides, not `-` (hyphen).
 - Use single backticks for code identifiers, paths, and CLI commands in markdown. In Python docstrings, use double backticks (` `` `) for inline code per reStructuredText convention.
-- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- [admonitions](https://squidfunk.github.io/mkdocs-material/reference/admonitions/) (`!!! note`), tabs (`===`), code blocks with titles and highlights.
+- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). In `.md`, use MkDocs Material syntax -- [admonitions](https://squidfunk.github.io/mkdocs-material/reference/admonitions/) (`!!! note`), tabs (`===`), code blocks with titles and highlights. In `.mdx`, use Fern components such as `<Note>`, `<Tabs>`, and `<Tab>` and version-independent page links; do not copy MkDocs-specific syntax into MDX.
 - `Mermaid` diagrams: no spaces in node IDs, quote labels with special characters, no explicit colors or styles.
 
 ---

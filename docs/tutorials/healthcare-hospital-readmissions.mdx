@@ -1,0 +1,420 @@
+---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Privacy-Aware Hospital Readmission Analysis and Prediction with Safe Synthesizer"
+---
+
+{/* Generated from the adjacent notebook; regenerate with mise run docs:fern:notebooks. */}
+
+[Open the runnable notebook on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/tutorials/healthcare-hospital-readmissions.ipynb). Download the tutorial datasets from the same directory.
+
+
+#### What you'll learn
+
+In this notebook, we'll build a privacy-aware hospital readmissions workflow with NeMo Safe Synthesizer. You'll learn how NeMo Safe Synthesizer finds and replaces columns that commonly contain sensitive healthcare data, generate synthetic admissions, interpret built-in quality and privacy evaluations, inspect healthcare-specific relationships, and test whether the generated data supports downstream readmission modeling.
+
+We will answer three questions:
+
+1. Does the Synthetic data preserve the utilization, payer, and clinical patterns found in the Original data?
+2. What do the built-in quality and privacy evaluations tell us about the generated data?
+3. Can a model trained on Synthetic data transfer to a held-out Original cohort?
+
+> Runtime: Running the complete notebook took about an hour on an NVIDIA A100. A first run may take longer while model files are downloaded.
+
+> Important terminology: the Original dataset provided with this notebook was generated with [NVIDIA NeMo Data Designer](https://docs.nvidia.com/nemo/datadesigner/getting-started/welcome), is entirely simulated, and contains no real patient data. This public, non-sensitive dataset lets anyone run the tutorial. In a Safe Synthesizer deployment, Original would instead mean your private, internal dataset; NeMo Data Designer is not required. Throughout this tutorial and its plots, Original means the input dataset, while Synthetic means the new dataset generated from it by Safe Synthesizer.
+
+## 1. Environment
+
+Run the cell below to install NeMo Safe Synthesizer with the engine and CUDA 12.9 extras. If it is already installed in your notebook environment, you can skip this cell. The cell after it installs xgboost, which section 6 uses to train a readmission model. A GPU that supports CUDA 12.9 is required for training and generation. The cell requires [uv](https://docs.astral.sh/uv/).
+
+```python
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+import sys
+
+# The override resolves a flashinfer-python pin conflict between vLLM and NeMo Safe Synthesizer.
+!echo "flashinfer-python==0.7.0.post1" | uv pip install --python "{sys.executable}" \
+    "nemo-safe-synthesizer[engine,cu129]==0.2.0" \
+    -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v0.2.0/constraints.txt \
+    --overrides - \
+    --find-links https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/ \
+    --find-links https://flashinfer.ai/whl/flashinfer-cubin/ \
+    --find-links https://wheels.vllm.ai/0.32.0/cu129/vllm/ \
+    --find-links https://download.pytorch.org/whl/cu129/torch/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchaudio/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchvision/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchcodec/ \
+    --find-links https://download.pytorch.org/whl/cu129/torchao/ \
+    --find-links https://download.pytorch.org/whl/cu129/triton/
+```
+
+```python
+import sys
+
+# Packages this tutorial uses besides NeMo Safe Synthesizer.
+!uv pip install --python "{sys.executable}" xgboost
+```
+
+```python
+import html
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from IPython.display import Markdown, display
+
+NVIDIA_GREEN = "#76B900"
+NVIDIA_DARK = "#1A1A1A"
+plt.rcParams.update({"figure.figsize": (10, 5), "axes.spines.top": False, "axes.spines.right": False})
+```
+
+## 2. Load the admissions data
+
+The Original dataset is provided with this tutorial. Pandas infers quoted numeric CSV fields as integers, so the explicit string dtype below preserves leading zeros in postal codes.
+
+```python
+source_df = pd.read_csv(
+    "datasets/hospital_readmissions_synthetic_2026_08_18.csv",
+    dtype={"postal_code": "string"},
+)
+
+print(f"Loaded {len(source_df):,} Original admissions with {source_df.shape[1]} fields.")
+```
+
+```python
+PREVIEW_COLUMNS = [
+    "age", "sex", "insurance_type", "encounter_type",
+    "primary_diagnosis", "icd10_code", "primary_lab_name",
+    "primary_lab_value", "primary_lab_unit", "primary_lab_flag",
+    "length_of_stay_days", "discharge_disposition",
+    "total_charge_usd", "readmitted_within_30_days",
+]
+source_df[PREVIEW_COLUMNS].head()
+```
+
+## 3. Sensitive-data replacement
+
+Healthcare records may contain personally identifiable information (PII), and identifiable information about a person's health or care may be protected health information (PHI). Although this tutorial uses simulated data, its columns resemble fields that would require careful handling in a real healthcare workflow.
+
+Before training, NeMo Safe Synthesizer replaces PII. An LLM first reviews each column and drafts a replacement plan: which columns hold PII and of what kind, and which replacements should stay consistent with each other, such as a patient's email following their replaced name. Free-text columns such as `discharge_summary` are scanned for names, dates, and identifiers by a named-entity recognition (NER) model running in the notebook environment, and each original value gets the same replacement wherever it appears in a record. Replacement runs on the training records before fine-tuning, so the model never sees the original identifiers.
+
+By default, the planning LLM runs in a temporary vLLM server on this machine's GPU, so no API key is needed and the data stays on this machine. The local model needs an 80 GB GPU and downloads about 66 GB the first time it runs. To use a hosted service instead, such as the NVIDIA API at `https://integrate.api.nvidia.com/v1`, set `NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_MODEL`, and `NSS_INFERENCE_KEY` in the next cell. You can obtain an API key from [build.nvidia.com](https://build.nvidia.com/settings/api-keys). Column samples are then sent to that service. See [Where planning requests go](/user-guide/environment#where-planning-requests-go) for details.
+
+> Important: The plan is drafted by an LLM, so it can miss a sensitive column or replace one you need. Before using your own data, review the plan as shown in [Review the PII Replacement Plan](/tutorials/pii-replacement-review).
+
+```python
+import os
+
+# Keep the data split and generated replacements reproducible across tutorial runs.
+SPLIT_SEED = 318
+
+# Optional: plan with a hosted service instead of a local vLLM server.
+# import getpass
+# os.environ["NSS_INFERENCE_ENDPOINT"] = "https://integrate.api.nvidia.com/v1"
+# os.environ["NSS_INFERENCE_MODEL"] = "nvidia/nemotron-3-ultra-550b-a55b"
+# os.environ["NSS_INFERENCE_KEY"] = getpass.getpass("Paste inference API key: ")
+if os.environ.get("NSS_INFERENCE_ENDPOINT"):
+    print(f"PII planning sends requests to {os.environ['NSS_INFERENCE_ENDPOINT']}")
+else:
+    print("PII planning runs a local vLLM server on this machine's GPU")
+```
+
+## 4. Train, generate, and evaluate
+
+The next cell runs the complete Safe Synthesizer pipeline. It sets aside 499 Original records for evaluation, drafts the PII replacement plan and applies it to the remaining 9,498 records before fine-tuning the default SmolLM3 model, generates 5,000 Synthetic records, and evaluates the result. The generated data, trained model adapter (the learned model update), metrics, and HTML report are saved automatically under `ARTIFACT_ROOT`. The adapter can be reused for later generation without repeating fine-tuning.
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+ARTIFACT_ROOT = "safe-synthesizer-artifacts/healthcare-hospital-readmissions"
+builder = (
+    SafeSynthesizer(save_path=ARTIFACT_ROOT)
+    .with_data_source(source_df)
+    .with_replace_pii(seed=SPLIT_SEED)
+    .with_data(random_state=SPLIT_SEED)
+    .with_generate(num_records=5_000)
+)
+
+builder.run()
+results = builder.results
+synthetic_df = results.synthetic_data.copy()
+
+assert len(synthetic_df) == 5_000, f"Expected 5,000 generated records, found {len(synthetic_df):,}."
+print(f"Generated {len(synthetic_df):,} synthetic admissions.")
+```
+
+```python
+display(synthetic_df[PREVIEW_COLUMNS].head())
+```
+
+### Built-in SQS, DPS, and HTML report
+
+The Synthetic Data Quality Score (SQS) summarizes statistical similarity, while the Data Privacy Score (DPS) summarizes the built-in privacy evaluation. Both use a 0–10 scale, where higher is better. Open the HTML report to inspect the component scores and identify distributions, relationships, or privacy risks that need attention. These results support review; they do not certify compliance or automatically approve the data for sharing.
+
+```python
+report_html = results.evaluation_report_html
+if report_html:
+    # srcdoc, not a data: URL: Chrome blanks data: URLs over 2 MB, and the base keeps the report's #section links in the frame.
+    report_doc = report_html.replace("<head>", '<head><base href="about:srcdoc">', 1)
+    frame = (
+        f'<iframe srcdoc="{html.escape(report_doc)}" sandbox="allow-scripts allow-popups" '
+        'width="100%" height="850"></iframe>'
+    )
+    # Raw display: HTML() warns about a bare <iframe>, and IFrame() cannot take srcdoc.
+    display({"text/html": frame}, raw=True)
+else:
+    display(Markdown("The run did not return an HTML evaluation report."))
+```
+
+## 5. Healthcare utility checks
+
+These comparisons test whether the Synthetic data preserves patterns from the Original data well enough to support descriptive utilization analysis. The generic similarity from the evaluation report above is useful evidence, but every dataset and use case is different, so these plots compare specific properties that are relevant for hospital readmission data. These checks do not validate causal effects, predictive models, fairness, or clinical decision-making.
+
+### Overall 30-day readmission prevalence
+
+**What to look for:** The Synthetic readmission rate should be close to the Original rate. Small differences are normal.
+
+**What it means:** A large difference means the Synthetic cohort has a different baseline readmission risk and may not support the same planning or modeling assumptions.
+
+```python
+READMISSION = "readmitted_within_30_days"
+NUMERIC = ["age", "length_of_stay_days", "total_charge_usd", "primary_lab_value"]
+DATES = ["admission_datetime", "discharge_datetime", "date_of_birth"]
+
+def prepare(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    clean = frame.copy().assign(source=label)
+    clean[READMISSION] = clean[READMISSION].astype("string").str.lower().map({"true": True, "false": False, "1": True, "0": False})
+    clean[NUMERIC] = clean[NUMERIC].apply(pd.to_numeric, errors="coerce")
+    for column in DATES:
+        clean[column] = pd.to_datetime(clean[column], format="mixed", errors="coerce")
+    return clean
+
+original = prepare(source_df, "Original")
+synthetic = prepare(synthetic_df, "Synthetic")
+combined = pd.concat([original, synthetic], ignore_index=True)
+
+overall_readmission = combined.groupby("source")[READMISSION].mean().mul(100)
+axis = overall_readmission.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Overall 30-Day Readmission Rate")
+axis.set_ylabel("readmission rate (%)")
+axis.set_xlabel("")
+axis.tick_params(axis="x", rotation=0)
+plt.tight_layout()
+plt.show()
+```
+
+### Readmission patterns across cohorts
+
+**What to look for:** Compare the relative ordering and broad differences across diagnoses, discharge dispositions, and insurance types, not just exact bar heights.
+
+**What it means:** Similar subgroup patterns indicate that relationships between diagnosis, discharge disposition, insurance, and readmission were preserved. Large or reversed differences identify analyses that may not be reliable on the Synthetic data.
+
+```python
+def readmission_by(column: str) -> pd.DataFrame:
+    return combined.groupby([column, "source"])[READMISSION].mean().mul(100).unstack()
+
+rate_tables = {
+    "Diagnosis": readmission_by("primary_diagnosis"),
+    "Discharge Disposition": readmission_by("discharge_disposition"),
+    "Insurance": readmission_by("insurance_type"),
+}
+fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+for (title, table), axis in zip(rate_tables.items(), axes, strict=True):
+    table.plot.bar(ax=axis, color=[NVIDIA_DARK, NVIDIA_GREEN], width=0.8, title=f"Readmission by {title}")
+    axis.set_ylabel("readmission rate (%)")
+    axis.tick_params(axis="x", rotation=35)
+plt.tight_layout()
+plt.show()
+```
+
+### Insurance mix
+
+**What to look for:** The proportions of major insurance categories should be broadly similar between the Original and Synthetic cohorts.
+
+**What it means:** Insurance mix affects payer and access analyses. A shifted mix can bias conclusions even when the overall readmission rate looks similar.
+
+```python
+insurance_mix = combined.groupby("source")["insurance_type"].value_counts(normalize=True).mul(100).unstack(0)
+axis = insurance_mix.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Insurance Mix")
+axis.set_ylabel("admissions (%)")
+plt.tight_layout()
+plt.show()
+```
+
+### Length of stay and total charges
+
+**What to look for:** Compare the center, spread, skew, and tails of both distributions. The Synthetic data should reproduce the broad shape without copying individual records.
+
+**What it means:** Compressed or exaggerated tails can distort capacity, utilization, and charge analyses even when averages are close.
+
+```python
+fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+plots = zip(axes, ["length_of_stay_days", "total_charge_usd"], ["Length of Stay", "Total Charges"], strict=True)
+for axis, column, title in plots:
+    for label, frame, color in [("Original", original, NVIDIA_DARK), ("Synthetic", synthetic, NVIDIA_GREEN)]:
+        axis.hist(frame[column].dropna(), bins=30, density=True, alpha=0.55, label=label, color=color)
+    axis.set_title(f"{title} Distribution")
+    axis.legend(frameon=False)
+plt.tight_layout()
+plt.show()
+```
+
+### Clinical relationship and chronology checks
+
+A useful hospital dataset must preserve more than single-column distributions. The following plots examine diagnosis-to-International Classification of Diseases (ICD) mappings, diagnosis-to-lab relationships, lab flag/reference-range agreement, and admission/discharge chronology.
+
+#### Diagnosis mapping agreement
+
+**What to look for:** Higher agreement means the Synthetic rows retain the diagnosis-to-ICD and diagnosis-to-primary-lab mappings observed in the Original data.
+
+**What it means:** Plausible individual columns are not sufficient if their combinations are clinically inconsistent. Low agreement would limit code-based or laboratory-specific analyses.
+
+```python
+def relationship_agreement(frame: pd.DataFrame, column: str) -> pd.Series:
+    expected = original.groupby("primary_diagnosis")[column].agg(lambda values: values.mode().iloc[0])
+    matches = frame[column].eq(frame["primary_diagnosis"].map(expected))
+    return matches.groupby(frame["primary_diagnosis"]).mean().mul(100)
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+relationships = [("icd10_code", "Diagnosis to ICD-10"), ("primary_lab_name", "Diagnosis to Primary Lab")]
+for axis, (column, title) in zip(axes, relationships, strict=True):
+    agreement = pd.DataFrame({
+        "Original": relationship_agreement(original, column),
+        "Synthetic": relationship_agreement(synthetic, column),
+    })
+    agreement.plot.bar(ax=axis, color=[NVIDIA_DARK, NVIDIA_GREEN], title=f"{title} Agreement")
+    axis.set_ylabel("agreement with source mapping (%)")
+    axis.set_xlabel("")
+    axis.set_ylim(0, 105)
+    axis.tick_params(axis="x", rotation=35)
+plt.tight_layout()
+plt.show()
+```
+
+#### Record-level clinical and chronological integrity
+
+**What to look for:** Rates near 100% indicate that lab flags agree with reference ranges, discharge follows admission, recorded length of stay matches the timestamps, and age agrees with the dates.
+
+**What it means:** These are basic record-validity checks. Failures can make individual Synthetic admissions unusable even when aggregate distributions appear accurate.
+
+```python
+def clinical_integrity(frame: pd.DataFrame) -> dict:
+    limits = frame["primary_lab_reference_range"].astype("string").str.extract(r"^\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*$").astype(float)
+    expected_flag = pd.Series("N", index=frame.index)
+    expected_flag.loc[frame["primary_lab_value"] < limits[0]] = "L"
+    expected_flag.loc[frame["primary_lab_value"] > limits[1]] = "H"
+    stay_days = (frame["discharge_datetime"] - frame["admission_datetime"]).dt.total_seconds() / 86_400
+    age = (frame["admission_datetime"] - frame["date_of_birth"]).dt.days / 365.2425
+    return {
+        "Lab flag matches range": 100 * expected_flag.eq(frame["primary_lab_flag"].astype("string").str.upper()).mean(),
+        "Discharge after admission": 100 * stay_days.ge(0).mean(),
+        "Length of stay matches dates": 100 * stay_days.sub(frame["length_of_stay_days"]).abs().le(0.5).mean(),
+        "Age matches dates": 100 * age.sub(frame["age"]).abs().le(2).mean(),
+    }
+
+integrity = pd.DataFrame({
+    "Original": clinical_integrity(original),
+    "Synthetic": clinical_integrity(synthetic),
+})
+axis = integrity.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Clinical Relationship Integrity")
+axis.set_ylabel("rows passing check (%)")
+axis.set_xlabel("")
+axis.set_ylim(0, 105)
+axis.tick_params(axis="x", rotation=25)
+plt.tight_layout()
+plt.show()
+```
+
+## 6. Train on Synthetic, Test on Real (TSTR)
+
+Train-on-synthetic, test-on-real (TSTR) measures whether a model learned only from Synthetic records transfers to unseen Original records. Here, real is the conventional name for the test side of TSTR and refers to the held-out Original input. For comparison, train-on-real, test-on-real (TRTR) trains the same XGBoost classifier on the Original training partition. The 499-row holdout was set aside before fine-tuning, and both classifiers are tested on those same rows using the same discharge-time clinical and utilization features.
+
+> **Utility is broader than matching model scores.** In production, analysts and developers may not be permitted to access or train directly on the Original data because it contains PHI or PII. A governed, privacy-reviewed Synthetic dataset can enable exploration, pipeline development, integration testing, and model prototyping that otherwise could not happen. The comparison below tests whether a model trained on the Synthetic data can make useful predictions on held-out Original data. Similar performance is only one dimension of utility and does not make the Synthetic data automatically safe to share.
+
+**What to look for:** Compare the metric bars and receiver operating characteristic (ROC) curves for the Original-trained and Synthetic-trained models. The area under each ROC curve (AUC) summarizes how well a model ranks readmitted admissions above non-readmitted admissions across classification thresholds. Similar scores suggest that the Synthetic data preserved relationships useful for prediction, while a large gap indicates lost signal. Average precision should be read relative to the readmission prevalence, and balanced accuracy depends on the selected classification threshold.
+
+**What it means:** This comparison demonstrates transfer to the held-out Original data; it is not clinical validation. A production study should test on a governed real-data holdout that was never used for synthesis. Direct identifiers, contact details, dates, and discharge-summary text are excluded from both classifiers, and neither model is intended for clinical use.
+
+```python
+from sklearn.compose import make_column_transformer
+from sklearn.metrics import average_precision_score, balanced_accuracy_score, roc_auc_score, roc_curve
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder
+from xgboost import XGBClassifier
+
+TSTR_NUMERIC = ["age", "primary_lab_value", "length_of_stay_days", "total_charge_usd"]
+TSTR_CATEGORICAL = [
+    "sex", "race_ethnicity", "insurance_type", "encounter_type",
+    "primary_diagnosis", "icd10_code", "comorbidities", "primary_lab_name",
+    "primary_lab_unit", "primary_lab_reference_range", "primary_lab_flag",
+    "medication", "procedure", "discharge_disposition",
+]
+TSTR_FEATURES = TSTR_NUMERIC + TSTR_CATEGORICAL
+
+original_training_source, held_out_source = train_test_split(
+    source_df, test_size=int(len(source_df) * 0.05), random_state=SPLIT_SEED
+)
+original_training = prepare(original_training_source.reset_index(drop=True), "Original training")
+held_out = prepare(held_out_source.reset_index(drop=True), "Held-out source")
+
+def readmission_model(training: pd.DataFrame):
+    positive_weight = (~training[READMISSION]).sum() / training[READMISSION].sum()
+    return make_pipeline(
+        make_column_transformer(
+            ("passthrough", TSTR_NUMERIC),
+            (OneHotEncoder(handle_unknown="ignore"), TSTR_CATEGORICAL),
+        ),
+        XGBClassifier(
+            n_estimators=200,
+            max_depth=4,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=5,
+            scale_pos_weight=positive_weight,
+            tree_method="hist",
+            random_state=SPLIT_SEED,
+            n_jobs=4,
+        ),
+    )
+
+training_sets = {"Original (TRTR)": original_training, "Synthetic (TSTR)": synthetic}
+probabilities = {}
+metrics = {}
+for label, training in training_sets.items():
+    model = readmission_model(training)
+    model.fit(training[TSTR_FEATURES], training[READMISSION])
+    probability = model.predict_proba(held_out[TSTR_FEATURES])[:, 1]
+    probabilities[label] = probability
+    metrics[label] = {
+        "ROC AUC": roc_auc_score(held_out[READMISSION], probability),
+        "Average precision": average_precision_score(held_out[READMISSION], probability),
+        "Balanced accuracy": balanced_accuracy_score(held_out[READMISSION], probability >= 0.5),
+    }
+utility_metrics = pd.DataFrame(metrics)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+utility_metrics.plot.bar(
+    ax=axes[0], color=[NVIDIA_DARK, NVIDIA_GREEN], title="Readmission Utility on Held-Out Source Records"
+)
+axes[0].set_ylabel("score")
+axes[0].set_ylim(0, 1)
+axes[0].tick_params(axis="x", rotation=20)
+for container in axes[0].containers:
+    axes[0].bar_label(container, fmt="%.3f")
+for (label, probability), color in zip(probabilities.items(), [NVIDIA_DARK, NVIDIA_GREEN], strict=True):
+    false_positive_rate, true_positive_rate, _ = roc_curve(held_out[READMISSION], probability)
+    axes[1].plot(
+        false_positive_rate, true_positive_rate, color=color,
+        label=f"{label}: AUC = {metrics[label]['ROC AUC']:.3f}",
+    )
+axes[1].plot([0, 1], [0, 1], linestyle="--", color="#777777", label="Random guessing")
+axes[1].set(title="Readmission ROC Curve", xlabel="false-positive rate", ylabel="true-positive rate")
+axes[1].legend(frameon=False)
+plt.tight_layout()
+plt.show()
+```
+
+## Try this workflow with your own data
+
+This notebook showed how to replace sensitive fields before training, generate and evaluate synthetic admissions, and test whether they retain useful healthcare patterns. To adapt it to your own data, change the dataset path, review the PII replacement plan as shown in [Review the PII Replacement Plan](/tutorials/pii-replacement-review), and change the generation size, healthcare plots, and TSTR target and features so they match your schema. Run every cell from the beginning and review the quality and privacy report before reusing the generated data.

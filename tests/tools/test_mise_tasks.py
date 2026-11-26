@@ -15,6 +15,7 @@ import yaml
 
 QUALITY_TASKS = {
     "check",
+    "check:docs:pairs",
     "check:format",
     "check:license:headers",
     "check:lint",

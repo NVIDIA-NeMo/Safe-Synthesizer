@@ -108,18 +108,23 @@ gh pr view <number> --json baseRefOid -q .baseRefOid
 
 ## CI / Actions
 
-The project has 7 GitHub Actions workflows:
+See [the workflow reference](../../../.github/workflows/README.md) for the complete
+workflow inventory, triggers, path filters, and runner configuration.
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
-| CI Checks | `ci-checks.yml` | push to main, PRs, manual | format, lint, typecheck, unit-test |
-| GPU jobs | `gpu-tests.yml` | push to main, push to `pull-request/<N>`, manual | e2e on A100 (copy-pr-bot; see below) |
+| CI Checks | `ci-checks.yml` | push to main, PRs, merge queue, manual | format, paired docs, typecheck, wheel install, unit and CPU smoke tests |
+| GPU jobs | `gpu-tests.yml` | nightly, manual | GPU smoke and E2E tests on A100 |
 | Conventional Commit | `conventional-commit.yml` | PR title changes | Validates PR title format |
-| DCO Assistant | `dco-assistant.yml` | PR events, comments | Developer Certificate of Origin |
-| Release | `release.yml` | manual dispatch only | Build and publish to PyPI |
+| Fern Docs CI | `fern-docs-ci.yml` | path-filtered PRs/pushes to main, merge queue, manual | Tokenless Fern validation |
+| Fern Docs Preview | `fern-docs-preview.yml` | manual | Validate and generate a hosted preview |
+| Release | `release.yml` | push tags matching `v*` | Verify and publish wheel, installer, GitHub release, and final-release docs |
 | Secrets Detector | `secrets-detector.yml` | PRs to main | Scans for leaked secrets |
 
-GPU tests use the copy-pr-bot pattern: they do NOT fire on `pull_request` events. Instead, copy-pr-bot pushes PR content to a `pull-request/<N>` branch, which triggers the workflow via a push event. To manually trigger GPU tests on a PR, comment `/sync` on the PR. See the [copy-pr-bot docs](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/).
+GPU PR runs are currently disabled: the copy-pr-bot `push` trigger is commented
+out, so `/sync` does not trigger GPU tests. Use manual dispatch instead:
+`gh workflow run gpu-tests.yml --ref <branch-name> -f suite=all` (or `smoke`/`e2e`).
+Manual runs do not post a PR status check.
 
 ```bash
 # Check CI status + recent runs in one call
@@ -142,8 +147,11 @@ CI jobs map to local commands:
 |--------|---------------|
 | Format | `mise run format` (fix) or `mise run check:format ::: check:lint ::: check:license:headers` (check) |
 | Format (lock) | `mise run check:lock` |
+| Paired docs (Format job) | `mise run check:docs:pairs` |
 | Typecheck | `mise run check:type` |
 | Unit Tests | `mise run test:ci` |
+| CPU Smoke Tests | `mise run test:smoke` |
+| Fern Check | `mise run docs:fern:check` |
 
 Format and type checks run on every pull request. The local pre-PR gate is `mise run check ::: test`; specialized CI and GPU suites remain separate.
 
@@ -177,13 +185,11 @@ gh pr review <number> --request-changes --body "feedback"
 gh release list
 gh release view <tag>
 
-# Trigger release workflow (dry run first)
-gh workflow run release.yml \
-  -f release-ref=<full-sha-or-tag> \
-  -f dry-run=true \
-  -f create-gh-release=true \
-  -f version-bump-branch=<branch>
 ```
+
+`release.yml` runs on `v*` tag pushes; it has no manual dispatch or dry-run
+inputs. Follow [the release procedure](../../../CONTRIBUTING.md#releasing)
+for candidate validation and promotion before pushing a release tag.
 
 ## CODEOWNERS
 
