@@ -34,6 +34,7 @@ from pydantic import AliasChoices, Field, PrivateAttr, field_validator, model_va
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..config.inference_environment import (
+    ALLOW_LOCAL_ENV,
     ENDPOINT_ENV,
     KEY_ENV,
     LOCAL_PROFILE_ENV,
@@ -237,6 +238,16 @@ class CLISettings(BaseSettings):
     configured model ID selects a bundled profile.
     """
 
+    inference_allow_local: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_allow_local", "NSS_INFERENCE_ALLOW_LOCAL"),
+        description="Whether PII plan discovery may start a managed local vLLM server",
+    )
+    """Whether PII planning may start a managed local vLLM server (env: ``NSS_INFERENCE_ALLOW_LOCAL``).
+
+    ``False`` makes planning raise unless an inference endpoint is set. ``None`` leaves the default, which allows it.
+    """
+
     huggingface_remote: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("huggingface_remote"),
@@ -274,12 +285,13 @@ class CLISettings(BaseSettings):
             TIMEOUT_ENV: None if self.inference_timeout_seconds is None else f"{self.inference_timeout_seconds:g}",
             REQUEST_OPTIONS_ENV: self.inference_request_options,
             LOCAL_PROFILE_ENV: self.inference_local_profile,
+            ALLOW_LOCAL_ENV: None if self.inference_allow_local is None else str(self.inference_allow_local).lower(),
         }
         return {name: value for name, value in values.items() if value is not None}
 
-    @field_validator("inference_timeout_seconds", mode="before")
+    @field_validator("inference_timeout_seconds", "inference_allow_local", mode="before")
     @classmethod
-    def validate_inference_timeout_seconds(cls, v: float | str | None) -> float | str | None:
+    def validate_blank_inference_values(cls, v: float | bool | str | None) -> float | bool | str | None:
         """Treat a blank value as unset, as the PII inference client does."""
         if isinstance(v, str) and not v.strip():
             return None

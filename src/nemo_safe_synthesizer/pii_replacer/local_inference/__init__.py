@@ -8,6 +8,7 @@ from __future__ import annotations
 from .managed import (
     LOCAL_PROFILE_ENV,
     InvalidLocalServerSettingsError,
+    LocalInferenceDisabledError,
     LocalServerRequest,
     planning_inference_settings,
     resolve_planning_inference,
@@ -24,6 +25,7 @@ from .server import (
 __all__ = [
     "LOCAL_PROFILE_ENV",
     "InvalidLocalServerSettingsError",
+    "LocalInferenceDisabledError",
     "LocalServerRequest",
     "LocalVllmProfile",
     "LocalVllmServer",

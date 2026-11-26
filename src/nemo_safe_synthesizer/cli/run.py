@@ -245,6 +245,18 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     )
     options.append(
         click.option(
+            "--inference-allow-local/--no-inference-allow-local",
+            "inference_allow_local",
+            required=False,
+            default=None,
+            help="Allow or forbid starting a local vLLM server for LLM-assisted PII plan discovery. "
+            "--no-inference-allow-local makes planning fail unless --inference-endpoint-url is set, and rejects "
+            "--inference-local-profile. Can also be set via NSS_INFERENCE_ALLOW_LOCAL env var. "
+            "[default: --inference-allow-local]",
+        )
+    )
+    options.append(
+        click.option(
             "--enable-huggingface-remote/--disable-huggingface-remote",
             "huggingface_remote",
             required=False,

@@ -18,6 +18,7 @@ from ...observability import get_logger
 from ...pii_replacer.llm_client import InvalidRequestSettingsError, MissingInferenceModelError
 from ...pii_replacer.local_inference import (
     InvalidLocalServerSettingsError,
+    LocalInferenceDisabledError,
     LocalServerRequest,
     local_runtime_problem,
     local_runtime_problem_message,
@@ -458,7 +459,8 @@ class InferenceModelCheck(ConfigCheck):
     When a managed local server applies (a local profile, or no endpoint at
     all), validates the profile, managed address, model names, and that vLLM,
     enough GPUs, and enough GPU memory are available, instead of the remote
-    endpoint and key.
+    endpoint and key. When ``NSS_INFERENCE_ALLOW_LOCAL`` is false, reports that
+    case without loading a profile or probing GPUs.
     Skipped when an explicit replacement plan makes discovery unnecessary.
     """
 
@@ -477,6 +479,9 @@ class InferenceModelCheck(ConfigCheck):
             inference = resolve_planning_inference(replace_pii.llm)
         except InvalidRequestSettingsError as exc:
             collector.error("inference_request_settings_invalid", str(exc))
+            return
+        except LocalInferenceDisabledError as exc:
+            collector.error("inference_local_disabled", str(exc))
             return
         except InvalidLocalServerSettingsError as exc:
             collector.error("inference_local_profile_invalid", str(exc))

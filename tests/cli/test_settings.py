@@ -235,6 +235,16 @@ class TestCLISettings:
         settings = CLISettings.from_cli_kwargs(inference_local_profile="/profiles/custom.yaml")
         assert settings.inference_local_profile == "/profiles/custom.yaml"
 
+    @pytest.mark.parametrize(("raw", "expected"), [("false", False), ("true", True), ("  ", None)])
+    def test_inference_allow_local_from_env(self, monkeypatch, raw, expected):
+        monkeypatch.setenv("NSS_INFERENCE_ALLOW_LOCAL", raw)
+        assert CLISettings().inference_allow_local is expected
+
+    def test_inference_allow_local_cli_overrides_env(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ALLOW_LOCAL", "true")
+        settings = CLISettings.from_cli_kwargs(inference_allow_local=False)
+        assert settings.inference_environ()["NSS_INFERENCE_ALLOW_LOCAL"] == "false"
+
     @pytest.mark.parametrize(("raw", "expected"), [("  ", None), ("90", 90.0)])
     def test_blank_inference_timeout_is_unset(self, monkeypatch, raw, expected):
         monkeypatch.setenv("NSS_INFERENCE_TIMEOUT", raw)

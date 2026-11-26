@@ -51,6 +51,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else none (server defaults) | JSON object of chat-completions fields sent with every request; overrides a profile's options field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Profile YAML path, or bundled profile name, for the local vLLM server Safe Synthesizer runs during plan discovery | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ALLOW_LOCAL` | nss | `--inference-allow-local` / `--no-inference-allow-local` | PII planning | `true` | Set to `false` to forbid the local vLLM server for plan discovery; planning then requires `NSS_INFERENCE_ENDPOINT` | [Running embedded in a platform](#running-embedded-in-a-platform) |
 | `NSS_NEMOTRON_PERSONAS_PATH` | nss | -- | PII replacement | `~/.data-designer/managed-assets` | Directory containing downloaded Nemotron-Personas `datasets/<locale>.parquet` files; `replace_pii.sampler.nemotron_personas_path` takes precedence | [Nemotron-Personas](customize-pii-replacement.md#nemotron-personas) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
@@ -220,6 +221,23 @@ export NSS_INFERENCE_KEY=<your key>
 
 If vLLM or a suitable GPU is unavailable and no endpoint is set, planning fails
 with an error instead of falling back to a remote service.
+
+### Running embedded in a platform
+
+A platform that runs Safe Synthesizer as a job and routes every LLM call
+through its own inference service can forbid the local vLLM server:
+
+```bash title="Platform job environment"
+export NSS_INFERENCE_ALLOW_LOCAL=false
+export NSS_INFERENCE_ENDPOINT=https://inference.example/v1
+export NSS_INFERENCE_MODEL=<served model>
+```
+
+With `NSS_INFERENCE_ALLOW_LOCAL=false` (or `--no-inference-allow-local`),
+planning never starts a server or downloads the planning model. If
+`NSS_INFERENCE_ENDPOINT` is unset, or `NSS_INFERENCE_LOCAL_PROFILE` is set,
+planning and preflight fail with an error that names the setting. The value
+accepts `true`/`false`, `1`/`0`, `yes`/`no`, or `on`/`off`.
 
 ---
 

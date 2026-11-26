@@ -12,11 +12,13 @@ from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings, InvalidRequestSettingsError
 from nemo_safe_synthesizer.pii_replacer.local_inference import (
     InvalidLocalServerSettingsError,
+    LocalInferenceDisabledError,
     LocalServerRequest,
     load_profile,
     planning_inference_settings,
     resolve_planning_inference,
 )
+from nemo_safe_synthesizer.pii_replacer.local_inference import managed as managed_module
 
 from ..conftest import FakeLocalServer
 
@@ -243,3 +245,81 @@ class TestPlanningInferenceSettings:
             pass
 
         assert "NSS_INFERENCE_KEY is set, but PII planning runs in a local vLLM server" in caplog.text
+
+
+@pytest.fixture
+def fixture_refuse_profile_loading(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("profile loaded while local inference is disabled")
+
+    monkeypatch.setattr(managed_module, "load_profile", refuse)
+    monkeypatch.setattr(managed_module, "bundled_profile_for_model", refuse)
+
+
+@pytest.mark.unit
+@pytest.mark.usefixtures("fixture_refuse_profile_loading")
+class TestLocalInferenceDisabled:
+    @pytest.mark.parametrize(
+        ("config", "environ", "reason"),
+        [
+            pytest.param(LLMConfig(), {}, "NSS_INFERENCE_ENDPOINT is unset", id="no-endpoint"),
+            pytest.param(
+                LLMConfig(model_id=GPT_OSS), {}, "NSS_INFERENCE_ENDPOINT is unset", id="model-id-selects-profile"
+            ),
+            pytest.param(
+                LLMConfig(), {"NSS_INFERENCE_MODEL": GPT_OSS}, "NSS_INFERENCE_ENDPOINT is unset", id="env-model"
+            ),
+            pytest.param(
+                LLMConfig(),
+                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b"},
+                "NSS_INFERENCE_LOCAL_PROFILE is set",
+                id="profile",
+            ),
+            pytest.param(
+                LLMConfig(),
+                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8000/v1"},
+                "NSS_INFERENCE_LOCAL_PROFILE is set",
+                id="profile-with-endpoint",
+            ),
+        ],
+    )
+    def test_local_server_selection_raises_without_starting_anything(
+        self,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        config: LLMConfig,
+        environ: dict[str, str],
+        reason: str,
+    ) -> None:
+        environ = {"NSS_INFERENCE_ALLOW_LOCAL": "false", **environ}
+
+        with pytest.raises(LocalInferenceDisabledError, match=reason) as excinfo:
+            with planning_inference_settings(config, environ=environ):
+                pass
+
+        assert "NSS_INFERENCE_ALLOW_LOCAL is false" in str(excinfo.value)
+        assert "Set NSS_INFERENCE_ENDPOINT" in str(excinfo.value)
+        assert isinstance(excinfo.value, ParameterError)
+        assert fixture_fake_local_servers == []
+
+    def test_explicit_endpoint_still_works(self, fixture_fake_local_servers: list[FakeLocalServer]) -> None:
+        environ = {"NSS_INFERENCE_ALLOW_LOCAL": "false", "NSS_INFERENCE_ENDPOINT": "https://hosted.example/v1"}
+
+        with planning_inference_settings(LLMConfig(model_id="served/model"), environ=environ) as settings:
+            assert (settings.endpoint_url, settings.model_id) == ("https://hosted.example/v1", "served/model")
+
+        assert fixture_fake_local_servers == []
+
+
+@pytest.mark.unit
+class TestLocalInferenceAllowed:
+    @pytest.mark.parametrize("value", [None, "true", "  "], ids=["unset", "true", "blank"])
+    def test_default_and_explicit_allow_select_the_managed_server(self, value: str | None) -> None:
+        environ = {} if value is None else {"NSS_INFERENCE_ALLOW_LOCAL": value}
+
+        request = _local_request(LLMConfig(), environ)
+
+        assert request.profile.model_id == NEMOTRON
+
+    def test_invalid_value_is_a_request_settings_error(self) -> None:
+        with pytest.raises(InvalidRequestSettingsError, match="NSS_INFERENCE_ALLOW_LOCAL must be true or false"):
+            resolve_planning_inference(LLMConfig(), environ={"NSS_INFERENCE_ALLOW_LOCAL": "never"})

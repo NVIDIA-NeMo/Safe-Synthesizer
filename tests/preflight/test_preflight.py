@@ -472,6 +472,15 @@ class TestInferenceModelCheck:
             pytest.param(
                 {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, None, ["inference_local_profile_invalid"], id="bad-profile"
             ),
+            pytest.param(
+                {"NSS_INFERENCE_ALLOW_LOCAL": "false"}, None, ["inference_local_disabled"], id="local-disabled"
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_ALLOW_LOCAL": "false", "NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b"},
+                None,
+                ["inference_local_disabled"],
+                id="local-disabled-with-profile",
+            ),
         ],
     )
     def test_managed_local_server_replaces_endpoint_validation(
@@ -489,6 +498,18 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert [issue.code for issue in issues] == expected_codes
+
+    def test_disabled_local_inference_does_not_probe_the_runtime(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with (
+            patch.dict("os.environ", {"NSS_INFERENCE_ALLOW_LOCAL": "false"}, clear=True),
+            patch("nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem") as runtime_problem,
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_local_disabled"]
+        runtime_problem.assert_not_called()
 
 
 @pytest.mark.unit

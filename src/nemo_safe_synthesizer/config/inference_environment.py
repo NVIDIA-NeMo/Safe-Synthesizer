@@ -22,6 +22,7 @@ from typing import Self
 from ..errors import ParameterError
 
 __all__ = [
+    "ALLOW_LOCAL_ENV",
     "ENDPOINT_ENV",
     "INFERENCE_ENV_VARS",
     "KEY_ENV",
@@ -47,16 +48,29 @@ REQUEST_OPTIONS_ENV = "NSS_INFERENCE_REQUEST_OPTIONS"
 """Extra chat-completions fields, as a JSON object."""
 LOCAL_PROFILE_ENV = "NSS_INFERENCE_LOCAL_PROFILE"
 """Bundled profile name or profile YAML path for the managed local vLLM server."""
+ALLOW_LOCAL_ENV = "NSS_INFERENCE_ALLOW_LOCAL"
+"""Whether planning may start the managed local vLLM server; ``false`` requires an endpoint instead."""
 
-INFERENCE_ENV_VARS = (ENDPOINT_ENV, KEY_ENV, MODEL_ENV, TIMEOUT_ENV, REQUEST_OPTIONS_ENV, LOCAL_PROFILE_ENV)
+INFERENCE_ENV_VARS = (
+    ENDPOINT_ENV,
+    KEY_ENV,
+    MODEL_ENV,
+    TIMEOUT_ENV,
+    REQUEST_OPTIONS_ENV,
+    LOCAL_PROFILE_ENV,
+    ALLOW_LOCAL_ENV,
+)
 """Every environment variable ``InferenceEnvironment`` reads."""
 
 RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "stream"})
 """Chat-completions fields NSS sets itself and request options must not override."""
 
+_TRUE_VALUES = frozenset({"true", "1", "yes", "on"})
+_FALSE_VALUES = frozenset({"false", "0", "no", "off"})
+
 
 class InvalidRequestSettingsError(ParameterError):
-    """``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS`` is invalid."""
+    """``NSS_INFERENCE_TIMEOUT``, ``NSS_INFERENCE_REQUEST_OPTIONS``, or ``NSS_INFERENCE_ALLOW_LOCAL`` is invalid."""
 
 
 def nonblank(value: str | None) -> str | None:
@@ -85,6 +99,8 @@ class InferenceEnvironment:
     request_options: Mapping[str, object] = field(default_factory=dict)
     """Chat-completions fields; a ``None`` value drops the field from a lower layer, such as a profile."""
     local_profile: str | None = None
+    allow_local: bool = True
+    """Whether planning may start the managed local vLLM server; when ``False``, it requires an endpoint."""
 
     @classmethod
     def from_environ(cls, environ: Mapping[str, str] | None = None) -> Self:
@@ -92,7 +108,8 @@ class InferenceEnvironment:
 
         Raises:
             InvalidRequestSettingsError: If the timeout is not a positive, finite number of
-                seconds, or the request options are not a JSON object or set a field NSS manages.
+                seconds, the request options are not a JSON object or set a field NSS manages, or
+                ``NSS_INFERENCE_ALLOW_LOCAL`` is not a boolean.
         """
         values = os.environ if environ is None else environ
         return cls(
@@ -102,7 +119,19 @@ class InferenceEnvironment:
             timeout_seconds=_timeout_seconds(nonblank(values.get(TIMEOUT_ENV))),
             request_options=_request_options(nonblank(values.get(REQUEST_OPTIONS_ENV))),
             local_profile=nonblank(values.get(LOCAL_PROFILE_ENV)),
+            allow_local=_allow_local(nonblank(values.get(ALLOW_LOCAL_ENV))),
         )
+
+
+def _allow_local(raw: str | None) -> bool:
+    if raw is None:
+        return True
+    value = raw.casefold()
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    raise InvalidRequestSettingsError(f"{ALLOW_LOCAL_ENV} must be true or false, got {raw!r}")
 
 
 def _timeout_seconds(raw: str | None) -> float | None:

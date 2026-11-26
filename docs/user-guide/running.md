@@ -231,6 +231,7 @@ optional.
 | `--inference-request-options` | `NSS_INFERENCE_REQUEST_OPTIONS` | local profile's options, else none (server defaults) | JSON object of fields for each PII inference request; overrides a profile's options field by field |
 | `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile |
 | `--inference-local-profile` | `NSS_INFERENCE_LOCAL_PROFILE` | -- | Custom profile YAML, or bundled profile name, for the local vLLM server used for PII planning ([details](customize-pii-replacement.md#local-inference-server)) |
+| `--inference-allow-local` / `--no-inference-allow-local` | `NSS_INFERENCE_ALLOW_LOCAL` | `true` | Allow or forbid the local vLLM server for PII planning; when forbidden, planning requires an endpoint ([details](environment.md#running-embedded-in-a-platform)) |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides

@@ -372,6 +372,7 @@ class TestPathOptions:
         assert "--inference-api-key" in result.output
         assert "--inference-model-id" in result.output
         assert "--inference-local-profile" in result.output
+        assert "--no-inference-allow-local" in result.output
         assert "--inference-timeout-seconds" in result.output
         assert "--inference-request-options" in result.output
         assert "--disable-huggingface-remote" in result.output

@@ -11,7 +11,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-from ...config.inference_environment import ENDPOINT_ENV, KEY_ENV, LOCAL_PROFILE_ENV, InferenceEnvironment, nonblank
+from ...config.inference_environment import (
+    ALLOW_LOCAL_ENV,
+    ENDPOINT_ENV,
+    KEY_ENV,
+    LOCAL_PROFILE_ENV,
+    MODEL_ENV,
+    InferenceEnvironment,
+    nonblank,
+)
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
@@ -31,6 +39,7 @@ logger = get_logger(__name__)
 __all__ = [
     "LOCAL_PROFILE_ENV",
     "InvalidLocalServerSettingsError",
+    "LocalInferenceDisabledError",
     "LocalServerRequest",
     "planning_inference_settings",
     "resolve_planning_inference",
@@ -39,6 +48,10 @@ __all__ = [
 
 class InvalidLocalServerSettingsError(ParameterError):
     """The managed local server's profile, address, or model settings are invalid."""
+
+
+class LocalInferenceDisabledError(InvalidLocalServerSettingsError):
+    """Planning would start the managed local server, but ``NSS_INFERENCE_ALLOW_LOCAL`` is false."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +159,9 @@ def resolve_planning_inference(
     ``NSS_INFERENCE_ENDPOINT`` selects that endpoint and no managed server.
     With neither, the configured model (``replace_pii.llm.model_id``, then
     ``NSS_INFERENCE_MODEL``, then ``DEFAULT_NSS_INFERENCE_LOCAL_MODEL``)
-    selects the bundled profile to run.
+    selects the bundled profile to run. When ``NSS_INFERENCE_ALLOW_LOCAL`` is
+    false, any case that would select a managed server raises instead, before a
+    profile is loaded.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
@@ -157,8 +172,11 @@ def resolve_planning_inference(
         ``InferenceSettings`` for an explicit endpoint.
 
     Raises:
-        InvalidRequestSettingsError: If ``NSS_INFERENCE_TIMEOUT`` or
-            ``NSS_INFERENCE_REQUEST_OPTIONS`` is invalid.
+        InvalidRequestSettingsError: If ``NSS_INFERENCE_TIMEOUT``,
+            ``NSS_INFERENCE_REQUEST_OPTIONS``, or ``NSS_INFERENCE_ALLOW_LOCAL``
+            is invalid.
+        LocalInferenceDisabledError: If a managed server would be selected but
+            ``NSS_INFERENCE_ALLOW_LOCAL`` is false.
         InvalidLocalServerSettingsError: If the profile is invalid,
             ``NSS_INFERENCE_ENDPOINT`` is not a usable loopback address, a
             configured model differs from an explicit profile, or no bundled
@@ -169,9 +187,26 @@ def resolve_planning_inference(
     return _planning_inference(config, InferenceEnvironment.from_environ(environ))
 
 
+def _check_local_allowed(environment: InferenceEnvironment) -> None:
+    if environment.allow_local:
+        return
+    fix = (
+        f"Set {ENDPOINT_ENV} to an OpenAI-compatible inference service, with {MODEL_ENV} or "
+        "replace_pii.llm.model_id naming its model"
+    )
+    if environment.local_profile is not None:
+        reason = f"{LOCAL_PROFILE_ENV} is set, which starts a local vLLM server for PII planning"
+        fix += f", and unset {LOCAL_PROFILE_ENV}"
+    else:
+        reason = f"{ENDPOINT_ENV} is unset, so PII planning would start a local vLLM server"
+    raise LocalInferenceDisabledError(f"{reason}, but {ALLOW_LOCAL_ENV} is false. {fix}.")
+
+
 def _planning_inference(config: LLMConfig, environment: InferenceEnvironment) -> LocalServerRequest | InferenceSettings:
     """Resolve where planning runs from already-read settings; see ``resolve_planning_inference``."""
     reference = environment.local_profile
+    if reference is not None or environment.endpoint is None:
+        _check_local_allowed(environment)
     if reference is None and environment.endpoint is not None:
         return endpoint_inference_settings(config, environment)
     if reference is not None:
