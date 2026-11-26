@@ -1371,6 +1371,7 @@ class TestCodeConfiguredInference:
         monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
         monkeypatch.setenv("NSS_INFERENCE_KEY", "env-key")  # pragma: allowlist secret
         monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
+        monkeypatch.setenv("NSS_INFERENCE_TIMEOUT", "soon")
         requests = _gateway(monkeypatch, _classifications({"notes": None}).response)
 
         resolve_replacement_config(
@@ -1384,3 +1385,49 @@ class TestCodeConfiguredInference:
         assert {request.url.host for request in requests} == {"gateway.example"}
         assert {json.loads(request.content)["model"] for request in requests} == {"gateway-model"}
         assert all("Authorization" not in request.headers for request in requests)
+
+    def test_resolve_plan_uses_the_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
+        requests = _gateway(monkeypatch, _classifications({"notes": None}).response)
+
+        resolve_plan(
+            pd.DataFrame({"notes": ["hello"]}),
+            ReplacePiiConfig(),
+            DataParameters(),
+            inference_endpoint=InferenceEndpoint("https://gateway.example/v1", "gateway-model"),
+        )
+
+        assert {request.url.host for request in requests} == {"gateway.example"}
+
+    def test_mapping_discovery_beside_a_custom_enhancer_uses_the_endpoint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class PassThroughEnhancer(PlanEnhancer):
+            def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+                return baseline
+
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
+        requests = _gateway(monkeypatch, _dependency_mappings(("sex", "Non-binary", ["female", "male"])))
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="first_name",
+                    entity_type=EntityType.FIRST_NAME,
+                    depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                )
+            ]
+        )
+
+        resolved = resolve_replacement_config(
+            pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": ["Female", "Non-binary"]}),
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=FixedDiscoverer(plan),
+            enhancer=PassThroughEnhancer(),
+            sampler_value_catalog={EntityType.GENDER: ("female", "male")},
+            inference_endpoint=InferenceEndpoint("https://gateway.example/v1", "gateway-model"),
+        )
+
+        assert {request.url.host for request in requests} == {"gateway.example"}
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping["sex"]["Non-binary"] == ["female", "male"]

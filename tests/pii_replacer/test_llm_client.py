@@ -15,7 +15,6 @@ from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceEndpoint,
     InferenceSettings,
     InvalidInferenceResponse,
-    InvalidRequestSettingsError,
     MissingInferenceModelError,
     OpenAICompatibleTransport,
     TransientInferenceError,
@@ -353,49 +352,22 @@ GATEWAY = "https://gateway.example/v1"
 @pytest.mark.unit
 class TestInferenceEndpoint:
     def test_settings_use_the_endpoint_and_ignore_the_configured_model(self) -> None:
-        endpoint = InferenceEndpoint(
-            f"{GATEWAY}/", "gateway-model", timeout_seconds=30, request_options={"temperature": 0.2}
-        )
+        endpoint = InferenceEndpoint(f" {GATEWAY}/ ", " gateway-model ")
 
         settings = endpoint.settings(LLMConfig(max_workers=3, model_id="openai/gpt-oss-120b"))
 
-        assert settings == InferenceSettings(
-            endpoint_url=GATEWAY,
-            model_id="gateway-model",
-            max_workers=3,
-            timeout_seconds=30,
-            request_options={"temperature": 0.2},
-        )
+        assert settings == InferenceSettings(endpoint_url=GATEWAY, model_id="gateway-model", max_workers=3)
 
     @pytest.mark.parametrize(
-        ("kwargs", "error", "message"),
+        ("kwargs", "message"),
         [
-            pytest.param({"endpoint_url": "gateway.example/v1"}, ParameterError, "absolute HTTP", id="relative"),
-            pytest.param({"endpoint_url": f"{GATEWAY}?api_key=x"}, ParameterError, "sends no credentials", id="query"),
-            pytest.param({"model_id": "  "}, ParameterError, "must not be blank", id="blank-model"),
-            pytest.param({"timeout_seconds": 0}, InvalidRequestSettingsError, "positive", id="timeout"),
-            pytest.param({"timeout_seconds": "30"}, InvalidRequestSettingsError, "positive", id="string-timeout"),
-            pytest.param({"timeout_seconds": True}, InvalidRequestSettingsError, "positive", id="bool-timeout"),
-            pytest.param(
-                {"request_options": {"model": "x"}}, InvalidRequestSettingsError, "fields NSS manages", id="reserved"
-            ),
-            pytest.param(
-                {"request_options": {"top_p": float("nan")}}, InvalidRequestSettingsError, "JSON object", id="nan"
-            ),
+            pytest.param({"endpoint_url": "gateway.example/v1"}, "absolute HTTP", id="relative"),
+            pytest.param({"endpoint_url": f"{GATEWAY}?api_key=x"}, "query string", id="query"),
+            pytest.param({"model_id": "  "}, "must not be blank", id="blank-model"),
         ],
     )
-    def test_invalid_values_are_rejected_on_construction(
-        self, kwargs: dict[str, object], error: type[Exception], message: str
-    ) -> None:
-        values: dict[str, object] = {"endpoint_url": GATEWAY, "model_id": "m", **kwargs}
+    def test_invalid_values_are_rejected_on_construction(self, kwargs: dict[str, str], message: str) -> None:
+        values = {"endpoint_url": GATEWAY, "model_id": "m", **kwargs}
 
-        with pytest.raises(error, match=message):
-            InferenceEndpoint(**values)  # ty: ignore[invalid-argument-type]
-
-    def test_values_are_normalized_and_copied(self) -> None:
-        options: dict[str, object] = {"temperature": 0.2}
-        endpoint = InferenceEndpoint(f" {GATEWAY}/ ", " gateway-model ", timeout_seconds=30, request_options=options)
-        options["model"] = "other"
-
-        assert (endpoint.endpoint_url, endpoint.model_id, endpoint.timeout_seconds) == (GATEWAY, "gateway-model", 30.0)
-        assert endpoint.request_options == {"temperature": 0.2}
+        with pytest.raises(ParameterError, match=message):
+            InferenceEndpoint(**values)

@@ -532,7 +532,6 @@ class SafeSynthesizer(ConfigBuilder):
             resolved,
             data_config=config.data,
             time_series=config.time_series,
-            inference_endpoint=self._inference_endpoint,
         ).replace(dataframe)
         self._nss_config = config.model_copy(update={"replace_pii": result.resolved_config})
         self._replace_pii_config = result.resolved_config
@@ -690,7 +689,6 @@ class SafeSynthesizer(ConfigBuilder):
                 self._nss_config.replace_pii,
                 data_config=self._nss_config.data,
                 time_series=self._nss_config.time_series,
-                inference_endpoint=self._inference_endpoint,
             ).replace(original_training_df, check_pattern_coverage=False)
             self._training_df = replacement_result.transformed_df
             self._column_statistics = replacement_result.column_statistics

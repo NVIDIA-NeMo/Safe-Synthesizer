@@ -11,14 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-from ...config.inference_environment import (
-    ENDPOINT_ENV,
-    INFERENCE_ENV_VARS,
-    KEY_ENV,
-    LOCAL_PROFILE_ENV,
-    InferenceEnvironment,
-    nonblank,
-)
+from ...config.inference_environment import ENDPOINT_ENV, KEY_ENV, LOCAL_PROFILE_ENV, InferenceEnvironment, nonblank
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
@@ -249,10 +242,6 @@ def planning_inference_settings(
     """
     runtime_env = os.environ if environ is None else environ
     if endpoint is not None:
-        if ignored := sorted(name for name in INFERENCE_ENV_VARS if nonblank(runtime_env.get(name))):
-            logger.user.info(
-                f"PII inference is configured in code, so these settings are ignored: {', '.join(ignored)}"
-            )
         settings = endpoint.settings(config)
         _log_external_destination(settings.endpoint_url)
         yield settings

@@ -309,7 +309,7 @@ def test_with_inference_reaches_planning_and_stays_out_of_saved_config(tmp_path:
     nss = (
         SafeSynthesizer(config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()), save_path=tmp_path)
         .with_data_source(dataframe)
-        .with_inference("https://gateway.example/v1", "gateway-model", timeout_seconds=30)
+        .with_inference("https://gateway.example/v1", "gateway-model")
     )
     config_path = tmp_path / "config.yaml"
 
@@ -319,22 +319,13 @@ def test_with_inference_reaches_planning_and_stays_out_of_saved_config(tmp_path:
         nss.plan_pii_replacement(output_path=config_path)
 
     endpoint = resolve_config.call_args.kwargs["inference_endpoint"]
-    assert (endpoint.endpoint_url, endpoint.model_id, endpoint.timeout_seconds) == (
-        "https://gateway.example/v1",
-        "gateway-model",
-        30,
-    )
+    assert (endpoint.endpoint_url, endpoint.model_id) == ("https://gateway.example/v1", "gateway-model")
     assert config_path.is_file()
     saved = "".join(path.read_text() for path in tmp_path.iterdir() if path.is_file())
     assert nss._nss_config is not None
     dumped = nss._nss_config.model_dump_json()
     for text in (saved, dumped):
         assert "gateway.example" not in text
-
-
-def test_with_inference_validates_eagerly() -> None:
-    with pytest.raises(ParameterError, match="query string"):
-        SafeSynthesizer().with_inference("https://gateway.example/v1?key=secret", "m")
 
 
 def test_process_data_preflight_receives_with_inference_settings(tmp_path: Path) -> None:
