@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Self, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Self, TypeAlias, TypeVar
 
 import pandas as pd
 
@@ -30,6 +30,9 @@ from ..config.unknown_fields import (
 from ..configurator.parameters import Parameters
 from ..data_processing.csv_source import CsvSource
 from ..telemetry import _telemetry_enabled
+
+if TYPE_CHECKING:
+    from ..pii_replacer.llm_client import InferenceEndpoint
 
 DataSource = pd.DataFrame | str | CsvSource
 # File formats read with their own pandas reader instead of as CSV.
@@ -92,6 +95,7 @@ class ConfigBuilder:
         self._data_source: DataSource | None = None
         self._data_source_csv: CsvSource | None = None
         self._hf_token_secret: str | None = None
+        self._inference_endpoint: InferenceEndpoint | None = None
 
     @property
     def _effective_unknown_fields(self) -> UnknownFieldBehavior:
@@ -247,6 +251,42 @@ class ConfigBuilder:
         if config is not None and not isinstance(config, ReplacePiiConfig | Mapping):
             raise ValueError(f"Config must be a ReplacePiiConfig, raw mapping, or None, got {config!r}")
         self._replace_pii_config = self._overlay_section(ReplacePiiConfig, self._replace_pii_config, config, kwargs)
+        return self
+
+    def with_inference(
+        self,
+        endpoint_url: str,
+        model_id: str,
+        *,
+        timeout_seconds: float | None = None,
+        request_options: Mapping[str, object] | None = None,
+    ) -> Self:
+        """Send PII planning requests to ``endpoint_url`` instead of using ``NSS_INFERENCE_*`` or a local server.
+
+        Overrides all ``NSS_INFERENCE_*`` variables and ``replace_pii.llm.model_id``.
+        Requests carry no credentials, so the endpoint must accept them as they are;
+        ``NSS_INFERENCE_KEY`` is not sent. Nothing here is saved to config or artifacts.
+
+        Args:
+            endpoint_url: OpenAI-compatible base URL, without credentials or a query string.
+            model_id: Model the endpoint serves.
+            timeout_seconds: Per-request timeout; defaults to 60 seconds.
+            request_options: Extra chat-completions fields, such as ``{"temperature": 0.2}``.
+
+        Returns:
+            This builder instance.
+
+        Raises:
+            ParameterError: If the endpoint, model, timeout, or request options are invalid.
+        """
+        from ..pii_replacer.llm_client import InferenceEndpoint
+
+        self._inference_endpoint = InferenceEndpoint(
+            endpoint_url=endpoint_url,
+            model_id=model_id,
+            timeout_seconds=timeout_seconds,
+            request_options=dict(request_options or {}),
+        )
         return self
 
     def with_evaluate(self, config: EvaluationParameters | RawConfig | None = None, **kwargs: object) -> Self:

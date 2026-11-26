@@ -28,6 +28,7 @@ from .types import (
 if TYPE_CHECKING:
     from ..config.parameters import SafeSynthesizerParameters
     from ..llm.metadata import ModelMetadata
+    from ..pii_replacer.llm_client import InferenceEndpoint
 
 __all__ = ["CRASH_CODE", "run_preflight"]
 
@@ -166,6 +167,7 @@ def run_preflight(
     *,
     registry: PreflightRegistry | None = None,
     stages: frozenset[PreflightStage] | None = None,
+    inference: InferenceEndpoint | None = None,
 ) -> PreflightReport:
     """Execute all pre-flight checks against the training split.
 
@@ -180,6 +182,8 @@ def run_preflight(
         stages: Optional subset of stages to execute. Used when callers
             need early DataFrame validation before later processing has
             produced the final training split.
+        inference: PII planning inference configured in code, checked in place
+            of the ``NSS_INFERENCE_*`` settings.
 
     Returns:
         A structured ``PreflightReport``.
@@ -187,7 +191,7 @@ def run_preflight(
     effective_registry = _registry.get_registry() if registry is None else registry
     _warn_unknown_disabled_checks(config, effective_registry)
 
-    ctx = PreflightContext(data=data, config=config, metadata=metadata)
+    ctx = PreflightContext(data=data, config=config, metadata=metadata, inference=inference)
     report = PreflightReport(checks=_run_registry(ctx, effective_registry, stages=stages))
     n_checks = len(report.checks)
     n_skipped = sum(1 for c in report.checks if c.status == "skipped")

@@ -19,6 +19,7 @@ from ..config.replace_pii import (
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from ..observability import get_logger
+from .llm_client import InferenceEndpoint
 from .planning import resolve_replacement_config
 from .replacement.detection import CompositeFreeTextDetector
 from .replacement.executor import ReplacementExecutor
@@ -52,6 +53,9 @@ class TabularPiiReplacer:
             resolved plan.
         time_series: Optional time-series configuration used to protect ordering
             and grouping columns.
+        inference_endpoint: Inference service configured in code for
+            LLM-assisted plan discovery, in place of the ``NSS_INFERENCE_*``
+            settings. With it, no local inference server starts.
     """
 
     def __init__(
@@ -60,10 +64,12 @@ class TabularPiiReplacer:
         *,
         data_config: DataParameters,
         time_series: TimeSeriesParameters | None = None,
+        inference_endpoint: InferenceEndpoint | None = None,
     ) -> None:
         self._config = config
         self._data_config = data_config
         self._time_series = time_series
+        self._inference_endpoint = inference_endpoint
 
     def replace(
         self,
@@ -97,6 +103,7 @@ class TabularPiiReplacer:
             self._data_config,
             self._time_series,
             check_pattern_coverage=check_pattern_coverage,
+            inference_endpoint=self._inference_endpoint,
         )
         if resolved_config.inline_plan is not None and not resolved_config.inline_plan.columns_to_replace:
             logger.user.warning("The PII replacement plan lists no columns, so no values are replaced")
@@ -132,6 +139,7 @@ class TabularPiiReplacer:
             self._data_config,
             self._time_series,
             check_pattern_coverage=check_pattern_coverage,
+            inference_endpoint=self._inference_endpoint,
         )
         column_statistics = self._executor(resolved_config).detect(df)
         return DetectionResult(

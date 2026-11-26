@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,7 @@ from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHy
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
+from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceEndpoint
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
     ConfigCheck,
@@ -489,6 +491,26 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert [issue.code for issue in issues] == expected_codes
+
+    def test_code_configured_inference_ignores_environment(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+        ctx = replace(
+            make_ctx(config=default_config), inference=InferenceEndpoint("https://gateway.example/v1", "gateway-model")
+        )
+        environ = {
+            "NSS_INFERENCE_ENDPOINT": "not a url",
+            "NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b",
+            "NSS_INFERENCE_TIMEOUT": "soon",
+        }
+
+        with (
+            patch.dict("os.environ", environ, clear=True),
+            patch("nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem") as runtime_problem,
+        ):
+            issues = InferenceModelCheck().run(ctx)
+
+        assert issues == []
+        runtime_problem.assert_not_called()
 
 
 @pytest.mark.unit

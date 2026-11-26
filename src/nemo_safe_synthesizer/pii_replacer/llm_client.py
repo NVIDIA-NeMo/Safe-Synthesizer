@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import ipaddress
+import json
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -36,6 +38,7 @@ __all__ = [
     "REQUEST_OPTIONS_ENV",
     "RESERVED_REQUEST_FIELDS",
     "TIMEOUT_ENV",
+    "InferenceEndpoint",
     "InferenceSettings",
     "InvalidInferenceResponse",
     "InvalidRequestSettingsError",
@@ -130,7 +133,10 @@ def is_loopback_host(hostname: str | None) -> bool:
         return False
 
 
-def _validate_endpoint(endpoint_url: str) -> None:
+_KEY_HINT = "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
+
+
+def _validate_endpoint(endpoint_url: str, *, credential_hint: str = _KEY_HINT) -> None:
     """Reject endpoints that are malformed or embed credentials."""
     parsed = urlparse(endpoint_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -141,8 +147,7 @@ def _validate_endpoint(endpoint_url: str) -> None:
     # ``https://host/v1?key=abc`` would be sent as ``https://host/v1?key=abc/chat/completions``.
     if parsed.query or parsed.fragment:
         raise ParameterError(
-            "The PII inference endpoint URL must not contain a query string or fragment; "
-            "pass an API key through NSS_INFERENCE_KEY or --inference-api-key instead"
+            f"The PII inference endpoint URL must not contain a query string or fragment; {credential_hint}"
         )
 
 
@@ -232,6 +237,71 @@ def endpoint_inference_settings(config: LLMConfig, environment: InferenceEnviron
         ),
         request_options=merge_request_options(environment.request_options),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class InferenceEndpoint:
+    """PII planning inference configured in code; see ``SafeSynthesizer.with_inference``."""
+
+    endpoint_url: str
+    """OpenAI-compatible base URL that ``/chat/completions`` is appended to."""
+
+    model_id: str
+    """Model the endpoint serves."""
+
+    timeout_seconds: float | None = None
+    """Per-request timeout; ``None`` uses the default of 60 seconds."""
+
+    request_options: Mapping[str, object] = field(default_factory=dict)
+    """Extra chat-completions fields sent with every request; a ``None`` value is dropped."""
+
+    def __post_init__(self) -> None:
+        endpoint_url = self.endpoint_url.strip()
+        _validate_endpoint(endpoint_url, credential_hint="inference configured in code sends no credentials")
+        model_id = nonblank(self.model_id)
+        if model_id is None:
+            raise ParameterError("The PII inference model ID must not be blank")
+        timeout = self.timeout_seconds
+        if timeout is not None and (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, int | float)
+            or not (timeout > 0 and math.isfinite(timeout))
+        ):
+            raise InvalidRequestSettingsError(
+                f"The PII inference timeout must be a positive number of seconds, got {timeout!r}"
+            )
+        object.__setattr__(self, "endpoint_url", endpoint_url.rstrip("/"))
+        object.__setattr__(self, "model_id", model_id)
+        object.__setattr__(self, "timeout_seconds", None if timeout is None else float(timeout))
+        object.__setattr__(self, "request_options", dict(self.request_options))
+        if reserved := reserved_request_fields(self.request_options):
+            raise InvalidRequestSettingsError(
+                f"PII inference request options must not set fields NSS manages: {', '.join(reserved)}"
+            )
+        try:
+            if not all(isinstance(key, str) for key in self.request_options):
+                raise TypeError("keys must be strings")
+            json.dumps(self.request_options, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise InvalidRequestSettingsError(f"PII inference request options must be a JSON object: {exc}") from exc
+
+    def settings(self, config: LLMConfig) -> InferenceSettings:
+        """Return the settings planning sends requests with.
+
+        Args:
+            config: Persisted LLM behavior from ``replace_pii.llm``. Only
+                ``max_workers`` is used; ``model_id`` is ignored in favor of this
+                endpoint's model.
+        """
+        return InferenceSettings(
+            endpoint_url=self.endpoint_url,
+            model_id=self.model_id,
+            max_workers=config.max_workers,
+            timeout_seconds=(
+                DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS if self.timeout_seconds is None else self.timeout_seconds
+            ),
+            request_options=merge_request_options(self.request_options),
+        )
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:

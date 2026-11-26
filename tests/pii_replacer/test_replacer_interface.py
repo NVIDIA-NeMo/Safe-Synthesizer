@@ -69,9 +69,11 @@ class TestTabularPiiReplacerInterface:
     def test_constructor_has_only_the_public_configuration_inputs(self) -> None:
         signature = inspect.signature(TabularPiiReplacer)
 
-        assert list(signature.parameters) == ["config", "data_config", "time_series"]
+        assert list(signature.parameters) == ["config", "data_config", "time_series", "inference_endpoint"]
         assert signature.parameters["data_config"].kind is inspect.Parameter.KEYWORD_ONLY
         assert signature.parameters["time_series"].default is None
+        assert signature.parameters["inference_endpoint"].kind is inspect.Parameter.KEYWORD_ONLY
+        assert signature.parameters["inference_endpoint"].default is None
 
     def test_replacement_map_capture_is_keyword_only_and_off_by_default(self) -> None:
         parameter = inspect.signature(TabularPiiReplacer.replace).parameters["capture_replacement_map"]

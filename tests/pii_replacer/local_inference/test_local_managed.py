@@ -9,7 +9,11 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings, InvalidRequestSettingsError
+from nemo_safe_synthesizer.pii_replacer.llm_client import (
+    InferenceEndpoint,
+    InferenceSettings,
+    InvalidRequestSettingsError,
+)
 from nemo_safe_synthesizer.pii_replacer.local_inference import (
     InvalidLocalServerSettingsError,
     LocalServerRequest,
@@ -17,6 +21,7 @@ from nemo_safe_synthesizer.pii_replacer.local_inference import (
     planning_inference_settings,
     resolve_planning_inference,
 )
+from nemo_safe_synthesizer.pii_replacer.local_inference import managed as managed_module
 
 from ..conftest import FakeLocalServer
 
@@ -243,3 +248,46 @@ class TestPlanningInferenceSettings:
             pass
 
         assert "NSS_INFERENCE_KEY is set, but PII planning runs in a local vLLM server" in caplog.text
+
+
+@pytest.fixture
+def fixture_refuse_profile_loading(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("local profile loaded although inference is configured in code")
+
+    monkeypatch.setattr(managed_module, "load_profile", refuse)
+    monkeypatch.setattr(managed_module, "bundled_profile_for_model", refuse)
+
+
+@pytest.mark.unit
+@pytest.mark.usefixtures("fixture_refuse_profile_loading")
+class TestCodeConfiguredEndpoint:
+    @pytest.mark.parametrize(
+        ("config", "environ"),
+        [
+            pytest.param(LLMConfig(), {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b"}, id="local-profile"),
+            pytest.param(LLMConfig(model_id=GPT_OSS), {}, id="local-model-id"),
+            pytest.param(
+                LLMConfig(),
+                {"NSS_INFERENCE_KEY": "env-key", "NSS_INFERENCE_TIMEOUT": "soon"},  # pragma: allowlist secret
+                id="invalid-environment",
+            ),
+        ],
+    )
+    def test_environment_and_local_model_are_ignored(
+        self,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        caplog: pytest.LogCaptureFixture,
+        config: LLMConfig,
+        environ: dict[str, str],
+    ) -> None:
+        caplog.set_level(logging.DEBUG)
+        endpoint = InferenceEndpoint("https://gateway.example/v1", "gateway-model")
+
+        with planning_inference_settings(config, environ=environ, endpoint=endpoint) as settings:
+            assert (settings.model_id, settings.api_key) == ("gateway-model", None)
+
+        assert fixture_fake_local_servers == []
+        assert "env-key" not in caplog.text
+        for name in environ:
+            assert name in caplog.text

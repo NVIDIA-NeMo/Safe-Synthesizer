@@ -27,6 +27,7 @@ from ...config.replace_pii import (
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from ...observability import get_logger
+from ..llm_client import InferenceEndpoint
 from .dependency_mappings import (
     built_in_value_mappings,
     conditioner_columns,
@@ -177,6 +178,7 @@ def _enhance_with_default_llm(
     llm_config: LLMConfig,
     discovery_input: PlanDiscoveryInput,
     baseline: PiiReplacementPlan,
+    inference_endpoint: InferenceEndpoint | None,
 ) -> PiiReplacementPlan:
     """Run the default LLM enhancer inside its inference environment.
 
@@ -187,7 +189,7 @@ def _enhance_with_default_llm(
     from ..local_inference import planning_inference_settings
     from .llm import LLMPlanEnhancer
 
-    with planning_inference_settings(llm_config) as settings:
+    with planning_inference_settings(llm_config, endpoint=inference_endpoint) as settings:
         return LLMPlanEnhancer(llm_config, settings=settings).enhance(discovery_input, baseline)
 
 
@@ -200,6 +202,7 @@ def resolve_plan(
     discoverer: PlanDiscoverer | None = None,
     enhancer: PlanEnhancer | None = None,
     check_pattern_coverage: bool = True,
+    inference_endpoint: InferenceEndpoint | None = None,
 ) -> PiiReplacementPlan:
     """Resolve and validate one replacement plan.
 
@@ -210,7 +213,8 @@ def resolve_plan(
     supplied, the default enhancer runs against a managed local vLLM server
     unless ``NSS_INFERENCE_ENDPOINT`` selects another service; that server
     stops as soon as enhancement ends. Dataframe-aware validation occurs once, after the final plan has
-    been selected.
+    been selected. An ``inference_endpoint`` configured in code replaces the ``NSS_INFERENCE_*`` settings for the
+    default enhancer, which then never starts a local server.
     """
     if (inline_plan := config.inline_plan) is not None:
         plan = inline_plan
@@ -220,7 +224,7 @@ def resolve_plan(
         if enhancer is not None:
             plan = enhancer.enhance(discovery_input, baseline)
         else:
-            plan = _enhance_with_default_llm(config.llm, discovery_input, baseline)
+            plan = _enhance_with_default_llm(config.llm, discovery_input, baseline, inference_endpoint)
         plan = _without_row_counters(df, plan, discovery_input.group_column)
 
     validate_plan(
@@ -245,6 +249,7 @@ def resolve_replacement_config(
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
     check_pattern_coverage: bool = True,
+    inference_endpoint: InferenceEndpoint | None = None,
 ) -> ReplacePiiConfig:
     """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
 
@@ -275,6 +280,8 @@ def resolve_replacement_config(
         sampler_value_catalog: Sampler values per entity type; loaded from the configured sampler when omitted.
         check_pattern_coverage: Require each pattern to cover at least 99% of ``df``'s values; see
             ``validate_plan``.
+        inference_endpoint: Inference service configured in code for the default LLM. It replaces the
+            ``NSS_INFERENCE_*`` settings, never starts a local server, and is never persisted.
 
     Returns:
         A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
@@ -302,7 +309,7 @@ def resolve_replacement_config(
         from ..local_inference import planning_inference_settings
         from .llm import LLMPlanEnhancer
 
-        with planning_inference_settings(config.llm) as settings:
+        with planning_inference_settings(config.llm, endpoint=inference_endpoint) as settings:
             llm = LLMPlanEnhancer(config.llm, settings=settings)
             return _resolve_replacement_config(
                 df,
@@ -325,6 +332,7 @@ def resolve_replacement_config(
         mapping_discoverer=mapping_discoverer,
         sampler_value_catalog=sampler_value_catalog,
         check_pattern_coverage=check_pattern_coverage,
+        inference_endpoint=inference_endpoint,
     )
 
 
@@ -339,6 +347,7 @@ def _resolve_replacement_config(
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
     check_pattern_coverage: bool = True,
+    inference_endpoint: InferenceEndpoint | None = None,
 ) -> ReplacePiiConfig:
     """Resolve the plan and value mapping with the given adapters; see ``resolve_replacement_config``."""
     discover_plan = config.is_auto_discovery
@@ -350,6 +359,7 @@ def _resolve_replacement_config(
         discoverer=discoverer,
         enhancer=enhancer,
         check_pattern_coverage=check_pattern_coverage,
+        inference_endpoint=inference_endpoint,
     )
     config, sampler_name = _with_available_sampler(config, plan)
 
@@ -371,7 +381,7 @@ def _resolve_replacement_config(
         if mapping_discoverer is not None:
             discovered = mapping_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
         else:
-            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
+            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog, inference_endpoint)
         mappings = _merged_value_mappings(mappings, discovered)
     resolved_plan = _with_value_mapping(plan, mappings)
     validate_data_to_sampler_value_mapping(resolved_plan, catalog, sampler_name=sampler_name)
@@ -460,12 +470,13 @@ def _discover_mappings_with_default_llm(
     df: pd.DataFrame,
     plan: PiiReplacementPlan,
     catalog: Mapping[EntityType, tuple[str, ...]],
+    inference_endpoint: InferenceEndpoint | None,
 ) -> DataToSamplerValueMapping:
     """Run value-mapping discovery with the default LLM inside its own inference session."""
     from ..local_inference import planning_inference_settings
     from .llm import LLMPlanEnhancer
 
-    with planning_inference_settings(llm_config) as settings:
+    with planning_inference_settings(llm_config, endpoint=inference_endpoint) as settings:
         return LLMPlanEnhancer(llm_config, settings=settings).discover_data_to_sampler_value_mapping(df, plan, catalog)
 
 

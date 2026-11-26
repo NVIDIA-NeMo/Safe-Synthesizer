@@ -11,12 +11,20 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-from ...config.inference_environment import ENDPOINT_ENV, KEY_ENV, LOCAL_PROFILE_ENV, InferenceEnvironment, nonblank
+from ...config.inference_environment import (
+    ENDPOINT_ENV,
+    INFERENCE_ENV_VARS,
+    KEY_ENV,
+    LOCAL_PROFILE_ENV,
+    InferenceEnvironment,
+    nonblank,
+)
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
 from ...observability import get_logger
 from ..llm_client import (
+    InferenceEndpoint,
     InferenceSettings,
     configured_model_id,
     endpoint_inference_settings,
@@ -136,6 +144,7 @@ def resolve_planning_inference(
     config: LLMConfig,
     *,
     environ: Mapping[str, str] | None = None,
+    endpoint: InferenceEndpoint | None = None,
 ) -> LocalServerRequest | InferenceSettings:
     """Resolve where LLM-assisted planning runs, without launching anything.
 
@@ -146,11 +155,15 @@ def resolve_planning_inference(
     ``NSS_INFERENCE_ENDPOINT`` selects that endpoint and no managed server.
     With neither, the configured model (``replace_pii.llm.model_id``, then
     ``NSS_INFERENCE_MODEL``, then ``DEFAULT_NSS_INFERENCE_LOCAL_MODEL``)
-    selects the bundled profile to run.
+    selects the bundled profile to run. An ``endpoint`` configured in code
+    wins over all of this: the ``NSS_INFERENCE_*`` settings are not read, and
+    no managed server is selected.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
         environ: Environment mapping to read; defaults to ``os.environ``.
+        endpoint: Inference service configured in code, which wins over the
+            ``NSS_INFERENCE_*`` settings; see ``InferenceEndpoint``.
 
     Returns:
         A ``LocalServerRequest`` for a managed local server, or the
@@ -166,6 +179,8 @@ def resolve_planning_inference(
         MissingInferenceModelError: If an explicit endpoint has no model ID.
         ParameterError: If an explicit endpoint is invalid.
     """
+    if endpoint is not None:
+        return endpoint.settings(config)
     return _planning_inference(config, InferenceEnvironment.from_environ(environ))
 
 
@@ -208,6 +223,7 @@ def planning_inference_settings(
     config: LLMConfig,
     *,
     environ: Mapping[str, str] | None = None,
+    endpoint: InferenceEndpoint | None = None,
 ) -> Iterator[InferenceSettings]:
     """Yield the inference settings for one LLM planning pass.
 
@@ -220,6 +236,8 @@ def planning_inference_settings(
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
         environ: Environment mapping to read; defaults to ``os.environ``.
+        endpoint: Inference service configured in code; with it, no managed
+            server ever starts. See ``InferenceEndpoint``.
 
     Yields:
         Settings the planner sends its requests with.
@@ -230,6 +248,15 @@ def planning_inference_settings(
         GenerationError: If the managed server fails to start.
     """
     runtime_env = os.environ if environ is None else environ
+    if endpoint is not None:
+        if ignored := sorted(name for name in INFERENCE_ENV_VARS if nonblank(runtime_env.get(name))):
+            logger.user.info(
+                f"PII inference is configured in code, so these settings are ignored: {', '.join(ignored)}"
+            )
+        settings = endpoint.settings(config)
+        _log_external_destination(settings.endpoint_url)
+        yield settings
+        return
     environment = InferenceEnvironment.from_environ(runtime_env)
     inference = _planning_inference(config, environment)
     if isinstance(inference, InferenceSettings):

@@ -458,7 +458,8 @@ class InferenceModelCheck(ConfigCheck):
     When a managed local server applies (a local profile, or no endpoint at
     all), validates the profile, managed address, model names, and that vLLM,
     enough GPUs, and enough GPU memory are available, instead of the remote
-    endpoint and key.
+    endpoint and key. Inference configured in code wins over the
+    ``NSS_INFERENCE_*`` settings, so they are not checked.
     Skipped when an explicit replacement plan makes discovery unnecessary.
     """
 
@@ -474,7 +475,7 @@ class InferenceModelCheck(ConfigCheck):
             return
         # Plan discovery resolves its settings the same way.
         try:
-            inference = resolve_planning_inference(replace_pii.llm)
+            inference = resolve_planning_inference(replace_pii.llm, endpoint=ctx.inference)
         except InvalidRequestSettingsError as exc:
             collector.error("inference_request_settings_invalid", str(exc))
             return

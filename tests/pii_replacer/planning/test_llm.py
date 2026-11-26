@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from threading import Lock
 
+import httpx
 import pandas as pd
 import pytest
 from pydantic import BaseModel
@@ -23,7 +24,11 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.llm_client import TransientInferenceError, resolve_inference_settings
+from nemo_safe_synthesizer.pii_replacer.llm_client import (
+    InferenceEndpoint,
+    TransientInferenceError,
+    resolve_inference_settings,
+)
 from nemo_safe_synthesizer.pii_replacer.planning import (
     LLMPlanEnhancer,
     PlanDiscoverer,
@@ -1333,3 +1338,49 @@ class TestLLMPlanEnhancer:
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 4
         assert "is not valid strftime" in transport.calls[1][0][1]["content"]
+
+
+def _gateway(monkeypatch: pytest.MonkeyPatch, content: str) -> list[httpx.Request]:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    def post(
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, object],
+        timeout: float,
+        trust_env: bool,
+    ) -> httpx.Response:
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.post(url, headers=headers, json=json, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "post", post)
+    return requests
+
+
+@pytest.mark.unit
+class TestCodeConfiguredInference:
+    def test_default_planning_path_uses_the_endpoint_and_ignores_the_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://other.example/v1")
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "env-key")  # pragma: allowlist secret
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
+        requests = _gateway(monkeypatch, _classifications({"notes": None}).response)
+
+        resolve_replacement_config(
+            pd.DataFrame({"notes": ["hello"]}),
+            ReplacePiiConfig(),
+            DataParameters(),
+            inference_endpoint=InferenceEndpoint("https://gateway.example/v1", "gateway-model"),
+        )
+
+        assert requests
+        assert {request.url.host for request in requests} == {"gateway.example"}
+        assert {json.loads(request.content)["model"] for request in requests} == {"gateway-model"}
+        assert all("Authorization" not in request.headers for request in requests)
